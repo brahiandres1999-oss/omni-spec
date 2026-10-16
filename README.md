@@ -2,7 +2,7 @@
 
 A zero-dependency Spec-Driven Development (SDD) framework and command-line interface for human software engineers and autonomous AI coding agents.
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](package.json)
 [![Dependencies](https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg)](package.json)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-black.svg)](package.json)
 [![License](https://img.shields.io/badge/license-MIT-gray.svg)](LICENSE)
@@ -29,7 +29,13 @@ OmniSpec introduces **Spec-Driven Development (SDD)**: an engineering contract w
 ┌──────────────────┐        ┌──────────────┐        ┌──────────────────┐
 │  Phase 0: Clarify├───────►│ Active Spec  ├───────►│  Execution Gate  │
 │  (Resolve Gaps)  │        │  (Manifest)  │        │ (Tasks & Checks) │
-└──────────────────┘        └──────────────┘        └──────────────────┘
+└────────┬─────────┘        └──────┬───────┘        └──────────────────┘
+         │                         │
+         ▼                         ▼
+┌──────────────────────────────────────────────┐
+│        omni-spec audit (Quality Gate)        │
+│  Blocks agents if Phase 0 or contracts miss  │
+└──────────────────────────────────────────────┘
 ```
 
 ---
@@ -38,6 +44,9 @@ OmniSpec introduces **Spec-Driven Development (SDD)**: an engineering contract w
 
 ### Zero Dependencies
 OmniSpec contains zero runtime and development dependencies. It executes exclusively via native Node.js 18+ standard libraries (`node:fs/promises`, `node:readline/promises`, `node:test`, `node:assert/strict`). It requires no compilation, virtual environments, or package installation steps, initializing in under 20 milliseconds.
+
+### Greenfield & Brownfield Adaptation
+OmniSpec automatically detects whether it is running in a blank folder (**Greenfield**) or an existing repository (**Brownfield**). When run in an existing codebase, it inspects your stack (React, Next.js, Express, Python FastAPI/Django, Java Maven/Gradle, Go, Rust) and extracts your existing quality gates (`npm test`, `pytest`, `mvn test`, etc.) directly into `CONSTITUTION.md` without disturbing existing code.
 
 ### The Four Engineering Archetypes
 Software evolution comprises distinct task profiles. OmniSpec structures changes into four specialized archetypes:
@@ -68,7 +77,7 @@ Industry invariants are injected directly into `CONSTITUTION.md` during initiali
 Initialize OmniSpec in the root of any repository:
 
 ```bash
-# Interactive guided terminal setup
+# Interactive guided terminal setup (auto-detects project stack and gates)
 omni-spec init
 
 # Non-interactive initialization with defaults
@@ -104,6 +113,25 @@ omni-spec create debt remove-mock-storage
 # Architectural decision record
 omni-spec create rfc postgres-vs-clickhouse
 ```
+
+### Specification Quality Audit (Anti-Hallucination Gate)
+
+OmniSpec includes a programmatic specification health auditor. It verifies that requirements are mathematically sound and unambiguous before any human or AI agent writes code:
+
+```bash
+# Audit active specification
+omni-spec audit
+
+# Audit specific specification by sequence ID
+omni-spec audit 001
+```
+
+Verification enforced by `omni-spec audit`:
+* **Phase 0 Anti-Hallucination:** Verifies that ambiguity questions have been documented and agreed upon.
+* **Non-Goals / Scope Creep:** Confirms explicit out-of-scope boundaries are defined.
+* **Data Contracts & Rollbacks:** Ensures API payloads, database schema changes, and rollback strategies are documented in `plan.md`.
+* **Zero AI-Slop & Placeholders:** Detects unreplaced template tokens (`SPEC-XXX`, `[Rol Autorizado]`, etc.).
+* **Progress Tracking:** Parses task checkboxes in `tasks.md` and reports completion percentages (`X/Y tasks, Z%`).
 
 ### Inspection and Lifecycle Management
 

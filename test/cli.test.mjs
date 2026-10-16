@@ -104,4 +104,24 @@ describe('OmniSpec CLI', () => {
     const code = await runCli(['complete'], tempDir);
     assert.equal(code, 1);
   });
+
+  test('audit command blocks unedited spec and approves compliant spec', async () => {
+    await runCli(['init', '--yes', '--name', 'AuditApp'], tempDir);
+    await runCli(['create', 'feature', 'checkout-flow'], tempDir);
+
+    // Fresh spec contains placeholder text -> should exit with code 1 (blocked)
+    let code = await runCli(['audit'], tempDir);
+    assert.equal(code, 1);
+
+    // Now overwrite with clean content
+    const specDir = join(tempDir, 'specs', '001-checkout-flow');
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(specDir, 'spec.md'), '# SPEC-001: Checkout\n## 0. Fase de Clarificación y Supuestos\n- Q: Cash or card? A: Card only.\n## 1. Visión\nCheckout\n## 2. Non-Goals\nNo crypto\n## 3. Criterios de Aceptación\nGiven user cart When pay Then success', 'utf-8');
+    await writeFile(join(specDir, 'plan.md'), '# PLAN-001\nAPI Contracts defined.\nRollback plan defined.', 'utf-8');
+    await writeFile(join(specDir, 'tasks.md'), '# TASKS\n- [x] Integrate Stripe\n- [ ] Write integration test', 'utf-8');
+
+    // Clean spec -> should exit with code 0 (passed)
+    code = await runCli(['audit'], tempDir);
+    assert.equal(code, 0);
+  });
 });

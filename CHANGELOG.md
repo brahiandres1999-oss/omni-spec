@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-16
+
+### Added
+- **Programmatic Specification Health Auditor (`src/auditor.mjs` & `omni-spec audit`):**
+  - Enforces mathematically that an AI coding agent or software engineer cannot start coding if Phase 0 Clarification questions, explicit Non-Goals, or Data Contracts are missing or unclarified.
+  - Detects unreplaced template placeholders and generic samples (`SPEC-XXX`, `[Rol Autorizado]`, unedited sample questions).
+  - Verifies presence of mandatory archetype artifacts (`spec.md`, `plan.md`, `tasks.md`, `rca.md`, `migration-plan.md`).
+  - Calculates and reports task checklist progress percentages directly from `tasks.md`.
+  - Exits with deterministic POSIX status codes (0 for approved, 1 for blocked) for native integration into pre-commit hooks and CI pipelines.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

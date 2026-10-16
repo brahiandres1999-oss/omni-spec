@@ -1,6 +1,7 @@
 import { scaffoldProject, createSpec, ARCHETYPES } from './generator.mjs';
 import { runWizard } from './wizard.mjs';
 import { loadManifest, updateSpecStatus, getActiveSpec } from './manifest.mjs';
+import { auditSpec } from './auditor.mjs';
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,13 +16,13 @@ async function getVersion() {
     const pkg = JSON.parse(raw);
     return pkg.version;
   } catch {
-    return '0.2.0';
+    return '0.3.0';
   }
 }
 
 export function printHelp() {
   console.log(`
-OmniSpec — Universal Spec-Driven Development Framework (v0.2.0)
+OmniSpec — Universal Spec-Driven Development Framework (v0.3.0)
 
 USAGE:
   omni-spec <command> [options]
@@ -29,6 +30,7 @@ USAGE:
 COMMANDS:
   init                     Initialize OmniSpec in the current repository with interactive wizard
   create <type> <name>     Create a new specification (feature, bugfix, debt, rfc)
+  audit [id]               Audit specification health, Phase 0 gates, and task progress
   status                   Show the current active spec and project progress
   complete <id>            Mark a specification as completed
   help                     Show this help message
@@ -54,6 +56,8 @@ EXAMPLES:
   omni-spec create bugfix null-pointer-dashboard
   omni-spec create debt remove-legacy-mock
   omni-spec create rfc websocket-vs-sse
+  omni-spec audit
+  omni-spec audit 001
   omni-spec status
   omni-spec complete 001
 `);
@@ -116,6 +120,42 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         console.log(`   - Status:     Active\n`);
         console.log(`Open specs/${spec.slug} to complete the specification.`);
         return 0;
+      }
+
+      case 'audit': {
+        const id = args[1] || null;
+        console.log('[AUDIT] Running specification health audit...');
+        const report = await auditSpec(workingDir, id);
+
+        if (!report.spec) {
+          console.error(`[ERROR] ${report.errors.join(' ')}`);
+          return 1;
+        }
+
+        console.log('\n=============================================================');
+        console.log(` AUDIT REPORT: [${report.spec.id}] ${report.spec.slug} (${report.spec.type})`);
+        console.log(` Directory: specs/${report.spec.slug}`);
+        console.log('=============================================================');
+
+        if (report.tasks && report.tasks.total > 0) {
+          console.log(` Progress: ${report.tasks.completed}/${report.tasks.total} tasks completed (${report.tasks.percentage}%)`);
+        }
+
+        if (report.warnings.length > 0) {
+          console.log(`\n[WARNINGS] (${report.warnings.length}):`);
+          report.warnings.forEach(w => console.log(`  - [WARN] ${w}`));
+        }
+
+        if (report.valid) {
+          console.log('\n[AUDIT PASSED] Specification complies with SDD Quality Gates.');
+          console.log('  Phase 0 clarification verified. Safe for AI agents and human engineers to code.\n');
+          return 0;
+        } else {
+          console.log('\n[AUDIT BLOCKED] Specification fails mandatory SDD criteria:');
+          report.errors.forEach(e => console.log(`  - [BLOCKER] ${e}`));
+          console.log(`\nAction required: Complete missing sections in specs/${report.spec.slug} before coding.\n`);
+          return 1;
+        }
       }
 
       case 'status': {
