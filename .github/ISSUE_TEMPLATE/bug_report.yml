@@ -1,0 +1,64 @@
+name: Bug Report
+description: File a defect, crash, or unexpected behavior in OmniSpec
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue. Please provide actionable reproduction steps.
+
+  - type: input
+    id: version
+    attributes:
+      label: OmniSpec Version
+      description: Run `omni-spec version` or inspect `package.json`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Linux (Ubuntu/Debian)
+        - Linux (Arch/Fedora)
+        - macOS
+        - Windows 10/11
+    validations:
+      required: true
+
+  - type: input
+    id: node_version
+    attributes:
+      label: Node.js Version
+      placeholder: "v20.x or v22.x"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      description: A clear and concise description of the defect.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal commands to trigger the issue.
+      placeholder: |
+        1. Run `omni-spec init --yes`
+        2. Run `omni-spec create feature test-feature`
+        3. Observe error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Output / Error Stack Trace
+      render: shell

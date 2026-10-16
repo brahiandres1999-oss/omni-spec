@@ -1,0 +1,35 @@
+name: Feature Proposal
+description: Suggest an idea, archetype, or domain profile for OmniSpec
+title: "[FEAT]: "
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the proposed feature and why it belongs in the zero-dependency core.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a specific limitation or workflow gap?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the changes to CLI, templates, or profiles.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: criteria
+    attributes:
+      label: Design Constraints Checklist
+      options:
+        - label: Preserves zero external dependencies mandate (Node.js standard library only).
+          required: true
+        - label: Works identically on Windows, Linux, and macOS.
+          required: true

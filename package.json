@@ -1,0 +1,29 @@
+{
+  "name": "omni-spec",
+  "version": "0.1.0",
+  "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding.",
+  "type": "module",
+  "main": "src/cli.mjs",
+  "bin": {
+    "omni-spec": "bin/omni-spec.mjs"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1"
+  },
+  "keywords": [
+    "spec-driven-development",
+    "sdd",
+    "spec-kit",
+    "ai-agents",
+    "agentic-coding",
+    "constitution",
+    "rfc",
+    "bugfix-rca",
+    "tech-debt"
+  ],
+  "author": "OmniSpec Authors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

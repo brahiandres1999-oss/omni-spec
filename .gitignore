@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test artifacts
+test-temp/
+temp-*/
+.coverage/
