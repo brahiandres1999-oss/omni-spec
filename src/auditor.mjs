@@ -1,6 +1,23 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadManifest, getActiveSpec } from './manifest.mjs';
+
+function stripHtmlComments(content) {
+  return content.replace(/<!--[\s\S]*?-->/g, '');
+}
+
+async function readRegularFile(filePath) {
+  try {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) {
+      return { error: 'not a regular file' };
+    }
+    const content = await readFile(filePath, 'utf-8');
+    return { content };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
 
 /**
  * Validates the completeness and health of a specification artifact
@@ -54,71 +71,112 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     };
   }
 
-  // Common check across all archetypes: placeholder tokens
+  // Common check across all archetypes: placeholder tokens and regular files
   for (const file of files) {
     if (!file.endsWith('.md')) continue;
-    try {
-      const content = await readFile(join(specDir, file), 'utf-8');
-      if (
-        content.includes('SPEC-XXX') ||
-        content.includes('BUG-XXX') ||
-        content.includes('DEBT-XXX') ||
-        content.includes('RFC-XXX') ||
-        content.includes('Nombre / Rol') ||
-        content.includes('ej. ¿Esta operación') ||
-        content.includes('[Rol Autorizado]') ||
-        content.includes('[TODO]')
-      ) {
-        errors.push(`File ${file} still contains unreplaced placeholder tokens or sample template text.`);
-      }
-      if (content.includes('AAAA-MM-DD') || content.includes('YYYY-MM-DD')) {
-        warnings.push(`File ${file} contains unpopulated date placeholder (AAAA-MM-DD).`);
-      }
-    } catch {
-      // Ignored
+    const readResult = await readRegularFile(join(specDir, file));
+    if (readResult.error) {
+      errors.push(`File ${file} could not be read as a regular file: ${readResult.error}`);
+      continue;
     }
+
+    const content = readResult.content;
+    if (
+      content.includes('SPEC-XXX') ||
+      content.includes('BUG-XXX') ||
+      content.includes('DEBT-XXX') ||
+      content.includes('RFC-XXX') ||
+      content.includes('Nombre / Rol') ||
+      content.includes('ej. ¿Esta operación') ||
+      content.includes('[Rol Autorizado]') ||
+      content.includes('[TODO]')
+    ) {
+      errors.push(`File ${file} still contains unreplaced placeholder tokens or sample template text.`);
+    }
+    if (content.includes('AAAA-MM-DD') || content.includes('YYYY-MM-DD')) {
+      warnings.push(`File ${file} contains unpopulated date placeholder (AAAA-MM-DD).`);
+    }
+  }
+
+  // Helper to load and validate mandatory file
+  async function getCleanMandatoryContent(fileName, archetypeTitle) {
+    if (!files.includes(fileName)) {
+      errors.push(`Missing mandatory ${archetypeTitle} artifact: ${fileName}`);
+      return null;
+    }
+    const res = await readRegularFile(join(specDir, fileName));
+    if (res.error) {
+      errors.push(`Mandatory ${archetypeTitle} artifact ${fileName} is invalid or unreadable: ${res.error}`);
+      return null;
+    }
+    const clean = stripHtmlComments(res.content);
+    if (clean.trim().length === 0) {
+      errors.push(`Mandatory ${archetypeTitle} artifact ${fileName} is empty.`);
+      return null;
+    }
+    return { raw: res.content, clean };
   }
 
   // Archetype-specific audits
   switch (spec.type) {
     case 'feature': {
       // 1. Audit spec.md
-      if (!files.includes('spec.md')) {
-        errors.push('Missing mandatory artifact: spec.md');
-      } else {
-        const specContent = await readFile(join(specDir, 'spec.md'), 'utf-8');
+      const specData = await getCleanMandatoryContent('spec.md', 'feature');
+      if (specData) {
+        const cleanSpec = specData.clean;
         // Phase 0 Clarification check
-        if (!specContent.includes('## 0. Fase de Clarificación') && !specContent.includes('## 0. Clarification')) {
+        const hasSection0 =
+          cleanSpec.includes('## 0. Fase de Clarificación') ||
+          cleanSpec.includes('## 0. Clarification');
+
+        if (!hasSection0) {
           errors.push('spec.md is missing Section 0: Clarification & Assumptions (Anti-Hallucination Gate).');
+        } else {
+          // Check substantive content strictly within Section 0
+          const section0Match = cleanSpec.match(/^## 0\.[^\n]*\n([\s\S]*?)(?=\n#{1,2}(?:\s|$)|$(?![\s\S]))/m);
+          const section0Body = section0Match ? section0Match[1] : '';
+          const substantiveText = section0Body
+            .replace(/<!--[\s\S]*?-->/g, '')
+            .replace(/^\s*#{1,6}\s+.*$/gm, '')
+            .replace(/^\s*(?:[-*_]\s*){3,}$/gm, '')
+            .replace(/^\s*\|[\s:|\-]+$/gm, '')
+            .replace(/Phase 0|Clarification|Fase de Clarificación|Supuestos|Assumptions/gi, '')
+            .trim();
+          if (substantiveText.length < 30) {
+            errors.push('spec.md Section 0 (Clarification) lacks substantive decision content.');
+          }
         }
+
         // Non-Goals check
-        if (!specContent.includes('Non-Goals') && !specContent.includes('Fuera de Alcance')) {
+        if (!cleanSpec.includes('Non-Goals') && !cleanSpec.includes('Fuera de Alcance')) {
           warnings.push('spec.md does not explicitly define Non-Goals (Scope creep risk).');
         }
         // Acceptance criteria
-        if (!specContent.includes('Gherkin') && !specContent.includes('Criterios de Aceptación') && !specContent.includes('Acceptance Criteria')) {
+        if (
+          !cleanSpec.includes('Gherkin') &&
+          !cleanSpec.includes('Criterios de Aceptación') &&
+          !cleanSpec.includes('Acceptance Criteria')
+        ) {
           warnings.push('spec.md does not include structured Acceptance Criteria.');
         }
       }
 
       // 2. Audit plan.md
-      if (!files.includes('plan.md')) {
-        errors.push('Missing mandatory artifact: plan.md');
-      } else {
-        const planContent = await readFile(join(specDir, 'plan.md'), 'utf-8');
-        if (!planContent.includes('Contratos') && !planContent.includes('Contracts') && !planContent.includes('API')) {
+      const planData = await getCleanMandatoryContent('plan.md', 'feature');
+      if (planData) {
+        const cleanPlan = planData.clean;
+        if (!cleanPlan.includes('Contratos') && !cleanPlan.includes('Contracts') && !cleanPlan.includes('API')) {
           warnings.push('plan.md does not clearly define Data Contracts or API contracts.');
         }
-        if (!planContent.includes('Rollback') && !planContent.includes('Reversión')) {
+        if (!cleanPlan.includes('Rollback') && !cleanPlan.includes('Reversión')) {
           warnings.push('plan.md does not define a Rollback / Migration reversal strategy.');
         }
       }
 
       // 3. Audit tasks.md & progress
-      if (!files.includes('tasks.md')) {
-        errors.push('Missing mandatory artifact: tasks.md');
-      } else {
-        const tasksContent = await readFile(join(specDir, 'tasks.md'), 'utf-8');
+      const tasksData = await getCleanMandatoryContent('tasks.md', 'feature');
+      if (tasksData) {
+        const tasksContent = tasksData.clean;
         const checked = (tasksContent.match(/- \[[xX]\]/g) || []).length;
         const unchecked = (tasksContent.match(/- \[ \]/g) || []).length;
         const total = checked + unchecked;
@@ -126,42 +184,71 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         taskStats = { total, completed: checked, pending: unchecked, percentage };
 
         if (total === 0) {
-          warnings.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
+          errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
         }
       }
       break;
     }
 
     case 'bugfix': {
-      if (!files.includes('bug.md')) errors.push('Missing mandatory bugfix artifact: bug.md');
-      if (!files.includes('rca.md')) {
-        errors.push('Missing mandatory Root Cause Analysis artifact: rca.md');
-      } else {
-        const rcaContent = await readFile(join(specDir, 'rca.md'), 'utf-8');
-        if (!rcaContent.includes('5 Whys') && !rcaContent.includes('Por qué')) {
+      const bugData = await getCleanMandatoryContent('bug.md', 'bugfix');
+      if (bugData && bugData.clean.length < 30) {
+        errors.push('bug.md lacks substantive defect reproduction details.');
+      }
+
+      const rcaData = await getCleanMandatoryContent('rca.md', 'bugfix');
+      if (rcaData) {
+        if (!rcaData.clean.includes('5 Whys') && !rcaData.clean.includes('Por qué')) {
           warnings.push('rca.md does not document a 5 Whys root cause analysis chain.');
         }
+        if (rcaData.clean.length < 30) {
+          errors.push('rca.md lacks substantive root cause analysis.');
+        }
       }
-      if (!files.includes('fix.md')) errors.push('Missing mandatory fix artifact: fix.md');
+
+      const fixData = await getCleanMandatoryContent('fix.md', 'bugfix');
+      if (fixData && fixData.clean.length < 30) {
+        errors.push('fix.md lacks substantive fix strategy and test verification details.');
+      }
       break;
     }
 
     case 'debt': {
-      if (!files.includes('audit.md')) errors.push('Missing mandatory tech-debt artifact: audit.md');
-      if (!files.includes('migration-plan.md')) {
-        errors.push('Missing mandatory migration artifact: migration-plan.md');
+      const auditData = await getCleanMandatoryContent('audit.md', 'tech-debt');
+      if (auditData && auditData.clean.length < 30) {
+        errors.push('audit.md lacks substantive debt analysis and blast radius.');
       }
-      if (!files.includes('tasks.md')) errors.push('Missing mandatory tasks artifact: tasks.md');
+
+      const migrationData = await getCleanMandatoryContent('migration-plan.md', 'tech-debt');
+      if (migrationData && migrationData.clean.length < 30) {
+        errors.push('migration-plan.md lacks substantive migration steps.');
+      }
+
+      const debtTasksData = await getCleanMandatoryContent('tasks.md', 'tech-debt');
+      if (debtTasksData) {
+        const checked = (debtTasksData.clean.match(/- \[[xX]\]/g) || []).length;
+        const unchecked = (debtTasksData.clean.match(/- \[ \]/g) || []).length;
+        const total = checked + unchecked;
+        const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
+        taskStats = { total, completed: checked, pending: unchecked, percentage };
+
+        if (total === 0) {
+          errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
+        }
+      }
       break;
     }
 
     case 'rfc': {
-      if (!files.includes('rfc.md')) errors.push('Missing mandatory RFC artifact: rfc.md');
+      const rfcData = await getCleanMandatoryContent('rfc.md', 'RFC');
+      if (rfcData && rfcData.clean.length < 40) {
+        errors.push('rfc.md lacks substantive architectural proposal content.');
+      }
       break;
     }
 
     default:
-      warnings.push(`Unknown specification archetype: ${spec.type}`);
+      errors.push(`Unknown specification archetype: "${spec.type}". Valid types are: feature, bugfix, debt, rfc.`);
   }
 
   const isValid = errors.length === 0;

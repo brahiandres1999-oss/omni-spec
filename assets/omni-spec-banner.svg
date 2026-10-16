@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 250" width="100%" height="250" fill="none">
+  <defs>
+    <!-- Background: Deep Obsidian & Matte Charcoal -->
+    <linearGradient id="obsidian-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E1117"/>
+      <stop offset="50%" stop-color="#141822"/>
+      <stop offset="100%" stop-color="#0A0D14"/>
+    </linearGradient>
+
+    <!-- Subdued Technical Border -->
+    <linearGradient id="border-line" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#30363D"/>
+      <stop offset="50%" stop-color="#484F58"/>
+      <stop offset="100%" stop-color="#21262D"/>
+    </linearGradient>
+
+    <!-- Natural Architectural Palette: Copper / Amber, Slate Blue, Sage, Titanium -->
+    <linearGradient id="copper-amber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#B45309"/>
+    </linearGradient>
+
+    <linearGradient id="slate-steel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#58A6FF"/>
+      <stop offset="100%" stop-color="#1F6FEB"/>
+    </linearGradient>
+
+    <linearGradient id="sage-olive" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3FB950"/>
+      <stop offset="100%" stop-color="#238636"/>
+    </linearGradient>
+
+    <linearGradient id="titanium-lead" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E6EDF3"/>
+      <stop offset="100%" stop-color="#8B949E"/>
+    </linearGradient>
+
+    <!-- Subtle Ambient Lighting -->
+    <radialGradient id="warm-ambient" cx="130" cy="125" r="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.08"/>
+      <stop offset="50%" stop-color="#58A6FF" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#0E1117" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Shadow filter for architectural elevation -->
+    <filter id="plinth-shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Canvas Container -->
+  <rect x="2" y="2" width="916" height="246" rx="14" fill="url(#obsidian-bg)" stroke="url(#border-line)" stroke-width="1.2"/>
+
+  <!-- Ambient Backdrop Glow -->
+  <rect x="2" y="2" width="916" height="246" rx="14" fill="url(#warm-ambient)"/>
+
+  <!-- Architectural Blueprint Grid (Very subtle, muted) -->
+  <g opacity="0.07" stroke="#8B949E" stroke-width="0.8">
+    <line x1="60" y1="0" x2="60" y2="250"/>
+    <line x1="130" y1="0" x2="130" y2="250"/>
+    <line x1="200" y1="0" x2="200" y2="250"/>
+    <line x1="320" y1="0" x2="320" y2="250"/>
+    <line x1="480" y1="0" x2="480" y2="250"/>
+    <line x1="640" y1="0" x2="640" y2="250"/>
+    <line x1="800" y1="0" x2="800" y2="250"/>
+    <line x1="0" y1="50" x2="920" y2="50"/>
+    <line x1="0" y1="125" x2="920" y2="125"/>
+    <line x1="0" y1="200" x2="920" y2="200"/>
+  </g>
+
+  <!-- TECHNICAL LOGO / EMBLEM SECTION -->
+  <g transform="translate(130, 125)">
+    <!-- Drafting Compass Ring -->
+    <circle cx="0" cy="0" r="82" fill="none" stroke="#30363D" stroke-width="1" stroke-dasharray="2,6"/>
+    <circle cx="0" cy="0" r="72" fill="none" stroke="#21262D" stroke-width="1"/>
+
+    <!-- Precision Caliper Tick Marks (12 radial ticks) -->
+    <g stroke="#484F58" stroke-width="1">
+      <line x1="0" y1="-82" x2="0" y2="-76"/>
+      <line x1="0" y1="82" x2="0" y2="76"/>
+      <line x1="-82" y1="0" x2="-76" y2="0"/>
+      <line x1="82" y1="0" x2="76" y2="0"/>
+      <line x1="58" y1="-58" x2="53" y2="-53"/>
+      <line x1="-58" y1="-58" x2="-53" y2="-53"/>
+      <line x1="58" y1="58" x2="53" y2="53"/>
+      <line x1="-58" y1="58" x2="-53" y2="53"/>
+    </g>
+
+    <!-- Delicate Crosshairs -->
+    <g stroke="#30363D" stroke-width="0.8">
+      <line x1="-96" y1="0" x2="-86" y2="0"/>
+      <line x1="86" y1="0" x2="96" y2="0"/>
+      <line x1="0" y1="-96" x2="0" y2="-86"/>
+      <line x1="0" y1="86" x2="0" y2="96"/>
+    </g>
+
+    <!-- ARCHITECTURAL FOUNDATION PLINTH (Isometric 4 Archetypes + Constitution Core) -->
+    <g filter="url(#plinth-shadow)">
+      <!-- Isometric Ground Shadows -->
+      <polygon points="0,58 56,26 0,-6 -56,26" fill="#000000" opacity="0.45"/>
+
+      <!-- BASE FOUNDATION: Constitution Slab (Dark Graphite Ceramic) -->
+      <polygon points="0,-16 54,15 0,46 -54,15" fill="#161B22" stroke="#30363D" stroke-width="1.2"/>
+      <polygon points="-54,15 0,46 0,54 -54,23" fill="#0D1117" stroke="#21262D" stroke-width="1"/>
+      <polygon points="0,46 54,15 54,23 0,54" fill="#090C10" stroke="#21262D" stroke-width="1"/>
+
+      <!-- 4 ARCHETYPE BLOCKS (Precision Layered Interlocking Quadrants) -->
+
+      <!-- Top Quadrant: FEATURE (Steel/Cobalt Precision) -->
+      <g transform="translate(0, -18)">
+        <polygon points="0,-32 26,-17 0,-2 -26,-17" fill="url(#slate-steel)" stroke="#79C0FF" stroke-width="0.8"/>
+        <polygon points="-26,-17 0,-2 0,6 -26,-9" fill="#1F6FEB" opacity="0.9"/>
+        <polygon points="0,-2 26,-17 26,-9 0,6" fill="#1158C7" opacity="0.9"/>
+      </g>
+
+      <!-- Right Quadrant: BUGFIX / RCA (Warm Amber / Copper Precision) -->
+      <g transform="translate(24, -4)">
+        <polygon points="0,-22 24,-8 0,6 -24,-8" fill="url(#copper-amber)" stroke="#FCD34D" stroke-width="0.8"/>
+        <polygon points="-24,-8 0,6 0,13 -24,-1" fill="#B45309" opacity="0.95"/>
+        <polygon points="0,6 24,-8 24,-1 0,13" fill="#92400E" opacity="0.95"/>
+      </g>
+
+      <!-- Bottom Quadrant: TECH DEBT / STRANGLER (Sage / Olive Renewal) -->
+      <g transform="translate(0, 10)">
+        <polygon points="0,-12 24,2 0,16 -24,2" fill="url(#sage-olive)" stroke="#7EE787" stroke-width="0.8"/>
+        <polygon points="-24,2 0,16 0,22 -24,8" fill="#238636" opacity="0.95"/>
+        <polygon points="0,16 24,2 24,8 0,22" fill="#196C2E" opacity="0.95"/>
+      </g>
+
+      <!-- Left Quadrant: RFC / ADR DECISION RECORD (Titanium / Slate) -->
+      <g transform="translate(-24, -4)">
+        <polygon points="0,-22 24,-8 0,6 -24,-8" fill="url(#titanium-lead)" stroke="#FFFFFF" stroke-width="0.8"/>
+        <polygon points="-24,-8 0,6 0,13 -24,-1" fill="#6E7681" opacity="0.95"/>
+        <polygon points="0,6 24,-8 24,-1 0,13" fill="#484F58" opacity="0.95"/>
+      </g>
+
+      <!-- CENTRAL AUDITOR APERTURE: The Gate Lens -->
+      <!-- Beveled Aperture Frame -->
+      <polygon points="0,-10 14,-2 0,6 -14,-2" fill="#0D1117" stroke="#E3A048" stroke-width="1.5"/>
+      
+      <!-- Core Focal Jewel (Golden Verified Invariant) -->
+      <circle cx="0" cy="-2" r="3.5" fill="#F59E0B"/>
+      <circle cx="0" cy="-2" r="1.5" fill="#FFFFFF"/>
+    </g>
+
+    <!-- Technical Index Markers -->
+    <text x="-48" y="-48" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', monospace" font-size="8" font-weight="700" fill="#6E7681">01·F</text>
+    <text x="34" y="-48" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', monospace" font-size="8" font-weight="700" fill="#6E7681">02·B</text>
+    <text x="34" y="52" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', monospace" font-size="8" font-weight="700" fill="#6E7681">03·D</text>
+    <text x="-48" y="52" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', monospace" font-size="8" font-weight="700" fill="#6E7681">04·R</text>
+  </g>
+
+  <!-- SEPARATOR RULE (Delicate drafting vertical ruler) -->
+  <line x1="242" y1="40" x2="242" y2="210" stroke="#21262D" stroke-width="1"/>
+  <line x1="242" y1="80" x2="246" y2="80" stroke="#484F58" stroke-width="1"/>
+  <line x1="242" y1="125" x2="248" y2="125" stroke="#8B949E" stroke-width="1.2"/>
+  <line x1="242" y1="170" x2="246" y2="170" stroke="#484F58" stroke-width="1"/>
+
+  <!-- TYPOGRAPHY & BRANDING SECTION -->
+  <g transform="translate(270, 56)">
+    <!-- Header Row: Brand Name + Release Badge -->
+    <g>
+      <text x="0" y="42" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="44" font-weight="800" letter-spacing="-0.5" fill="#F0F6FC">
+        Omni<tspan fill="#E3A048">Spec</tspan>
+      </text>
+
+      <!-- Version Text (Clean Typography, No Badge Box, No Status Dot) -->
+      <text x="216" y="40" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', monospace" font-size="14" font-weight="500" fill="#8B949E">v0.3.1</text>
+    </g>
+
+    <!-- Subtitle: Methodological Proposition -->
+    <text x="0" y="76" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="450" fill="#8B949E" letter-spacing="0.1">
+      Universal Spec-Driven Development (SDD) &amp; Execution Gates for AI Coding Agents
+    </text>
+
+    <!-- Engineering Pill Badges (Natural, Muted, Technical Palette) -->
+    <g transform="translate(0, 102)">
+      <!-- Pill 1: Zero Dependencies -->
+      <g>
+        <rect x="0" y="0" width="144" height="28" rx="6" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+        <circle cx="14" cy="14" r="3.5" fill="#58A6FF"/>
+        <text x="26" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="600" fill="#C9D1D9">Zero Dependencies</text>
+      </g>
+
+      <!-- Pill 2: Atomic Concurrency -->
+      <g transform="translate(154, 0)">
+        <rect x="0" y="0" width="156" height="28" rx="6" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+        <circle cx="14" cy="14" r="3.5" fill="#E3A048"/>
+        <text x="26" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="600" fill="#C9D1D9">Lamport Concurrency</text>
+      </g>
+
+      <!-- Pill 3: Anti-Hallucination Gate -->
+      <g transform="translate(320, 0)">
+        <rect x="0" y="0" width="168" height="28" rx="6" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+        <circle cx="14" cy="14" r="3.5" fill="#3FB950"/>
+        <text x="26" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="600" fill="#C9D1D9">Anti-Hallucination Gate</text>
+      </g>
+
+      <!-- Pill 4: Pure Node.js Standard Library -->
+      <g transform="translate(498, 0)">
+        <rect x="0" y="0" width="118" height="28" rx="6" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+        <circle cx="14" cy="14" r="3.5" fill="#8B949E"/>
+        <text x="26" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11.5" font-weight="600" fill="#C9D1D9">Pure ESM</text>
+      </g>
+    </g>
+  </g>
+</svg>

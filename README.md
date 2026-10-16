@@ -1,12 +1,42 @@
-# OmniSpec
+<p align="center">
+  <img src="assets/omni-spec-banner.svg" alt="OmniSpec Banner" width="100%">
+</p>
 
-A zero-dependency Spec-Driven Development (SDD) framework and command-line interface for human software engineers and autonomous AI coding agents.
+<p align="center">
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.3.1-blue.svg" alt="Version 0.3.1"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
+  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="CI Build Passing"></a>
+</p>
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](package.json)
-[![Dependencies](https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg)](package.json)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-black.svg)](package.json)
-[![License](https://img.shields.io/badge/license-MIT-gray.svg)](LICENSE)
-[![CI](https://img.shields.io/badge/build-passing-brightgreen.svg)](.github/workflows/ci.yml)
+<p align="center">
+  <strong>A zero-dependency Spec-Driven Development (SDD) framework and CLI for autonomous AI coding agents and human software engineers.</strong>
+</p>
+
+---
+
+## Table of Contents
+
+- [Overview & The Problem](#overview)
+- [Quick Start](#quick-start)
+  - [Option A: AI Agent Guided Adoption (Prompt Setup)](#option-a-ai-agent-guided-adoption-prompt-installation)
+  - [Option B: Manual Installation (Human Engineers)](#option-b-manual-installation-human-engineers)
+- [Architectural Principles](#architectural-principles)
+  - [Zero External Dependencies](#zero-dependencies)
+  - [Greenfield & Brownfield Adaptation](#greenfield--brownfield-adaptation)
+  - [The Four Engineering Archetypes](#the-four-engineering-archetypes)
+  - [State Machine Manifest & Concurrency](#state-machine-manifest--concurrency)
+  - [Domain Regulatory Profiles](#domain-regulatory-profiles)
+- [Command-Line Interface (CLI Reference)](#command-line-interface)
+  - [1. Initialization (`omni-spec init`)](#1-initialization)
+  - [2. Creating Specifications (`omni-spec create`)](#2-creating-specifications)
+  - [3. Specification Health Auditor (`omni-spec audit`)](#3-specification-quality-audit-anti-hallucination-gate)
+  - [4. Lifecycle & Status Management (`status` & `complete`)](#4-inspection-and-lifecycle-management)
+- [Autonomous AI Agent Protocol](#ai-agent-integration)
+- [Architectural Rationale: Node.js vs. Python](#architectural-rationale-nodejs-vs-python)
+- [Automated Verification](#automated-verification)
+- [Repository Governance](#repository-governance)
 
 ---
 
@@ -19,65 +49,61 @@ Modern software development with frontier AI coding models suffers from two syst
 
 OmniSpec introduces **Spec-Driven Development (SDD)**: an engineering contract where specifications are authored, clarified, and audited prior to code implementation.
 
+<p align="center">
+  <img src="assets/mermaid-diagram.svg" alt="OmniSpec SDD Architecture" width="100%">
+</p>
+
+---
+
+## Quick Start
+
+OmniSpec requires only Node.js (version 18.19 or higher) and can be adopted through two frictionless pathways:
+
+### Option A: AI Agent Guided Adoption (Prompt Installation)
+
+If you are using frontier AI coding agents (Google Antigravity, Cursor, Claude Code, GitHub Copilot, Roo Code), you can bootstrap OmniSpec in any repository with a single conversational prompt.
+
+#### 🇬🇧 English Prompt:
+```text
+Adopt Spec-Driven Development (SDD) in this repository using OmniSpec:
+1. Initialize the framework by running:
+   npx github:brahiandres1999-oss/omni-spec init --yes
+   (or install locally with `npm i -D github:brahiandres1999-oss/omni-spec` or globally with `npm i -g github:brahiandres1999-oss/omni-spec`).
+2. Inspect the newly generated CONSTITUTION.md and specs/manifest.json files.
+3. Verify that project quality gates (test runners, linters, and documentation standards) were accurately detected.
+4. For all subsequent tasks, strictly follow the SDD lifecycle:
+   - Run `npx github:brahiandres1999-oss/omni-spec create <feature|bugfix|debt|rfc> <task-name>`.
+   - Complete the generated specification folder under `specs/<id>-<task-name>/`:
+     * feature: fill Phase 0 Clarification in `spec.md`, design in `plan.md`, tasks in `tasks.md`.
+     * bugfix: reproduction in `bug.md`, 5 Whys RCA in `rca.md`, verification in `fix.md`.
+     * debt: blast radius in `audit.md`, strangler strategy in `migration-plan.md`, tasks in `tasks.md`.
+     * rfc: decision drivers and trade-offs in `rfc.md`.
+   - Run `npx github:brahiandres1999-oss/omni-spec audit` to verify required criteria and completeness.
+   - Only start implementing code after `npx github:brahiandres1999-oss/omni-spec audit` outputs [AUDIT PASSED].
 ```
-                    ┌────────────────────────────┐
-                    │      CONSTITUTION.md       │
-                    │   Supreme Engineering Law  │
-                    └──────────────┬─────────────┘
-                                   │
-                                   ▼
-┌──────────────────┐        ┌──────────────┐        ┌──────────────────┐
-│  Phase 0: Clarify├───────►│ Active Spec  ├───────►│  Execution Gate  │
-│  (Resolve Gaps)  │        │  (Manifest)  │        │ (Tasks & Checks) │
-└────────┬─────────┘        └──────┬───────┘        └──────────────────┘
-         │                         │
-         ▼                         ▼
-┌──────────────────────────────────────────────┐
-│        omni-spec audit (Quality Gate)        │
-│  Blocks agents if Phase 0 or contracts miss  │
-└──────────────────────────────────────────────┘
+
+#### 🇪🇸 Prompt en Español:
+```text
+Adopta Spec-Driven Development (SDD) en este repositorio usando OmniSpec:
+1. Inicializa el framework ejecutando:
+   npx github:brahiandres1999-oss/omni-spec init --yes
+   (o instálalo localmente con `npm i -D github:brahiandres1999-oss/omni-spec` o globalmente con `npm i -g github:brahiandres1999-oss/omni-spec`).
+2. Inspecciona los archivos CONSTITUTION.md y specs/manifest.json recién generados.
+3. Verifica que los quality gates del proyecto (pruebas, linters y estándar de documentación) hayan sido detectados correctamente.
+4. Para todas las tareas subsecuentes, sigue estrictamente el ciclo SDD:
+   - Ejecuta `npx github:brahiandres1999-oss/omni-spec create <feature|bugfix|debt|rfc> <nombre-tarea>`.
+   - Completa la carpeta de especificación generada en `specs/<id>-<nombre-tarea>/`:
+     * feature: resuelve la Fase 0 de Clarificación en `spec.md`, diseño en `plan.md`, tareas en `tasks.md`.
+     * bugfix: pasos de reproducción en `bug.md`, análisis 5 Whys RCA en `rca.md`, verificación en `fix.md`.
+     * debt: blast radius en `audit.md`, migración gradual en `migration-plan.md`, tareas en `tasks.md`.
+     * rfc: alternativas y justificación en `rfc.md`.
+   - Ejecuta `npx github:brahiandres1999-oss/omni-spec audit` para verificar los criterios obligatorios y la ausencia de placeholders.
+   - Solo comienza a programar código una vez que `npx github:brahiandres1999-oss/omni-spec audit` apruebe con [AUDIT PASSED].
 ```
 
 ---
 
-## Architectural Principles
-
-### Zero Dependencies
-OmniSpec contains zero runtime and development dependencies. It executes exclusively via native Node.js 18+ standard libraries (`node:fs/promises`, `node:readline/promises`, `node:test`, `node:assert/strict`). It requires no compilation, virtual environments, or package installation steps, initializing in under 20 milliseconds.
-
-### Greenfield & Brownfield Adaptation
-OmniSpec automatically detects whether it is running in a blank folder (**Greenfield**) or an existing repository (**Brownfield**). When run in an existing codebase, it inspects your stack (React, Next.js, Express, Python FastAPI/Django, Java Maven/Gradle, Go, Rust) and extracts your existing quality gates (`npm test`, `pytest`, `mvn test`, etc.) directly into `CONSTITUTION.md` without disturbing existing code.
-
-### The Four Engineering Archetypes
-Software evolution comprises distinct task profiles. OmniSpec structures changes into four specialized archetypes:
-
-| Archetype | Identifier | Primary Artifacts | Methodological Standard |
-| :--- | :--- | :--- | :--- |
-| **Feature** | `feature` | `spec.md`, `plan.md`, `tasks.md` | Phase 0 Clarification, Contract-First Design |
-| **Bugfix** | `bugfix` | `bug.md`, `rca.md`, `fix.md` | Google SRE 5 Whys Root Cause Analysis |
-| **Tech Debt** | `debt` | `audit.md`, `migration-plan.md`, `tasks.md` | Martin Fowler Strangler Fig Pattern |
-| **RFC / ADR** | `rfc` | `rfc.md` | MADR (Markdown Architectural Decision Records) |
-
-### State Machine Manifest
-Active work is tracked in `specs/manifest.json`. AI agents inspect the manifest upon waking, identifying the active task, assigned Git branch, and completion state to prevent divergence across turns.
-
-### Domain Regulatory Profiles
-Industry invariants are injected directly into `CONSTITUTION.md` during initialization:
-* **General SaaS:** OWASP Top 10, tenant isolation, structured telemetry.
-* **Fintech:** PCI-DSS Level 1 boundaries, double-entry ledger invariance, client-generated `Idempotency-Key` headers.
-* **Healthtech:** HIPAA compliance, Protected Health Information (PHI) encryption, immutable audit trails.
-* **BPO & Occupational Health:** k-Anonymity ($k \ge 5$) cohort protection, operator private journal isolation, anti-surveillance policies.
-* **E-Commerce:** Distributed locks, inventory reservation expiration, zero price-tampering constraints.
-
----
-
-## Installation & Getting Started
-
-OmniSpec requires only Node.js (version 18 or higher) and can be adopted through two frictionless pathways: manual developer installation or autonomous AI agent prompt adoption.
-
-### Option A: Manual Installation (Human Engineers)
-
-Choose one of the following methods depending on your workflow:
+### Option B: Manual Installation (Human Engineers)
 
 #### 1. Instant Run via NPX (Zero-Install)
 Run OmniSpec directly without permanent installation:
@@ -104,43 +130,45 @@ npm link
 
 ---
 
-### Option B: AI Agent Guided Adoption (Prompt Installation)
+## Architectural Principles
 
-If you are using frontier AI coding agents (Google Antigravity, Cursor, Claude Code, GitHub Copilot, Roo Code), you can bootstrap OmniSpec in any repository with a single conversational prompt.
+### Zero Dependencies
+OmniSpec contains zero runtime and development dependencies. It executes exclusively via native Node.js 18.19+ standard libraries (`node:fs/promises`, `node:readline/promises`, `node:test`, `node:assert/strict`). It requires no compilation, virtual environments, or external package installation steps.
 
-Copy and paste the following prompt into your AI agent's chat interface:
+### Greenfield & Brownfield Adaptation
+OmniSpec automatically detects whether it is running in a blank folder (**Greenfield**) or an existing repository (**Brownfield**). When run in an existing codebase, it inspects your stack (React, Next.js, Express, Python FastAPI/Django, Java Maven/Gradle, Go, Rust) and extracts your existing quality gates (`npm test`, `pytest`, `mvn test`, etc.) directly into `CONSTITUTION.md` without disturbing existing code.
 
-#### English Prompt:
-```text
-Adopt Spec-Driven Development (SDD) in this repository using OmniSpec:
-1. Initialize the framework by running: npx github:brahiandres1999-oss/omni-spec init --yes
-2. Inspect the newly generated CONSTITUTION.md and specs/manifest.json files.
-3. Verify that project quality gates (test runners, linters, and documentation standards) were accurately detected.
-4. For all subsequent tasks, strictly follow the SDD lifecycle:
-   - Run `omni-spec create <feature|bugfix|debt|rfc> <task-name>`.
-   - Resolve Phase 0 Clarification questions in specs/<task-name>/spec.md.
-   - Run `omni-spec audit` to verify zero hallucinations and complete data contracts.
-   - Only start implementing code after `omni-spec audit` outputs [AUDIT PASSED].
-```
+### The Four Engineering Archetypes
+Software evolution comprises distinct task profiles. OmniSpec structures changes into four specialized archetypes:
 
-#### Prompt en Español:
-```text
-Adopta Spec-Driven Development (SDD) en este repositorio usando OmniSpec:
-1. Inicializa el framework ejecutando: npx github:brahiandres1999-oss/omni-spec init --yes
-2. Inspecciona los archivos CONSTITUTION.md y specs/manifest.json recién generados.
-3. Verifica que los quality gates del proyecto (pruebas, linters y estándar de documentación) hayan sido detectados correctamente.
-4. Para todas las tareas subsecuentes, sigue estrictamente el ciclo SDD:
-   - Ejecuta `omni-spec create <feature|bugfix|debt|rfc> <nombre-tarea>`.
-   - Resuelve la Fase 0 de Clarificación en specs/<nombre-tarea>/spec.md sin asumir reglas ocultas.
-   - Ejecuta `omni-spec audit` para verificar que no existan alucinaciones y que los contratos estén completos.
-   - Solo comienza a programar código una vez que `omni-spec audit` apruebe con [AUDIT PASSED].
-```
+| Archetype | Identifier | Primary Artifacts | Methodological Standard |
+| :--- | :--- | :--- | :--- |
+| **Feature** | `feature` | `spec.md`, `plan.md`, `tasks.md` | Phase 0 Clarification, Contract-First Design |
+| **Bugfix** | `bugfix` | `bug.md`, `rca.md`, `fix.md` | Google SRE 5 Whys Root Cause Analysis |
+| **Tech Debt** | `debt` | `audit.md`, `migration-plan.md`, `tasks.md` | Martin Fowler Strangler Fig Pattern |
+| **RFC / ADR** | `rfc` | `rfc.md` | MADR (Markdown Architectural Decision Records) |
+
+### State Machine Manifest & Concurrency
+Active work is tracked in `specs/manifest.json`. AI agents inspect the manifest upon waking, identifying the active task, assigned Git branch, and completion state to prevent divergence across turns.
+
+To support high-concurrency multi-agent setups without database or daemon dependencies, OmniSpec coordinates processes on the local filesystem using a native [Lamport Bakery Algorithm](docs/locking.md) in `specs/manifest.lock/`:
+- **Atomic Manifest Updates:** Writes are staged to temporary files (`manifest.json.tmp.*`) and committed via atomic rename.
+- **Dead-Owner Recovery:** Live processes are never timed out arbitrarily; deceased processes (`process.kill(pid, 0)` with `ESRCH`) have their individual claim cleanly reclaimed without corrupting concurrent peers.
+- **Ordered Tickets:** Agents choose monotonically increasing tickets to serialize operations cleanly. Read more in [docs/locking.md](docs/locking.md).
+
+### Domain Regulatory Profiles
+Industry invariants are injected directly into `CONSTITUTION.md` during initialization:
+* **General SaaS:** OWASP Top 10, tenant isolation, structured telemetry.
+* **Fintech:** PCI-DSS Level 1 boundaries, double-entry ledger invariance, client-generated `Idempotency-Key` headers.
+* **Healthtech:** HIPAA compliance, Protected Health Information (PHI) encryption, immutable audit trails.
+* **BPO & Occupational Health:** k-Anonymity ($k \ge 5$) cohort protection, operator private journal isolation, anti-surveillance policies.
+* **E-Commerce:** Distributed locks, inventory reservation expiration, zero price-tampering constraints.
 
 ---
 
 ## Command-Line Interface
 
-### Initialization
+### 1. Initialization
 Initialize OmniSpec in the root of any repository:
 
 ```bash
@@ -151,21 +179,21 @@ omni-spec init
 omni-spec init --yes --profile fintech --stack "Node.js / TypeScript" --doc "TSDoc"
 ```
 
-Project scaffold:
+Project scaffold created:
 ```text
 my-project/
-├── CONSTITUTION.md
+├── CONSTITUTION.md          <-- Supreme architectural & quality gate rules
 └── specs/
-    ├── README.md
-    ├── manifest.json
-    └── _templates/
+    ├── README.md            <-- Specification index & instructions
+    ├── manifest.json        <-- Machine-readable state machine
+    └── _templates/          <-- Local archetype templates
         ├── 01-feature/
         ├── 02-bugfix/
         ├── 03-tech-debt/
         └── 04-rfc-idea/
 ```
 
-### Creating Specifications
+### 2. Creating Specifications
 
 ```bash
 # User capability or API expansion
@@ -181,7 +209,7 @@ omni-spec create debt remove-mock-storage
 omni-spec create rfc postgres-vs-clickhouse
 ```
 
-### Specification Quality Audit (Anti-Hallucination Gate)
+### 3. Specification Quality Audit (Anti-Hallucination Gate)
 
 OmniSpec includes a programmatic specification health auditor. It verifies that requirements are mathematically sound and unambiguous before any human or AI agent writes code:
 
@@ -194,13 +222,14 @@ omni-spec audit 001
 ```
 
 Verification enforced by `omni-spec audit`:
-* **Phase 0 Anti-Hallucination:** Verifies that ambiguity questions have been documented and agreed upon.
+* **Phase 0 Anti-Hallucination:** Verifies that ambiguity questions in Section 0 have substantive decisions documented (>30 non-whitespace characters outside headings).
+* **Comment Stripping:** Strips HTML comments before auditing; commented-out headings cannot bypass requirements.
 * **Non-Goals / Scope Creep:** Confirms explicit out-of-scope boundaries are defined.
 * **Data Contracts & Rollbacks:** Ensures API payloads, database schema changes, and rollback strategies are documented in `plan.md`.
-* **Zero AI-Slop & Placeholders:** Detects unreplaced template tokens (`SPEC-XXX`, `[Rol Autorizado]`, etc.).
-* **Progress Tracking:** Parses task checkboxes in `tasks.md` and reports completion percentages (`X/Y tasks, Z%`).
+* **Zero AI-Slop & Placeholders:** Detects unreplaced template tokens (`SPEC-XXX`, `[Rol Autorizado]`, unedited sample questions).
+* **Task Checklist Validation:** Parses task checkboxes in `tasks.md` and reports completion percentages (`X/Y tasks, Z%`). Requires at least one actionable task (`- [ ]`).
 
-### Inspection and Lifecycle Management
+### 4. Inspection and Lifecycle Management
 
 ```bash
 # Inspect current project state and active specification
@@ -233,7 +262,7 @@ Agents configured to work within an OmniSpec-enabled repository follow this prot
 | Metric | OmniSpec (Node.js ESM) | Python-Based Alternatives |
 | :--- | :--- | :--- |
 | **Installation Friction** | Instant (`node bin/omni-spec.mjs` or `npx`). | Requires Python runtime, `pip`, `venv`, or `pipx`. |
-| **Startup Overhead** | ~15 ms cold start. | 150-300 ms module loading. |
+| **Startup Overhead** | Instantaneous execution without compiling (<30ms). | Slower initialization and module import overhead. |
 | **Platform Compatibility** | Native POSIX and Windows support without path normalization scripts. | Path and permission discrepancies across Windows/Linux (`python3` vs `py`). |
 | **Supply Chain Exposure** | Zero runtime dependencies (`node_modules` empty). | Vulnerable to upstream package supply-chain attacks. |
 
@@ -248,8 +277,9 @@ npm test
 ```
 
 Verification covers:
-* State machine persistence, updates, and concurrency.
-* Scaffolding and multi-archetype template generation.
+* State machine persistence, updates, and Lamport bakery concurrency.
+* Scaffolding, re-initialization safety, and multi-archetype template generation.
+* Anti-hallucination auditor validation and comment-stripping defenses.
 * CLI arguments, interactive flags, and error boundary handling.
 
 ---
@@ -258,4 +288,5 @@ Verification covers:
 
 * [Contributing Guidelines](CONTRIBUTING.md)
 * [Changelog](CHANGELOG.md)
+* [Manifest Coordination & Locking Documentation](docs/locking.md)
 * [MIT License](LICENSE)

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-10-16
+
+### Fixed & Hardened
+- **Atomic Concurrency & Storage Locking (`src/manifest.mjs`):**
+  - Local cross-process coordination through unique PID/UUID claims and ordered tickets; living owners never expire by age.
+  - Dead-owner cleanup removes only that owner's unique claim, including interruptions before ticket publication. Release requires the acquiring lease.
+  - Atomic manifest writes through randomized temporary files and atomic `rename`.
+  - Shared coordination for `initManifest`, `createSpec`, `addSpec`, and `updateSpecStatus`, with regression tests for mixed operations and simultaneous recovery.
+- **Non-Destructive Idempotent Scaffolding (`src/generator.mjs`):**
+  - Re-running `omni-spec init` preserves customized documents. `--force` replaces constitution and templates but preserves registered specifications.
+  - Profile injection retains both added rows and edits within original security rows, including CRLF templates.
+  - Automatic collision prevention in `createSpec`: ensures unique folder creation without clobbering existing directories.
+- **Auditor Hardening & Anti-Bypass (`src/auditor.mjs`):**
+  - Strict HTML comment stripping before evaluating mandatory sections.
+  - Regular file validation (`stat.isFile()`) preventing directories or unreadable paths from satisfying requirements.
+  - Section 0 body checks require at least 30 trimmed characters after removing headings and empty separators. This is a structural check, not semantic verification of decisions.
+  - Mandatory content enforcement across all 4 archetypes (feature, bugfix, debt, rfc) and rejection of unknown archetypes.
+- **Wizard & CLI Configuration Synchronization (`src/wizard.mjs`):**
+  - Accurate stack preset matching for framework families (FastAPI, Django, Spring, Maven, Go, Rust).
+  - Preserves existing manifest profiles and configurations when reinvoking `init --yes`.
+  - Accurately aligns documentation standards and quality gates with the interactively selected technology stack.
+  - Maven and Gradle select Java rather than JavaScript; automatic initialization retains detected scripts instead of adding nonexistent lint commands.
+  - Confirmed interactive choices update the manifest and constitution together with `--force`; conflicting changes without it are rejected before writing.
+  - Injects domain profile security questions (`specSecurityQuestions`) into `spec.md` while preserving user-defined custom template controls.
+- **DevOps & Release Pipeline Hardening (`.github/workflows/`):**
+  - Conditioned GitHub Release on its Ubuntu/Node 22 test job (`needs: [test]`); the broader CI matrix runs independently.
+  - Strict verification that release tags match `package.json` version.
+  - Aligned Node engine requirement to `>=18.19.0`.
+
 ## [0.3.0] - 2026-10-16
 
 ### Added

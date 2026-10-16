@@ -2,21 +2,27 @@ import { readFile, writeFile, mkdir, cp, readdir, access } from 'node:fs/promise
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getProfile } from './profiles/index.mjs';
-import { initManifest, addSpec, loadManifest } from './manifest.mjs';
+import { initManifest, _initManifestUnlocked, addSpec, loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export async function copyDirectoryRecursive(src, dest) {
+export async function copyDirectoryRecursive(src, dest, overwrite = true) {
   await mkdir(dest, { recursive: true });
   const entries = await readdir(src, { withFileTypes: true });
   for (const entry of entries) {
     const srcPath = join(src, entry.name);
     const destPath = join(dest, entry.name);
     if (entry.isDirectory()) {
-      await copyDirectoryRecursive(srcPath, destPath);
+      await copyDirectoryRecursive(srcPath, destPath, overwrite);
     } else {
-      await cp(srcPath, destPath);
+      if (!overwrite) {
+        try {
+          await access(destPath);
+          continue;
+        } catch {}
+      }
+      await cp(srcPath, destPath, { force: overwrite });
     }
   }
 }
@@ -127,25 +133,55 @@ Welcome to the Spec-Driven Development workspace. This directory organizes all e
 `;
 }
 
-export async function scaffoldProject(baseDir, options) {
-  // 1. Generate CONSTITUTION.md
-  const constitutionPath = join(baseDir, 'CONSTITUTION.md');
-  const constitutionContent = buildConstitutionContent(options);
-  await writeFile(constitutionPath, constitutionContent, 'utf-8');
+export async function scaffoldProject(baseDir, options = {}) {
+  const force = Boolean(options.force);
 
-  // 2. Initialize specs/manifest.json
+  // 1. Generate CONSTITUTION.md (preserve if exists and not force)
+  const constitutionPath = join(baseDir, 'CONSTITUTION.md');
+  let constitutionExists = false;
+  try {
+    await access(constitutionPath);
+    constitutionExists = true;
+  } catch {}
+
+  const existingManifest = await loadManifest(baseDir);
+  if (constitutionExists && existingManifest && !force) {
+    const changes = [
+      ['profile', options.profile, options.explicitProfile],
+      ['stack', options.stack, options.explicitStack],
+      ['documentationStandard', options.docStandard, options.explicitDoc]
+    ].filter(([key, value, explicit]) => explicit && value && value !== existingManifest[key]);
+    if (changes.length) {
+      throw new Error('Configuration changes require init --force to update CONSTITUTION.md and manifest.json together.');
+    }
+  }
+
+  if (!constitutionExists || force) {
+    const constitutionContent = buildConstitutionContent(options);
+    await writeFile(constitutionPath, constitutionContent, 'utf-8');
+  }
+
+  // 2. Initialize specs/manifest.json (idempotent, preserves existing specs array)
   await initManifest(baseDir, options);
 
-  // 3. Setup specs directory and copy templates
+  // 3. Setup specs directory and copy templates (preserve customized templates if not force)
   const specsDir = join(baseDir, 'specs');
   const templatesTarget = join(specsDir, '_templates');
   const templatesSource = join(__dirname, 'templates');
 
-  await copyDirectoryRecursive(templatesSource, templatesTarget);
+  await copyDirectoryRecursive(templatesSource, templatesTarget, force);
 
-  // 4. Generate specs/README.md
+  // 4. Generate specs/README.md (preserve if exists and not force)
   const specsReadmePath = join(specsDir, 'README.md');
-  await writeFile(specsReadmePath, buildSpecsReadmeContent(options.projectName), 'utf-8');
+  let readmeExists = false;
+  try {
+    await access(specsReadmePath);
+    readmeExists = true;
+  } catch {}
+
+  if (!readmeExists || force) {
+    await writeFile(specsReadmePath, buildSpecsReadmeContent(options.projectName), 'utf-8');
+  }
 
   return {
     constitutionPath,
@@ -161,72 +197,132 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
     throw new Error(`Invalid archetype "${rawArchetype}". Valid types are: ${Object.keys(ARCHETYPES).join(', ')}`);
   }
 
-  const manifest = (await loadManifest(baseDir)) || (await initManifest(baseDir));
-  
-  // Calculate next sequence ID
-  const existingNumbers = manifest.specs
-    .map(s => parseInt(s.id, 10))
-    .filter(n => !isNaN(n));
-  const nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
-  const idStr = String(nextNum).padStart(3, '0');
+  return withManifestLock(baseDir, async () => {
+    const manifest = (await loadManifest(baseDir)) || (await _initManifestUnlocked(baseDir, options));
 
-  // Sanitize name slug
-  const sanitizedName = name
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    // Inspect both manifest entries and actual folders in specs/ to prevent collisions
+    let existingDirs = [];
+    try {
+      existingDirs = await readdir(join(baseDir, 'specs'));
+    } catch {}
 
-  const slug = `${idStr}-${sanitizedName}`;
-  const specDir = join(baseDir, 'specs', slug);
-  await mkdir(specDir, { recursive: true });
+    const dirNumbers = existingDirs
+      .map(d => parseInt(d.split('-')[0], 10))
+      .filter(n => !isNaN(n));
 
-  // Resolve template source: prefer project specs/_templates, fallback to package built-ins
-  let templateSourceDir = join(baseDir, 'specs', '_templates', archetype.folder);
-  try {
-    await access(templateSourceDir);
-  } catch {
-    templateSourceDir = join(__dirname, 'templates', archetype.folder);
-  }
-  const files = await readdir(templateSourceDir);
+    const manifestNumbers = (manifest.specs || [])
+      .map(s => parseInt(s.id, 10))
+      .filter(n => !isNaN(n));
 
-  const today = new Date().toISOString().split('T')[0];
-  const title = options.title || name.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const allNumbers = [...dirNumbers, ...manifestNumbers];
+    let nextNum = allNumbers.length > 0 ? Math.max(...allNumbers) + 1 : 1;
 
-  for (const file of files) {
-    const srcFile = join(templateSourceDir, file);
-    const destFile = join(specDir, file);
-    let content = await readFile(srcFile, 'utf-8');
+    // Sanitize name slug
+    const sanitizedName = name
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
 
-    // Replace template variables
-    content = content
-      .replaceAll('XXX', idStr)
-      .replaceAll('AAAA-MM-DD', today)
-      .replaceAll('YYYY-MM-DD', today)
-      .replaceAll('Título de la Especificación', title)
-      .replaceAll('Short Title', title)
-      .replaceAll('Incident Title / Short Description', title);
+    let idStr = String(nextNum).padStart(3, '0');
+    let slug = `${idStr}-${sanitizedName}`;
+    let specDir = join(baseDir, 'specs', slug);
 
-    await writeFile(destFile, content, 'utf-8');
-  }
+    // Ensure target folder does not already exist
+    while (true) {
+      try {
+        await access(specDir);
+        nextNum++;
+        idStr = String(nextNum).padStart(3, '0');
+        slug = `${idStr}-${sanitizedName}`;
+        specDir = join(baseDir, 'specs', slug);
+      } catch {
+        break;
+      }
+    }
 
-  // Register in manifest
-  const specEntry = {
-    id: idStr,
-    type: archetypeKey,
-    slug,
-    title,
-    status: 'IN_PROGRESS',
-    created_at: today,
-    branch: `${archetype.branchPrefix}/${slug}`
-  };
+    await mkdir(specDir, { recursive: true });
 
-  await addSpec(baseDir, specEntry);
+    // Resolve template source: prefer project specs/_templates, fallback to package built-ins
+    let templateSourceDir = join(baseDir, 'specs', '_templates', archetype.folder);
+    try {
+      await access(templateSourceDir);
+    } catch {
+      templateSourceDir = join(__dirname, 'templates', archetype.folder);
+    }
+    const files = await readdir(templateSourceDir);
 
-  return {
-    id: idStr,
-    slug,
-    specDir,
-    branch: specEntry.branch,
-    archetype: archetype.name
-  };
+    const today = new Date().toISOString().split('T')[0];
+    const title = options.title || name.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const profile = getProfile(manifest.profile || options.profile || 'general');
+
+    for (const file of files) {
+      const srcFile = join(templateSourceDir, file);
+      const destFile = join(specDir, file);
+      let content = await readFile(srcFile, 'utf-8');
+
+      // Replace template variables
+      content = content
+        .replaceAll('XXX', idStr)
+        .replaceAll('AAAA-MM-DD', today)
+        .replaceAll('YYYY-MM-DD', today)
+        .replaceAll('Título de la Especificación', title)
+        .replaceAll('Short Title', title)
+        .replaceAll('Incident Title / Short Description', title);
+
+      // Inject profile compliance matrix if feature and questions exist, preserving custom template rows
+      if (file === 'spec.md' && profile && profile.specSecurityQuestions) {
+        const tableMatch = content.match(/(^\| Control de Seguridad[^\r\n]*\r?\n(?:\|[^\r\n]*(?:\r?\n|$))*)/m);
+        if (tableMatch) {
+          const tableText = tableMatch[1];
+          const lines = tableText.split('\n');
+          const projectRows = lines.slice(1).filter(line =>
+            line.trim().startsWith('|') &&
+            !/^\s*\|[\s:|\-]+$/.test(line)
+          );
+
+          let replacement = profile.specSecurityQuestions;
+          const existingRows = new Set(replacement.split('\n').map(line => line.trim()));
+          const preservedRows = projectRows.filter(line => !existingRows.has(line.trim()));
+          if (preservedRows.length > 0) {
+            replacement += '\n' + preservedRows.join('\n');
+          }
+          content = content.replace(tableText, replacement + '\n');
+        }
+      }
+
+      await writeFile(destFile, content, 'utf-8');
+    }
+
+    // Register in manifest
+    const specEntry = {
+      id: idStr,
+      type: archetypeKey,
+      slug,
+      title,
+      status: 'IN_PROGRESS',
+      created_at: today,
+      branch: `${archetype.branchPrefix}/${slug}`
+    };
+
+    let updatedManifest = (await loadManifest(baseDir)) || manifest;
+    updatedManifest.active_spec = specEntry.slug;
+    updatedManifest.active_archetype = specEntry.type;
+
+    const existingIdx = (updatedManifest.specs || []).findIndex(s => s.id === specEntry.id);
+    if (existingIdx >= 0) {
+      updatedManifest.specs[existingIdx] = { ...updatedManifest.specs[existingIdx], ...specEntry };
+    } else {
+      updatedManifest.specs.push(specEntry);
+    }
+
+    await saveManifest(baseDir, updatedManifest);
+
+    return {
+      id: idStr,
+      slug,
+      specDir,
+      branch: specEntry.branch,
+      archetype: archetype.name
+    };
+  });
 }

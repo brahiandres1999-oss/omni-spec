@@ -22,7 +22,7 @@ async function getVersion() {
 
 export function printHelp() {
   console.log(`
-OmniSpec — Universal Spec-Driven Development Framework (v0.3.0)
+OmniSpec — Universal Spec-Driven Development Framework (v0.3.1)
 
 USAGE:
   omni-spec <command> [options]
@@ -44,10 +44,12 @@ TYPES FOR "create":
 
 OPTIONS FOR "init":
   --yes, -y                Use automatic defaults without interactive prompt
+  --force                  Overwrite existing constitution and templates
   --profile <name>         Preselect domain profile (general, fintech, healthtech, bpo, ecommerce)
   --name <projectName>     Specify project name
   --stack <techStack>      Specify tech stack
   --doc <standard>         Specify documentation standard (JSDoc, TSDoc, JavaDoc, etc.)
+  --gates <commands>       Specify quality gates commands
 
 EXAMPLES:
   omni-spec init
@@ -82,16 +84,21 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--yes' || arg === '-y') flags.yes = true;
+    else if (arg === '--force') flags.force = true;
     else if (arg === '--profile' && args[i + 1]) flags.profile = args[++i];
     else if (arg === '--name' && args[i + 1]) flags.name = args[++i];
     else if (arg === '--stack' && args[i + 1]) flags.stack = args[++i];
     else if (arg === '--doc' && args[i + 1]) flags.doc = args[++i];
+    else if (arg === '--gates' && args[i + 1]) flags.gates = args[++i];
   }
 
   try {
     switch (command) {
       case 'init': {
         const wizardOptions = await runWizard(workingDir, flags);
+        if (!wizardOptions) {
+          return 0;
+        }
         console.log('[INFO] Scaffolding OmniSpec files...');
         const result = await scaffoldProject(workingDir, wizardOptions);
         console.log('[OK] OmniSpec initialized successfully!');
@@ -147,8 +154,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         }
 
         if (report.valid) {
-          console.log('\n[AUDIT PASSED] Specification complies with SDD Quality Gates.');
-          console.log('  Phase 0 clarification verified. Safe for AI agents and human engineers to code.\n');
+          console.log('\n[AUDIT PASSED] Specification structure, required artifacts, and Phase 0 criteria verified.');
+          console.log('  Quality gates satisfied. Proceed with implementation.\n');
           return 0;
         } else {
           console.log('\n[AUDIT BLOCKED] Specification fails mandatory SDD criteria:');
