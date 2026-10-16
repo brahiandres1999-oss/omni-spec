@@ -33,7 +33,7 @@ export async function initManifest(baseDir, options = {}) {
   const manifest = {
     $schema: 'https://raw.githubusercontent.com/omni-spec/omni-spec/main/schema/manifest.schema.json',
     project: options.projectName || 'MyProject',
-    version: '0.1.0',
+    version: '0.2.0',
     profile: options.profile || 'general',
     stack: options.stack || options.techStack || 'Node.js',
     documentationStandard: options.docStandard || options.documentationStandard || 'JSDoc',

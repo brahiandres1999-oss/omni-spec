@@ -1,0 +1,126 @@
+import { test, describe, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { detectProjectEnvironment } from '../src/detector.mjs';
+
+describe('Project Environment & Stack Detector', () => {
+  let tempDir;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'omnispec-detect-test-'));
+  });
+
+  afterEach(async () => {
+    if (tempDir) {
+      try {
+        await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      } catch {
+        // Safe cleanup
+      }
+    }
+  });
+
+  test('identifies greenfield environment when directory is empty', async () => {
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, true);
+    assert.equal(result.type, 'greenfield');
+    assert.equal(result.detectedStack, null);
+    assert.equal(result.docStandard, 'JSDoc');
+  });
+
+  test('identifies brownfield Node.js with TypeScript and React', async () => {
+    const pkg = {
+      name: 'my-react-app',
+      dependencies: {
+        react: '^18.0.0',
+        'react-dom': '^18.0.0'
+      },
+      devDependencies: {
+        typescript: '^5.0.0'
+      },
+      scripts: {
+        test: 'vitest run',
+        lint: 'eslint .',
+        build: 'vite build'
+      }
+    };
+
+    await writeFile(join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, false);
+    assert.equal(result.type, 'brownfield');
+    assert.equal(result.detectedStack, 'React / TypeScript');
+    assert.equal(result.docStandard, 'TSDoc');
+    assert.match(result.qualityGates, /npm test/);
+    assert.match(result.qualityGates, /npm run lint/);
+    assert.match(result.qualityGates, /npm run build/);
+    assert.equal(result.projectName, 'my-react-app');
+  });
+
+  test('identifies brownfield Python FastAPI project', async () => {
+    await writeFile(
+      join(tempDir, 'requirements.txt'),
+      'fastapi==0.110.0\nuvicorn==0.28.0\npydantic==2.6.0\n'
+    );
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, false);
+    assert.equal(result.type, 'brownfield');
+    assert.equal(result.detectedStack, 'Python (FastAPI)');
+    assert.equal(result.docStandard, 'Python Docstrings (PEP 257)');
+    assert.match(result.qualityGates, /pytest/);
+  });
+
+  test('identifies brownfield Java Maven project', async () => {
+    await writeFile(
+      join(tempDir, 'pom.xml'),
+      '<project><modelVersion>4.0.0</modelVersion><artifactId>demo</artifactId></project>'
+    );
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, false);
+    assert.equal(result.type, 'brownfield');
+    assert.equal(result.detectedStack, 'Java / Maven');
+    assert.equal(result.docStandard, 'JavaDoc');
+    assert.match(result.qualityGates, /mvn test/);
+  });
+
+  test('identifies brownfield Go project', async () => {
+    await writeFile(join(tempDir, 'go.mod'), 'module github.com/user/myapp\n\ngo 1.22\n');
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, false);
+    assert.equal(result.type, 'brownfield');
+    assert.equal(result.detectedStack, 'Go');
+    assert.equal(result.docStandard, 'Go doc');
+    assert.match(result.qualityGates, /go test/);
+  });
+
+  test('identifies brownfield Rust Cargo project', async () => {
+    await writeFile(
+      join(tempDir, 'Cargo.toml'),
+      '[package]\nname = "my_crate"\nversion = "0.1.0"\n'
+    );
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, false);
+    assert.equal(result.type, 'brownfield');
+    assert.equal(result.detectedStack, 'Rust');
+    assert.equal(result.docStandard, 'Rustdoc');
+    assert.match(result.qualityGates, /cargo test/);
+  });
+
+  test('identifies polyglot monorepo structure with frontend and backend folders', async () => {
+    await mkdir(join(tempDir, 'frontend'));
+    await mkdir(join(tempDir, 'backend'));
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, false);
+    assert.equal(result.type, 'brownfield');
+    assert.match(result.detectedStack, /Full-Stack/);
+    assert.match(result.qualityGates, /--prefix frontend/);
+  });
+});

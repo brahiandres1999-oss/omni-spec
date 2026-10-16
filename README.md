@@ -2,7 +2,7 @@
 
 A zero-dependency Spec-Driven Development (SDD) framework and command-line interface for human software engineers and autonomous AI coding agents.
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](package.json)
 [![Dependencies](https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg)](package.json)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-black.svg)](package.json)
 [![License](https://img.shields.io/badge/license-MIT-gray.svg)](LICENSE)

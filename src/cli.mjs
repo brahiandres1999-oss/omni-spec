@@ -15,13 +15,13 @@ async function getVersion() {
     const pkg = JSON.parse(raw);
     return pkg.version;
   } catch {
-    return '0.1.0';
+    return '0.2.0';
   }
 }
 
 export function printHelp() {
   console.log(`
-OmniSpec — Universal Spec-Driven Development Framework (v0.1.0)
+OmniSpec — Universal Spec-Driven Development Framework (v0.2.0)
 
 USAGE:
   omni-spec <command> [options]

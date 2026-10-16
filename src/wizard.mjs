@@ -2,11 +2,12 @@ import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { basename } from 'node:path';
 import { listProfiles } from './profiles/index.mjs';
+import { detectProjectEnvironment } from './detector.mjs';
 
 const STACK_PRESETS = [
   { label: 'Node.js / TypeScript', doc: 'TSDoc', gates: 'npm test\nnpm run lint\nnpm run build' },
   { label: 'Node.js / JavaScript (ESM)', doc: 'JSDoc', gates: 'npm test\nnpm run lint' },
-  { label: 'Python (FastAPI / Django)', doc: 'Python Docstrings', gates: 'pytest --cov\nruff check .' },
+  { label: 'Python (FastAPI / Django)', doc: 'Python Docstrings (PEP 257)', gates: 'pytest --cov\nruff check .' },
   { label: 'Java / Spring Boot', doc: 'JavaDoc', gates: 'mvn test\nmvn checkstyle:check' },
   { label: 'Go', doc: 'Go doc', gates: 'go test -v ./...\ngolangci-lint run' },
   { label: 'Rust', doc: 'Rustdoc', gates: 'cargo test\ncargo clippy' },
@@ -37,22 +38,27 @@ export async function promptChoice(rl, question, choices, defaultIndex = 0) {
 
 export async function runWizard(baseDir, cliOptions = {}) {
   const defaultProjectName = basename(baseDir);
+  const detected = await detectProjectEnvironment(baseDir);
 
   // If non-interactive mode is requested (e.g. --yes or in CI)
   if (cliOptions.yes) {
     return {
-      projectName: cliOptions.name || defaultProjectName,
-      stack: cliOptions.stack || 'Node.js',
-      docStandard: cliOptions.doc || 'JSDoc',
+      projectName: cliOptions.name || detected.projectName || defaultProjectName,
+      stack: cliOptions.stack || detected.detectedStack || 'Node.js',
+      docStandard: cliOptions.doc || detected.docStandard || 'JSDoc',
       profile: cliOptions.profile || 'general',
-      qualityGates: cliOptions.gates || 'npm test\nnpm run lint\nnpm run build'
+      qualityGates: cliOptions.gates || detected.qualityGates || 'npm test\nnpm run lint\nnpm run build'
     };
   }
 
   const rl = readline.createInterface({ input, output });
 
   console.log('\nOmniSpec — Universal Spec-Driven Development');
-  console.log('Repository constitution and specification engine setup.\n');
+  if (detected.isGreenfield) {
+    console.log('[INIT] Greenfield environment detected (starting fresh repository).\n');
+  } else {
+    console.log(`[DETECT] Existing codebase detected (${detected.detectedStack}). Setting up in-place SDD.\n`);
+  }
 
   try {
     // 1. Project Name
