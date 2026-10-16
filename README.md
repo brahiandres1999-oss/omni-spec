@@ -71,6 +71,73 @@ Industry invariants are injected directly into `CONSTITUTION.md` during initiali
 
 ---
 
+## Installation & Getting Started
+
+OmniSpec requires only Node.js (version 18 or higher) and can be adopted through two frictionless pathways: manual developer installation or autonomous AI agent prompt adoption.
+
+### Option A: Manual Installation (Human Engineers)
+
+Choose one of the following methods depending on your workflow:
+
+#### 1. Instant Run via NPX (Zero-Install)
+Run OmniSpec directly without permanent installation:
+```bash
+npx github:brahiandres1999-oss/omni-spec init
+```
+
+#### 2. Global CLI Installation
+Install OmniSpec globally to make the `omni-spec` binary available anywhere in your terminal:
+```bash
+npm install -g git+https://github.com/brahiandres1999-oss/omni-spec.git
+
+# Test global installation:
+omni-spec version
+```
+
+#### 3. Standalone Clone (Zero External Network Overhead)
+Clone the repository locally into your machine or tools directory and link it:
+```bash
+git clone https://github.com/brahiandres1999-oss/omni-spec.git
+cd omni-spec
+npm link
+```
+
+---
+
+### Option B: AI Agent Guided Adoption (Prompt Installation)
+
+If you are using frontier AI coding agents (Google Antigravity, Cursor, Claude Code, GitHub Copilot, Roo Code), you can bootstrap OmniSpec in any repository with a single conversational prompt.
+
+Copy and paste the following prompt into your AI agent's chat interface:
+
+#### English Prompt:
+```text
+Adopt Spec-Driven Development (SDD) in this repository using OmniSpec:
+1. Initialize the framework by running: npx github:brahiandres1999-oss/omni-spec init --yes
+2. Inspect the newly generated CONSTITUTION.md and specs/manifest.json files.
+3. Verify that project quality gates (test runners, linters, and documentation standards) were accurately detected.
+4. For all subsequent tasks, strictly follow the SDD lifecycle:
+   - Run `omni-spec create <feature|bugfix|debt|rfc> <task-name>`.
+   - Resolve Phase 0 Clarification questions in specs/<task-name>/spec.md.
+   - Run `omni-spec audit` to verify zero hallucinations and complete data contracts.
+   - Only start implementing code after `omni-spec audit` outputs [AUDIT PASSED].
+```
+
+#### Prompt en Español:
+```text
+Adopta Spec-Driven Development (SDD) en este repositorio usando OmniSpec:
+1. Inicializa el framework ejecutando: npx github:brahiandres1999-oss/omni-spec init --yes
+2. Inspecciona los archivos CONSTITUTION.md y specs/manifest.json recién generados.
+3. Verifica que los quality gates del proyecto (pruebas, linters y estándar de documentación) hayan sido detectados correctamente.
+4. Para todas las tareas subsecuentes, sigue estrictamente el ciclo SDD:
+   - Ejecuta `omni-spec create <feature|bugfix|debt|rfc> <nombre-tarea>`.
+   - Resuelve la Fase 0 de Clarificación en specs/<nombre-tarea>/spec.md sin asumir reglas ocultas.
+   - Ejecuta `omni-spec audit` para verificar que no existan alucinaciones y que los contratos estén completos.
+   - Solo comienza a programar código una vez que `omni-spec audit` apruebe con [AUDIT PASSED].
+```
+
+---
+
 ## Command-Line Interface
 
 ### Initialization
