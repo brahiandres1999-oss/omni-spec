@@ -86,12 +86,39 @@ export async function detectProjectEnvironment(baseDir) {
 
   // Check subdirectories (e.g. monorepo / frontend+backend structure)
   if (entries.includes('frontend') || entries.includes('backend')) {
+    let hasTs = false;
+    let hasJs = false;
+    for (const sub of ['backend', 'frontend']) {
+      if (entries.includes(sub)) {
+        try {
+          const subPkg = JSON.parse(await readFile(join(baseDir, sub, 'package.json'), 'utf-8'));
+          const allDeps = { ...subPkg.dependencies, ...subPkg.devDependencies };
+          if (allDeps.typescript || allDeps['@types/node']) {
+            hasTs = true;
+          }
+          hasJs = true;
+        } catch {
+          // not a readable package.json in this sub
+        }
+      }
+    }
+
+    let detectedStack = 'Full-Stack (Frontend / Backend Architecture)';
+    let docStandard = 'JSDoc / TSDoc';
+    if (hasTs) {
+      detectedStack = 'Full-Stack (Node.js / TypeScript)';
+      docStandard = 'TSDoc';
+    } else if (hasJs) {
+      detectedStack = 'Full-Stack (Node.js / JavaScript ESM)';
+      docStandard = 'JSDoc';
+    }
+
     return {
       isGreenfield: false,
       type: 'brownfield',
-      detectedStack: 'Full-Stack (Frontend / Backend Architecture)',
+      detectedStack,
       framework: 'Polyglot Monorepo',
-      docStandard: 'JSDoc / TSDoc',
+      docStandard,
       qualityGates: 'npm --prefix frontend test\nnpm --prefix backend test',
       projectName: null
     };

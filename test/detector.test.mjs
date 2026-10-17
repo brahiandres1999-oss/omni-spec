@@ -123,4 +123,32 @@ describe('Project Environment & Stack Detector', () => {
     assert.match(result.detectedStack, /Full-Stack/);
     assert.match(result.qualityGates, /--prefix frontend/);
   });
+
+  test('identifies monorepo with pure JavaScript ESM subdirectories', async () => {
+    await mkdir(join(tempDir, 'backend'));
+    const backendPkg = {
+      name: 'backend',
+      type: 'module',
+      dependencies: { express: '^5.0.0' }
+    };
+    await writeFile(join(tempDir, 'backend', 'package.json'), JSON.stringify(backendPkg, null, 2));
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.detectedStack, 'Full-Stack (Node.js / JavaScript ESM)');
+    assert.equal(result.docStandard, 'JSDoc');
+  });
+
+  test('identifies monorepo with TypeScript subdirectories', async () => {
+    await mkdir(join(tempDir, 'frontend'));
+    const frontendPkg = {
+      name: 'frontend',
+      dependencies: { react: '^18.0.0' },
+      devDependencies: { typescript: '^5.0.0' }
+    };
+    await writeFile(join(tempDir, 'frontend', 'package.json'), JSON.stringify(frontendPkg, null, 2));
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.detectedStack, 'Full-Stack (Node.js / TypeScript)');
+    assert.equal(result.docStandard, 'TSDoc');
+  });
 });

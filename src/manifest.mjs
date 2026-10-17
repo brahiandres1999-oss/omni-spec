@@ -165,15 +165,27 @@ export async function saveManifest(baseDir, manifest) {
   return manifest;
 }
 
+async function getPackageVersion() {
+  try {
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
+    const raw = await readFile(pkgPath, 'utf-8');
+    const pkg = JSON.parse(raw);
+    return pkg.version || '0.4.0';
+  } catch {
+    return '0.4.0';
+  }
+}
+
 export async function _initManifestUnlocked(baseDir, options = {}) {
   const existing = await loadManifest(baseDir);
   const resolvedStack = options.stack || options.techStack;
   const resolvedDoc = options.docStandard || options.documentationStandard;
+  const pkgVersion = await getPackageVersion();
   const manifest = {
     $schema: 'https://raw.githubusercontent.com/omni-spec/omni-spec/main/schema/manifest.schema.json',
     schemaVersion: 1,
     project: options.projectName || (existing && existing.project) || 'MyProject',
-    version: '0.3.1',
+    version: options.version || existing?.version || pkgVersion,
     profile: (options.explicitProfile ? options.profile : null) || (existing && existing.profile) || options.profile || 'general',
     stack: (options.explicitStack ? resolvedStack : null) || (existing && existing.stack) || resolvedStack || 'Node.js',
     documentationStandard: (options.explicitDoc ? resolvedDoc : null) || (existing && existing.documentationStandard) || resolvedDoc || 'JSDoc',

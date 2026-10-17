@@ -3,6 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getProfile } from './profiles/index.mjs';
 import { initManifest, _initManifestUnlocked, addSpec, loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
+import { installAgentIntegrations } from './integrations.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -181,6 +182,14 @@ export async function scaffoldProject(baseDir, options = {}) {
 
   if (!readmeExists || force) {
     await writeFile(specsReadmePath, buildSpecsReadmeContent(options.projectName), 'utf-8');
+  }
+
+  // 5. Install multi-agent slash commands and integrations
+  const manifest = await loadManifest(baseDir);
+  if (manifest) {
+    try {
+      await installAgentIntegrations(baseDir, manifest);
+    } catch {}
   }
 
   return {

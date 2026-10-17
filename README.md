@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.3.1-blue.svg" alt="Version 0.3.1"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.4.0-blue.svg" alt="Version 0.4.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -33,7 +33,8 @@
   - [2. Creating Specifications (`omni-spec create`)](#2-creating-specifications)
   - [3. Specification Health Auditor (`omni-spec audit`)](#3-specification-quality-audit-anti-hallucination-gate)
   - [4. Lifecycle & Status Management (`status` & `complete`)](#4-inspection-and-lifecycle-management)
-- [Autonomous AI Agent Protocol](#ai-agent-integration)
+  - [5. Version Verification & Upgrades (`check` & `update`)](#5-version-verification--non-destructive-upgrades)
+- [AI Agent Integration & Chat Slash Commands (`/omni-*`)](#ai-agent-integration--chat-slash-commands)
 - [Architectural Rationale: Node.js vs. Python](#architectural-rationale-nodejs-vs-python)
 - [Automated Verification](#automated-verification)
 - [Repository Governance](#repository-governance)
@@ -239,11 +240,49 @@ omni-spec status
 omni-spec complete 001
 ```
 
+### 5. Version Verification & Non-Destructive Upgrades
+
+OmniSpec protects brownfield projects by ensuring project configurations, templates, and AI agent skills can be upgraded without ever touching active specifications, in-progress tasks, or custom domain rules in `CONSTITUTION.md`:
+
+```bash
+# Check if current project is synchronized with installed OmniSpec CLI version
+omni-spec check
+
+# Preview upgrade changes without writing to disk
+omni-spec update --dry-run
+
+# Execute non-destructive project upgrade
+omni-spec update
+
+# Re-generate or configure multi-agent slash commands (.agents, .cursor, .claude, .kilo)
+omni-spec setup-agent
+```
+
 ---
 
-## AI Agent Integration
+## AI Agent Integration & Chat Slash Commands
 
-OmniSpec establishes clear guardrails for autonomous agents (Google Antigravity, Cursor, Claude Code, GitHub Copilot).
+OmniSpec establishes clear guardrails for autonomous agents across the modern 2026 AI coding ecosystem: **Google Antigravity, Cursor, Claude Code, GitHub Copilot, OpenCode, and KiloCode**.
+
+### Universal Chat Slash Commands (`/omni-*`)
+
+Developers and agents can invoke the entire SDD lifecycle directly within the chat interface using native slash commands backed by OmniSpec's deterministic engine:
+
+| Slash Command | Purpose | Underlying Deterministic Action |
+| :--- | :--- | :--- |
+| **`/omni-specify`** | Author Specification | Scaffolds `specs/<slug>/` and drafts `spec.md` respecting domain regulatory invariants. |
+| **`/omni-clarify`** | Phase 0 Gatekeeper | Conducts targeted clarification Q&A (Section 0) to eliminate assumptions before coding. |
+| **`/omni-plan`** | Technical Architecture | Drafts `plan.md` with system diagrams, data contracts, and anti-slop guidelines. |
+| **`/omni-tasks`** | Task Decomposition | Breaks down architecture into dependency-ordered checkboxes in `tasks.md`. |
+| **`/omni-audit`** | Spec Health Audit | Programmatically audits Phase 0, completeness, and quality gates via `omni-spec audit`. |
+| **`/omni-implement`** | Surgical Execution | Sequentially implements tasks, runs test gates, and marks completion via `omni-spec complete`. |
+
+### Supported AI Agent Adapters:
+- **Google Antigravity / Gemini CLI:** `.agents/skills/omni-*/SKILL.md` (interactive chat dropdown).
+- **Cursor:** `.cursor/rules/omni-spec.mdc` (system prompt steering rules).
+- **Claude Code:** `.claude/commands/omni-*.md` (custom slash command scripts).
+- **GitHub Copilot:** `.github/copilot-instructions.md` (persistent repo guidelines).
+- **OpenCode & KiloCode:** `AGENTS.md` and `.kilo/rules/omni-spec.md` + `kilo.jsonc`.
 
 ### Operational Protocol for Agents
 
@@ -252,7 +291,7 @@ Agents configured to work within an OmniSpec-enabled repository follow this prot
 1. **State Discovery:** Read `specs/manifest.json` using `omni-spec status` to identify the active spec.
 2. **Phase 0 Audit:** Inspect `spec.md` Section 0. If any requirement, data contract, or boundary is ambiguous, the agent must ask clarification questions before modifying code.
 3. **Constitutional Invariance:** Review `CONSTITUTION.md`. Do not introduce patterns, libraries, or side-effects prohibited by domain rules.
-4. **Task Execution:** Execute tasks defined in `tasks.md` sequentially.
+4. **Task Execution:** Execute tasks defined in `tasks.md` sequentially following Minimal Touch surgery.
 5. **Quality Gates:** Verify all commands declared in `CONSTITUTION.md` pass with zero errors before reporting completion.
 
 ---

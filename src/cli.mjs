@@ -2,6 +2,8 @@ import { scaffoldProject, createSpec, ARCHETYPES } from './generator.mjs';
 import { runWizard } from './wizard.mjs';
 import { loadManifest, updateSpecStatus, getActiveSpec } from './manifest.mjs';
 import { auditSpec } from './auditor.mjs';
+import { checkProjectVersion, updateProject, getCliVersion } from './updater.mjs';
+import { installAgentIntegrations } from './integrations.mjs';
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,19 +12,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function getVersion() {
-  try {
-    const pkgPath = join(__dirname, '..', 'package.json');
-    const raw = await readFile(pkgPath, 'utf-8');
-    const pkg = JSON.parse(raw);
-    return pkg.version;
-  } catch {
-    return '0.3.0';
-  }
+  return getCliVersion();
 }
 
 export function printHelp() {
   console.log(`
-OmniSpec — Universal Spec-Driven Development Framework (v0.3.1)
+OmniSpec — Universal Spec-Driven Development Framework (v0.4.0)
 
 USAGE:
   omni-spec <command> [options]
@@ -33,6 +28,9 @@ COMMANDS:
   audit [id]               Audit specification health, Phase 0 gates, and task progress
   status                   Show the current active spec and project progress
   complete <id>            Mark a specification as completed
+  update, upgrade          Non-destructively upgrade templates, manifest schema, and agent skills
+  check                    Check project synchronization and version status against CLI
+  setup-agent              Generate or refresh multi-agent slash commands (.agents, .cursor, .claude)
   help                     Show this help message
   version                  Show OmniSpec version
 
@@ -85,6 +83,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     const arg = args[i];
     if (arg === '--yes' || arg === '-y') flags.yes = true;
     else if (arg === '--force') flags.force = true;
+    else if (arg === '--dry-run') flags.dryRun = true;
     else if (arg === '--profile' && args[i + 1]) flags.profile = args[++i];
     else if (arg === '--name' && args[i + 1]) flags.name = args[++i];
     else if (arg === '--stack' && args[i + 1]) flags.stack = args[++i];
@@ -193,6 +192,12 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
             console.log(`   [${marker}] [${s.id}] ${s.slug} (${s.type}) - ${s.status}`);
           });
         }
+
+        const cliVersion = await getVersion();
+        if (manifest.version && manifest.version !== cliVersion) {
+          console.log(`\n[NOTICE] Project is running OmniSpec v${manifest.version}, but CLI v${cliVersion} is available.`);
+          console.log(`         Run 'omni-spec update' to synchronize templates and agent skills non-destructively.`);
+        }
         console.log('');
         return 0;
       }
@@ -207,6 +212,61 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
 
         const updated = await updateSpecStatus(workingDir, id, 'COMPLETED');
         console.log(`[OK] Spec [${updated.id}] ${updated.slug} marked as COMPLETED.`);
+        return 0;
+      }
+
+      case 'check': {
+        const check = await checkProjectVersion(workingDir);
+        console.log('\n[OMNISPEC CHECK] Version & Synchronization Report');
+        console.log(`   Project:          ${check.project || 'N/A'}`);
+        console.log(`   Project Version:  ${check.projectVersion ? 'v' + check.projectVersion : 'Not initialized'}`);
+        console.log(`   CLI Version:      v${check.cliVersion}`);
+        console.log(`   Status:           ${check.isOutdated ? 'UPDATE AVAILABLE' : 'SYNCHRONIZED'}`);
+        console.log(`\n${check.message}\n`);
+        return check.isOutdated ? 1 : 0;
+      }
+
+      case 'update':
+      case 'upgrade': {
+        console.log('[UPDATE] Initiating non-destructive project upgrade...');
+        const result = await updateProject(workingDir, flags);
+        if (result.dryRun) {
+          console.log(`\n[DRY RUN] Upgrade preview for "${result.project}":`);
+          console.log(`   From version:     v${result.fromVersion}`);
+          console.log(`   To version:       v${result.toVersion}`);
+          console.log(`   Specs preserved:  ${result.specsCount}`);
+          console.log('\nRun "omni-spec update" without --dry-run to apply changes.\n');
+          return 0;
+        }
+
+        console.log(`\n[OK] Project "${result.project}" successfully upgraded to v${result.toVersion}!`);
+        console.log(`   - Previous version:  v${result.fromVersion}`);
+        console.log(`   - Specs preserved:   ${result.specsPreserved} specifications intact`);
+        console.log(`   - Templates:         Refreshed in specs/_templates/`);
+        console.log(`   - AI Agent Skills:   Synchronized (${result.agentIntegrations.created.length} created, ${result.agentIntegrations.updated.length} updated)`);
+        console.log(`   - Constitution:      100% preserved\n`);
+        return 0;
+      }
+
+      case 'setup-agent':
+      case 'setup-agents': {
+        const manifest = await loadManifest(workingDir);
+        if (!manifest) {
+          console.error('[ERROR] Cannot setup agent integrations: project is not initialized. Run "omni-spec init" first.');
+          return 1;
+        }
+        console.log('[AGENT] Generating universal multi-agent slash commands and rules...');
+        const result = await installAgentIntegrations(workingDir, manifest);
+        console.log('[OK] Agent integrations configured successfully!');
+        console.log(`   - Created files (${result.created.length}):`);
+        result.created.forEach(f => console.log(`     * ${f}`));
+        if (result.updated.length > 0) {
+          console.log(`   - Updated files (${result.updated.length}):`);
+          result.updated.forEach(f => console.log(`     * ${f}`));
+        }
+        console.log('\nAvailable Slash Commands in Chat:');
+        console.log('  /omni-specify   /omni-clarify   /omni-plan');
+        console.log('  /omni-tasks     /omni-audit     /omni-implement\n');
         return 0;
       }
 

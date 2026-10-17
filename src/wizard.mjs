@@ -45,6 +45,9 @@ function findPresetIndex(target) {
   if (lower.includes('node') || lower.includes('javascript') || lower.includes('react') || lower.includes('express')) {
     return STACK_PRESETS.findIndex(p => p.label.includes('Node.js / JavaScript'));
   }
+  if (lower.includes('full-stack') || lower.includes('monorepo')) {
+    return STACK_PRESETS.findIndex(p => p.label.includes('Node.js / JavaScript'));
+  }
   return -1;
 }
 
