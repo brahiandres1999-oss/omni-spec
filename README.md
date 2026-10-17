@@ -230,11 +230,17 @@ Verification enforced by `omni-spec audit`:
 * **Zero AI-Slop & Placeholders:** Detects unreplaced template tokens (`SPEC-XXX`, `[Rol Autorizado]`, unedited sample questions).
 * **Task Checklist Validation:** Parses task checkboxes in `tasks.md` and reports completion percentages (`X/Y tasks, Z%`). Requires at least one actionable task (`- [ ]`).
 
-### 4. Inspection and Lifecycle Management
+### 4. Inspection, Focus & Lifecycle Management
 
 ```bash
 # Inspect current project state and active specification
 omni-spec status
+
+# List all specifications with status and active focus marker
+omni-spec list
+
+# Switch active specification focus to another feature or bugfix
+omni-spec focus 001
 
 # Mark a specification as implemented and close active tracking
 omni-spec complete 001
@@ -242,7 +248,7 @@ omni-spec complete 001
 
 ### 5. Version Verification & Non-Destructive Upgrades
 
-OmniSpec protects brownfield projects by ensuring project configurations, templates, and AI agent skills can be upgraded without ever touching active specifications, in-progress tasks, or custom domain rules in `CONSTITUTION.md`:
+OmniSpec protects brownfield projects by ensuring project configurations, templates, and AI agent skills can be upgraded without ever touching active specifications, in-progress tasks, or custom domain rules in \`CONSTITUTION.md\`:
 
 ```bash
 # Check if current project is synchronized with installed OmniSpec CLI version
@@ -264,18 +270,19 @@ omni-spec setup-agent
 
 OmniSpec establishes clear guardrails for autonomous agents across the modern 2026 AI coding ecosystem: **Google Antigravity, Cursor, Claude Code, GitHub Copilot, OpenCode, and KiloCode**.
 
-### Universal Chat Slash Commands (`/omni-*`)
+### Universal Chat Slash Commands (\`/omni-*\`)
 
 Developers and agents can invoke the entire SDD lifecycle directly within the chat interface using native slash commands backed by OmniSpec's deterministic engine:
 
 | Slash Command | Purpose | Underlying Deterministic Action |
 | :--- | :--- | :--- |
-| **`/omni-specify`** | Author Specification | Scaffolds `specs/<slug>/` and drafts `spec.md` respecting domain regulatory invariants. |
-| **`/omni-clarify`** | Phase 0 Gatekeeper | Conducts targeted clarification Q&A (Section 0) to eliminate assumptions before coding. |
-| **`/omni-plan`** | Technical Architecture | Drafts `plan.md` with system diagrams, data contracts, and anti-slop guidelines. |
-| **`/omni-tasks`** | Task Decomposition | Breaks down architecture into dependency-ordered checkboxes in `tasks.md`. |
-| **`/omni-audit`** | Spec Health Audit | Programmatically audits Phase 0, completeness, and quality gates via `omni-spec audit`. |
-| **`/omni-implement`** | Surgical Execution | Sequentially implements tasks, runs test gates, and marks completion via `omni-spec complete`. |
+| **\`/omni-specify\`** | Author Specification | Scaffolds \`specs/<slug>/\` and drafts \`spec.md\` respecting domain regulatory invariants. |
+| **\`/omni-clarify\`** | Phase 0 Gatekeeper | Conducts targeted clarification Q&A (Section 0) to eliminate assumptions before coding. |
+| **\`/omni-plan\`** | Technical Architecture | Drafts \`plan.md\` with system diagrams, data contracts, and anti-slop guidelines. |
+| **\`/omni-tasks\`** | Task Decomposition | Breaks down architecture into dependency-ordered checkboxes in \`tasks.md\`. |
+| **\`/omni-audit\`** | Spec Health Audit | Programmatically audits Phase 0, completeness, and quality gates via \`omni-spec audit\`. |
+| **\`/omni-implement\`** | Surgical Execution | Sequentially implements tasks, runs test gates, and marks completion via \`omni-spec complete\`. |
+| **\`/omni-converge\`** | Anti-Drift Verification | Verifies implemented code against \`spec.md\` & \`plan.md\`, checks quality gates, and completes lifecycle. |
 
 ### Supported AI Agent Adapters:
 - **Google Antigravity / Gemini CLI:** `.agents/skills/omni-*/SKILL.md` (interactive chat dropdown).

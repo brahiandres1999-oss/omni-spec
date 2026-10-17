@@ -1,6 +1,6 @@
 import { scaffoldProject, createSpec, ARCHETYPES } from './generator.mjs';
 import { runWizard } from './wizard.mjs';
-import { loadManifest, updateSpecStatus, getActiveSpec } from './manifest.mjs';
+import { loadManifest, updateSpecStatus, getActiveSpec, focusSpec, listSpecs } from './manifest.mjs';
 import { auditSpec } from './auditor.mjs';
 import { checkProjectVersion, updateProject, getCliVersion } from './updater.mjs';
 import { installAgentIntegrations } from './integrations.mjs';
@@ -25,6 +25,8 @@ USAGE:
 COMMANDS:
   init                     Initialize OmniSpec in the current repository with interactive wizard
   create <type> <name>     Create a new specification (feature, bugfix, debt, rfc)
+  focus <id|slug>          Switch the active specification focus (alias: switch)
+  list, specs              List all specifications with status and active indicator
   audit [id]               Audit specification health, Phase 0 gates, and task progress
   status                   Show the current active spec and project progress
   complete <id>            Mark a specification as completed
@@ -125,6 +127,50 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         console.log(`   - Git Branch: ${spec.branch}`);
         console.log(`   - Status:     Active\n`);
         console.log(`Open specs/${spec.slug} to complete the specification.`);
+        return 0;
+      }
+
+      case 'focus':
+      case 'switch': {
+        const id = args[1];
+        if (!id) {
+          console.error('[ERROR] Please specify the spec ID or slug to focus.');
+          console.log('Usage: omni-spec focus <id|slug>');
+          return 1;
+        }
+
+        const focused = await focusSpec(workingDir, id);
+        console.log(`\n[OK] Focused specification: [${focused.id}] ${focused.slug} (${focused.type})`);
+        console.log(`   - Branch: ${focused.branch}`);
+        console.log(`   - Status: ${focused.status}\n`);
+        return 0;
+      }
+
+      case 'list':
+      case 'specs': {
+        const data = await listSpecs(workingDir);
+        if (!data) {
+          console.log('[INFO] No OmniSpec manifest found. Run `omni-spec init` to get started.');
+          return 1;
+        }
+
+        console.log(`\n[OMNISPEC SPECS] Project: ${data.project} (${data.profile} profile)`);
+        console.log(`Total Specifications: ${data.specs.length}\n`);
+        if (data.specs.length === 0) {
+          console.log('No specifications found. Create one with `omni-spec create <type> <name>`.');
+          return 0;
+        }
+
+        console.log('  ACT  ID    SLUG                                TYPE       STATUS');
+        console.log('  ---  ----  ----------------------------------  ---------  -----------');
+        for (const s of data.specs) {
+          const isAct = s.slug === data.active_spec ? '*' : ' ';
+          const idPad = String(s.id).padEnd(4);
+          const slugPad = String(s.slug).padEnd(34);
+          const typePad = String(s.type).padEnd(9);
+          console.log(`  [${isAct}]  ${idPad}  ${slugPad}  ${typePad}  ${s.status}`);
+        }
+        console.log('');
         return 0;
       }
 
@@ -266,7 +312,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         }
         console.log('\nAvailable Slash Commands in Chat:');
         console.log('  /omni-specify   /omni-clarify   /omni-plan');
-        console.log('  /omni-tasks     /omni-audit     /omni-implement\n');
+        console.log('  /omni-tasks     /omni-audit     /omni-implement   /omni-converge\n');
         return 0;
       }
 

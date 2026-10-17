@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-16
+
+### Added
+- **Universal Multi-Agent Slash Commands (\`src/integrations.mjs\`):**
+  - Generated 7 core SDD slash commands (\`/omni-specify\`, \`/omni-clarify\`, \`/omni-plan\`, \`/omni-tasks\`, \`/omni-audit\`, \`/omni-implement\`, \`/omni-converge\`).
+  - Added \`/omni-converge\` for anti-drift verification between implementation, acceptance criteria, and architecture before marking specifications complete.
+  - Native multi-agent adapters for Google Antigravity / Gemini CLI (\`.agents/skills/\`), Cursor (\`.cursor/rules/\`), Claude Code (\`.claude/commands/\`), GitHub Copilot (\`.github/\`), OpenCode (\`AGENTS.md\`), and KiloCode (\`.kilo/rules/\`, \`kilo.jsonc\`).
+- **Specification Focus & List Engine (\`src/manifest.mjs\` & CLI \`focus\` / \`list\`):**
+  - \`omni-spec focus <id|slug>\` (alias \`switch\`): Atomically switches active specification and updates active archetype with Lamport lock protection.
+  - \`omni-spec list\` (alias \`specs\`): Tabular listing of all specifications with ID, slug, archetype, status, and active marker (\`[*]\`).
+- **Non-Destructive Project Updater & Migration Engine (\`src/updater.mjs\`):**
+  - \`omni-spec check\`: Validates synchronization between project manifest and installed CLI version.
+  - \`omni-spec update\` (with \`--dry-run\`): Upgrades templates in \`specs/_templates/\`, updates manifest version, and refreshes agent skills while keeping active specs and \`CONSTITUTION.md\` 100% intact.
+- **Deep Monorepo Stack Detection (\`src/detector.mjs\`):**
+  - Inspects \`backend/package.json\` and \`frontend/package.json\` packages to accurately identify JavaScript ESM vs TypeScript dependencies.
+- **Hardened Windows Concurrency (\`src/manifest.mjs\`):**
+  - Handled transient \`EPERM\` and \`EBUSY\` filesystem locks during concurrent removal in dead-owner recovery.
+- **Requirements Traceability Matrix (\`src/templates/01-feature/spec.md\`):**
+  - Integrated Section 2.5 linking User Stories (Gherkin) with technical tasks and test suites.
+
 ## [0.3.1] - 2026-10-16
 
 ### Fixed & Hardened

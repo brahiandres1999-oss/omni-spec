@@ -72,6 +72,14 @@
 * **Entonces** el sistema debe procesar una sola transacción,
 * **Y** devolver el mismo resultado sin duplicar registros ni efectos secundarios.
 
+### 2.5 Matriz de Trazabilidad de Requerimientos
+| ID Requerimiento | Criterio de Aceptación (Gherkin) | Tarea Asociada (tasks.md) | Suite de Pruebas |
+| :--- | :--- | :--- | :--- |
+| \`[US-001]\` | Escenario 1: Flujo Principal | \`[TASK-001]\`, \`[TASK-002]\` | test/unit/ |
+| \`[US-002]\` | Escenario 2: Restricción RBAC | \`[TASK-002]\` | test/security/ |
+| \`[US-003]\` | Escenario 3: Casos Límite | \`[TASK-003]\` | test/integration/ |
+| \`[US-004]\` | Escenario 4: Idempotencia | \`[TASK-002]\` | test/concurrency/ |
+
 ---
 
 ## 3. Matriz de Cumplimiento, Privacidad & Seguridad

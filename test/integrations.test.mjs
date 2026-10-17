@@ -22,11 +22,11 @@ describe('Multi-Agent Integrations & Slash Commands Generator', () => {
     }
   });
 
-  test('installs 6 Antigravity skills with frontmatter and descriptions', async () => {
+  test('installs 7 Antigravity skills with frontmatter and descriptions', async () => {
     const manifest = { project: 'TestApp', version: '0.4.0' };
     const result = await installAgentIntegrations(tempDir, manifest);
 
-    assert.equal(OMNI_SKILLS.length, 6);
+    assert.equal(OMNI_SKILLS.length, 7);
     for (const skill of OMNI_SKILLS) {
       const skillPath = join(tempDir, '.agents', 'skills', skill.name, 'SKILL.md');
       const content = await readFile(skillPath, 'utf-8');
@@ -40,6 +40,7 @@ describe('Multi-Agent Integrations & Slash Commands Generator', () => {
     assert.ok(result.created.some(f => f.includes('omni-tasks')));
     assert.ok(result.created.some(f => f.includes('omni-audit')));
     assert.ok(result.created.some(f => f.includes('omni-implement')));
+    assert.ok(result.created.some(f => f.includes('omni-converge')));
   });
 
   test('creates Cursor rule, Claude commands, and Kilo configuration', async () => {

@@ -122,10 +122,46 @@ You are an expert pair programmer. Your goal is to execute the tasks in \`tasks.
    \`\`\`
    Do not proceed to the next task if any test or lint error fails.
 5. Mark the task as completed in \`tasks.md\` (\`- [x]\`).
-6. Once all tasks are checked, mark the specification as complete:
+6. Once all tasks are checked, proceed to verify convergence:
+   \`\`\`bash
+   /omni-converge
+   \`\`\`
+`
+  },
+  {
+    name: 'omni-converge',
+    description: 'Verifica la ausencia de deriva (anti-drift) entre el código implementado, los criterios de aceptación y la arquitectura.',
+    instructions: `# /omni-converge — Anti-Drift Verification & Completion
+
+You are the principal quality auditor and lead architect. Your goal is to verify that the implementation completely and faithfully satisfies the specification without drift, debt, or unverified changes.
+
+## Instructions:
+1. Inspect the modified files and git diff (\`git status\`, \`git diff\`).
+2. Cross-verify against the active \`spec.md\`:
+   - Ensure every User Scenario and Acceptance Criteria (Given/When/Then) is fulfilled.
+   - Verify that all regulatory invariants (e.g. data masking, idempotency) are respected.
+3. Cross-verify against \`plan.md\`:
+   - Ensure the final code matches the agreed architectural boundaries and data contracts.
+   - Confirm no unauthorized packages or ad-hoc architectural shortcuts were introduced.
+4. Verify task completion:
+   - Confirm all tasks in \`tasks.md\` are marked as completed (\`- [x]\`).
+5. Execute the project's quality gates:
+   \`\`\`bash
+   npm test
+   \`\`\`
+   Confirm that all test suites pass with zero failures and zero linter warnings.
+6. Run the final specification audit:
+   \`\`\`bash
+   omni-spec audit
+   \`\`\`
+7. Complete the specification lifecycle:
    \`\`\`bash
    omni-spec complete <spec-id>
    \`\`\`
+8. Present a structured final summary report to the user including:
+   - Verification of Acceptance Criteria.
+   - Modified and created files.
+   - Quality gate results and test output.
 `
   }
 ];
@@ -179,6 +215,7 @@ This repository uses **OmniSpec (v${manifest.version || '0.4.0'})** for Spec-Dri
 - \`/omni-tasks\`: Decompose plan into dependency-ordered atomic tasks (\`tasks.md\`).
 - \`/omni-audit\`: Run deterministic \`omni-spec audit\` checks.
 - \`/omni-implement\`: Sequentially execute tasks and verify quality gates.
+- \`/omni-converge\`: Verify implementation against spec (anti-drift) and complete lifecycle.
 
 ## Core Rules:
 1. Always adhere to \`CONSTITUTION.md\` domain and architectural invariants.
@@ -237,6 +274,7 @@ This repository is governed by OmniSpec. AI agents must follow the SDD lifecycle
 - \`/omni-tasks\`: Break down tasks into \`tasks.md\`.
 - \`/omni-audit\`: Run \`omni-spec audit\` to verify compliance.
 - \`/omni-implement\`: Execute tasks and pass delivery quality gates.
+- \`/omni-converge\`: Anti-drift verification against spec and plan before completion.
 Refer to \`CONSTITUTION.md\` for non-negotiable domain and regulatory invariants.
 <!-- OMNI-SPEC-END -->\n`;
 

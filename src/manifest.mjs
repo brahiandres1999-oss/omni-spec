@@ -77,11 +77,13 @@ async function participants(lockPath) {
       if (!/^[1-9]\d*$/.test(ticket)) throw new Error(`Invalid manifest lock ticket: ${name}`);
       result.push({ name, ticket: BigInt(ticket) });
     } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+      if (!['ENOENT', 'EPERM', 'EBUSY'].includes(error.code)) throw error;
       try {
         await stat(join(lockPath, name));
         result.push({ name, ticket: null }); // choosing, not an abandoned empty lock
-      } catch (gone) { if (gone.code !== 'ENOENT') throw gone; }
+      } catch (gone) {
+        if (!['ENOENT', 'EPERM', 'EBUSY'].includes(gone.code)) throw gone;
+      }
     }
   }
   return result;
@@ -270,3 +272,39 @@ export async function getActiveSpec(baseDir) {
 
   return manifest.specs.find(s => s.slug === manifest.active_spec) || null;
 }
+
+export async function focusSpec(baseDir, identifier) {
+  return withManifestLock(baseDir, async () => {
+    const manifest = await loadManifest(baseDir);
+    if (!manifest) {
+      throw new Error('No OmniSpec manifest found. Run `omni-spec init` first.');
+    }
+
+    const spec = manifest.specs.find(
+      s => s.id === identifier || s.slug === identifier || s.slug.includes(identifier)
+    );
+
+    if (!spec) {
+      throw new Error(`Specification with identifier "${identifier}" not found in manifest.`);
+    }
+
+    manifest.active_spec = spec.slug;
+    manifest.active_archetype = spec.type;
+    await saveManifest(baseDir, manifest);
+    return spec;
+  });
+}
+
+export async function listSpecs(baseDir) {
+  const manifest = await loadManifest(baseDir);
+  if (!manifest) {
+    return null;
+  }
+  return {
+    project: manifest.project,
+    profile: manifest.profile,
+    active_spec: manifest.active_spec,
+    specs: manifest.specs
+  };
+}
+
