@@ -1,13 +1,13 @@
 {
   "name": "omni-spec",
-  "version": "0.5.0-rc.1",
+  "version": "0.5.0",
   "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding.",
   "type": "module",
   "main": "src/cli.mjs",
   "repository": { "type": "git", "url": "git+https://github.com/brahiandres1999-oss/omni-spec.git" },
   "homepage": "https://github.com/brahiandres1999-oss/omni-spec#readme",
   "bugs": { "url": "https://github.com/brahiandres1999-oss/omni-spec/issues" },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/", "tag": "next" },
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/", "tag": "latest" },
   "bin": {
     "omni-spec": "bin/omni-spec.mjs"
   },
@@ -17,7 +17,7 @@
     "release:check": "node scripts/release-check.mjs",
     "release:pack": "node scripts/release-assets.mjs"
   },
-  "files": ["bin/", "src/", "schema/", "docs/", "README.md", "CHANGELOG.md", "LICENSE"],
+  "files": ["bin/", "src/", "schema/", "assets/", "docs/ONBOARDING.md", "docs/STANDARDS.md", "docs/COMPATIBILITY.md", "docs/RELEASING.md", "docs/locking.md", "README.md", "CHANGELOG.md", "LICENSE"],
   "keywords": [
     "spec-driven-development",
     "sdd",

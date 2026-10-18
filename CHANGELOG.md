@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-18
+
+### Changed
+- Publish the normal 0.5.0 release on GitHub; npm remains a separate pending publication.
+- Restore the README banner, badges and navigation; retain current usage instructions.
+- Remove internal baseline/iteration reports from the current repository tree and use a concise compatibility reference.
+- Restrict package documentation to maintained user guides and include branding assets.
+- Document and verify content-based migration of development copies already labeled 0.5.0, preserving completed specifications and authored context.
+
 ## [0.5.0-rc.1] - 2026-10-18
 
 Release candidate distributed initially through the private GitHub repository; npm publication is separate and pending maintainer account setup. Previous local copies labeled `0.5.0` were unpublished development builds; see `docs/RELEASING.md` before migrating them to this prerelease.
@@ -33,9 +42,9 @@ Release candidate distributed initially through the private GitHub repository; n
 - The README describes structural checks, semantic review and executed verification separately. Earlier “zero hallucination” and mathematical-verification claims are not guarantees of this implementation.
 
 ### Compatibility
-- Local changes only; no tag, commit, remote publication or host-chat certification is implied.
+- The initial local implementation did not imply host-chat certification; the rc was subsequently published on GitHub.
 - Existing specification folders and custom constitution/context remain intact on update. Legacy specs need an authored `verification.md`; bugfix closure now requires a checklist in `fix.md`.
-- Adapters use each host's documented invocation mechanism; a universal slash syntax is not promised. See `docs/STANDARDS.md` and `docs/VALIDATION-0.5.0.md`.
+- Adapters use each host's documented invocation mechanism; a universal slash syntax is not promised. See `docs/STANDARDS.md` and `docs/COMPATIBILITY.md`.
 
 ## [0.4.1] - 2026-10-17
 

@@ -21,6 +21,8 @@ assert.ok(packageInfo.files.some(f => f.path === 'schema/manifest.schema.json'))
 assert.ok(packageInfo.files.some(f => f.path === 'schema/acceptance.schema.json'));
 assert.ok(packageInfo.files.some(f => f.path === 'src/workflows.mjs'));
 assert.ok(!packageInfo.files.some(f => f.path.startsWith('test/')));
+assert.ok(packageInfo.files.some(f => f.path === 'assets/omni-spec-banner.svg'));
+assert.ok(!packageInfo.files.some(f => /(?:BASELINE-|VALIDATION-|^artifacts\/|^docs\/releases\/)/.test(f.path)), 'Exclude internal reports and repository release history from the user package');
 const tool = join(temporary, 'installed-tool'); await mkdir(tool);
 exec([npm, 'install', '--prefix', tool, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', join(temporary, packageInfo.filename)], tool);
 const installed = join(tool, 'node_modules', 'omni-spec', 'bin', 'omni-spec.mjs');

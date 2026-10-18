@@ -171,11 +171,10 @@ test('newer project versions cannot be downgraded by update', async () => {
   assert.equal((await loadManifest(root)).version, '0.6.0');
 });
 
-test('migration from unpublished 0.5.0 to the rc requires an explicit downgrade and preserves authored state', async () => {
+test('downgrade requires explicit consent and preserves authored state', async () => {
   const cliVersion = await getCliVersion();
-  if (!cliVersion.includes('-')) return;
   await scaffoldProject(root);
-  const manifest = await loadManifest(root); manifest.version = cliVersion.split('-')[0]; await saveManifest(root, manifest);
+  const manifest = await loadManifest(root); manifest.version = '999.0.0'; await saveManifest(root, manifest);
   const contextPath = join(root, 'specs/project-context.md');
   await writeFile(contextPath, '# Confirmed decisions\nPreserve all existing user choices.\n');
   await assert.rejects(updateProject(root), /Refusing downgrade/);

@@ -5,6 +5,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { checkProjectVersion, updateProject, getCliVersion } from '../src/updater.mjs';
 import { saveManifest } from '../src/manifest.mjs';
+import { createHash } from 'node:crypto';
+import { scaffoldProject, createSpec } from '../src/generator.mjs';
+import { verifySpec, completeSpec } from '../src/verification.mjs';
+import { fillSpec } from '../test-support/fixtures.mjs';
 
 describe('OmniSpec Project Updater & Migration Engine', () => {
   let tempDir;
@@ -122,5 +126,43 @@ describe('OmniSpec Project Updater & Migration Engine', () => {
     const checkAfter = await checkProjectVersion(tempDir);
     assert.equal(checkAfter.isOutdated, false);
     assert.equal(checkAfter.projectVersion, cliVersion);
+  });
+
+  test('same-version development migration refreshes owned skills and preserves completed feature evidence', async () => {
+    await scaffoldProject(tempDir, { agent: 'antigravity', qualityGates: '' });
+    const spec = await createSpec(tempDir, 'feature', 'existing-work');
+    await fillSpec(tempDir, spec);
+    await verifySpec(tempDir, spec.id, { manual: 'Reviewed the existing deterministic feature in this migration fixture.' });
+    await completeSpec(tempDir, spec.id);
+    const contextPath = join(tempDir, 'specs', 'project-context.md');
+    await writeFile(contextPath, '# Existing context\nKeep these project decisions.\n');
+    const constitution = await readFile(join(tempDir, 'CONSTITUTION.md'), 'utf8');
+    const before = JSON.parse(await readFile(join(tempDir, 'specs', 'manifest.json'), 'utf8'));
+    const authored = {};
+    for (const name of ['spec.md', 'plan.md', 'tasks.md', 'verification.md', 'verification.json', 'acceptance.json']) {
+      authored[name] = await readFile(join(spec.specDir, name), 'utf8');
+    }
+    const skillName = '.agents/skills/omni-discuss/SKILL.md';
+    const oldSkill = '# Previously installed development skill\n';
+    await writeFile(join(tempDir, skillName), oldSkill);
+    const registryPath = join(tempDir, 'specs', '.omni', 'managed.json');
+    const registry = JSON.parse(await readFile(registryPath, 'utf8'));
+    registry.files[skillName].hash = createHash('sha256').update(oldSkill).digest('hex');
+    await writeFile(registryPath, JSON.stringify(registry));
+    const preview = await updateProject(tempDir, { dryRun: true });
+    assert.equal(preview.fromVersion, preview.toVersion);
+    assert.equal(preview.downgrade, false);
+    assert.ok(preview.assets.updated.includes(skillName));
+    assert.deepEqual(preview.assets.conflicts, []);
+    assert.equal(await readFile(join(tempDir, skillName), 'utf8'), oldSkill);
+    await updateProject(tempDir);
+    const after = JSON.parse(await readFile(join(tempDir, 'specs', 'manifest.json'), 'utf8'));
+    assert.deepEqual(after, before);
+    for (const [name, content] of Object.entries(authored)) assert.equal(await readFile(join(spec.specDir, name), 'utf8'), content);
+    assert.equal(await readFile(contextPath, 'utf8'), '# Existing context\nKeep these project decisions.\n');
+    assert.equal(await readFile(join(tempDir, 'CONSTITUTION.md'), 'utf8'), constitution);
+    assert.notEqual(await readFile(join(tempDir, skillName), 'utf8'), oldSkill);
+    assert.equal((await checkProjectVersion(tempDir)).healthy, true);
+    assert.deepEqual((await updateProject(tempDir, { dryRun: true })).assets.updated, []);
   });
 });

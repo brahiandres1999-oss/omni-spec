@@ -1,33 +1,54 @@
-# OmniSpec 0.5.0-rc.1
+<p align="center">
+  <img src="assets/omni-spec-banner.svg" alt="OmniSpec Banner" width="100%">
+</p>
+
+<p align="center">
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.5.0-blue.svg" alt="Version 0.5.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
+  <a href="https://github.com/brahiandres1999-oss/omni-spec/actions/workflows/ci.yml"><img src="https://github.com/brahiandres1999-oss/omni-spec/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+# OmniSpec 0.5.0
 
 Desarrollo guiado por especificaciones desde el chat de tu agente, con un motor CLI local y sin dependencias npm externas. Requiere Node.js >=18.19.0 y un agente capaz de leer archivos y ejecutar comandos.
 
-**Prerelease candidata: `0.5.0-rc.1`.** El motor y el paquete tienen pruebas automatizadas; la experiencia de todos los agentes y entornos aún requiere aceptación. Consulta las [notas de versión](docs/releases/0.5.0-rc.1.md), [evidencia y límites](docs/VALIDATION-0.5.0.md) y [fuentes de los adaptadores](docs/STANDARDS.md).
+**Versión 0.5.0.** Base de desarrollo con instalación por proyecto, nueve flujos y verificación explícita. Consulta las [notas de versión](https://github.com/brahiandres1999-oss/omni-spec/releases/tag/v0.5.0), [compatibilidad y límites](docs/COMPATIBILITY.md) y [fuentes de los adaptadores](docs/STANDARDS.md).
 
 OmniSpec ayuda a reconocer el repositorio, explorar ideas, definir cambios, corregir fallos y conservar decisiones entre sesiones. Separa hechos, hipótesis y preguntas; comprueba estructura documental y exige evidencia antes de cerrar trabajo. No garantiza ausencia de alucinaciones ni certifica cumplimiento regulatorio.
+
+## Contenido
+
+- [Instalar en un proyecto](#instalar-en-un-proyecto)
+- [Recorridos desde el chat](#recorridos-desde-el-chat)
+- [Agentes y sintaxis](#agentes-y-sintaxis)
+- [CLI y evidencia](#cli-y-evidencia)
+- [Archivos y actualización](#archivos-y-actualización)
+- [Desarrollo y comprobación](#desarrollo-y-comprobación)
 
 ## Instalar en un proyecto
 
 El repositorio GitHub se mantiene **privado**. Con una cuenta que tenga acceso, descarga el `.tgz` y su checksum desde la release. Después puedes usar `npx` con el archivo descargado, sin instalar el CLI globalmente. Ejecuta en la raíz del proyecto destino:
 
 ```sh
-npx --yes --package="/ruta/al/omni-spec-0.5.0-rc.1.tgz" omni-spec init --yes --agent antigravity
+npx --yes --package="/ruta/al/omni-spec-0.5.0.tgz" omni-spec init --yes --agent antigravity
 ```
 
 Después de la primera publicación del mantenedor en **npm**, también estarán disponibles estos comandos (GitHub y npm son publicaciones separadas):
 
 ```sh
 # Ejecución puntual desde npm
-npx --yes omni-spec@0.5.0-rc.1 init --yes --agent antigravity
+npx --yes omni-spec@0.5.0 init --yes --agent antigravity
 
 # Instalación global opcional desde npm
-npm install --global omni-spec@next
+npm install --global omni-spec@latest
 omni-spec init --yes --agent antigravity
 ```
 
-`npx` ejecuta paquetes; el registro donde se publica es npm. La candidata usa el canal `next`; `latest` queda reservado para una versión estable. El alta y primera publicación están explicadas en [RELEASING.md](docs/RELEASING.md).
+`npx` ejecuta paquetes; el registro donde se publica es npm. La versión normal usa el canal `latest`; las candidatas futuras usarán `next`. El alta y primera publicación están explicadas en [RELEASING.md](docs/RELEASING.md).
 
-Antes de publicar en npm también puedes instalar globalmente el archivo descargado: `npm install --global /ruta/al/omni-spec-0.5.0-rc.1.tgz`. Un enlace de descarga de un repositorio privado no permite instalación anónima; no incluyas credenciales en URLs o comandos compartidos.
+Antes de publicar en npm también puedes instalar globalmente el archivo descargado: `npm install --global /ruta/al/omni-spec-0.5.0.tgz`. Un enlace de descarga de un repositorio privado no permite instalación anónima; no incluyas credenciales en URLs o comandos compartidos.
 
 Para probar esta copia local, abre una terminal **en el proyecto destino**, nuevo o existente:
 
@@ -38,7 +59,7 @@ node "/ruta/absoluta/omni-spec/bin/omni-spec.mjs" init --yes --agent antigravity
 También puedes instalar el tarball local en un proyecto npm:
 
 ```sh
-npm install --save-dev /ruta/absoluta/omni-spec-0.5.0-rc.1.tgz
+npm install --save-dev /ruta/absoluta/omni-spec-0.5.0.tgz
 npx --no-install omni-spec init --yes --agent antigravity
 ```
 
@@ -181,6 +202,8 @@ node "/ruta/al/nuevo/omni-spec/bin/omni-spec.mjs" update --accept-updates
 
 Esa opción respalda los archivos en conflicto antes de reemplazarlos. Las especificaciones activas, la constitución y el contexto no se reemplazan. Los comandos antiguos de otros adaptadores se conservan; revisa posibles duplicados en el selector del host al migrar. `init --force` reemplaza expresamente constitución y plantillas y no es el mecanismo habitual de actualización.
 
+Las copias de desarrollo que ya indiquen `0.5.0` también reciben los archivos actuales con `update`: se comparan sus contenidos aunque coincida la versión. Los trabajos completados siguen en el historial; solo si se vuelven a verificar deben adaptar sus criterios a `acceptance.json`.
+
 Una versión antigua instalada dentro del proyecto no descarga una nueva versión por sí misma. Las actualizaciones son locales y explícitas. No se hacen commits, cambios de rama ni publicaciones.
 
 ## Desarrollo y comprobación
@@ -192,4 +215,4 @@ npm run test:package
 
 La segunda orden empaqueta, instala sin red ni scripts de instalación y ejecuta recorridos contra el paquete, no contra imports del código fuente del CLI. Conserva sus proyectos temporales y muestra dónde están para inspección.
 
-La publicación de etiquetas valida la matriz de CI antes de crear la release y adjunta un tarball con SHA-256. Esta candidata conserva los límites de aceptación descritos en [VALIDATION-0.5.0.md](docs/VALIDATION-0.5.0.md); no equivale a una declaración de estabilidad universal. Ver [RELEASING.md](docs/RELEASING.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md) y [coordinación local](docs/locking.md).
+La publicación de etiquetas valida la matriz de CI antes de crear la release y adjunta un tarball con SHA-256. El alcance comprobado y las limitaciones están en [COMPATIBILITY.md](docs/COMPATIBILITY.md). Ver [RELEASING.md](docs/RELEASING.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md) y [coordinación local](docs/locking.md).
