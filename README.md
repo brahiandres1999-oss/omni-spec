@@ -8,10 +8,10 @@ OmniSpec ayuda a reconocer el repositorio, explorar ideas, definir cambios, corr
 
 ## Instalar en un proyecto
 
-Desde una release de GitHub puedes usar `npx` sin instalar el CLI globalmente. Ejecuta en la raíz del proyecto destino:
+El repositorio GitHub se mantiene **privado**. Con una cuenta que tenga acceso, descarga el `.tgz` y su checksum desde la release. Después puedes usar `npx` con el archivo descargado, sin instalar el CLI globalmente. Ejecuta en la raíz del proyecto destino:
 
 ```sh
-npx --yes --package="https://github.com/brahiandres1999-oss/omni-spec/releases/download/v0.5.0-rc.1/omni-spec-0.5.0-rc.1.tgz" omni-spec init --yes --agent antigravity
+npx --yes --package="/ruta/al/omni-spec-0.5.0-rc.1.tgz" omni-spec init --yes --agent antigravity
 ```
 
 Después de la primera publicación del mantenedor en **npm**, también estarán disponibles estos comandos (GitHub y npm son publicaciones separadas):
@@ -26,6 +26,8 @@ omni-spec init --yes --agent antigravity
 ```
 
 `npx` ejecuta paquetes; el registro donde se publica es npm. La candidata usa el canal `next`; `latest` queda reservado para una versión estable. El alta y primera publicación están explicadas en [RELEASING.md](docs/RELEASING.md).
+
+Antes de publicar en npm también puedes instalar globalmente el archivo descargado: `npm install --global /ruta/al/omni-spec-0.5.0-rc.1.tgz`. Un enlace de descarga de un repositorio privado no permite instalación anónima; no incluyas credenciales en URLs o comandos compartidos.
 
 Para probar esta copia local, abre una terminal **en el proyecto destino**, nuevo o existente:
 

@@ -2,6 +2,8 @@
 
 Versión preparada: **0.5.0-rc.1**, etiqueta Git `v0.5.0-rc.1`, canal npm `next`. Es una candidata, no una release estable. Publicar en GitHub no publica automáticamente en npm.
 
+Decisión del mantenedor: conservar GitHub privado y publicar npm más adelante, cuando exista una cuenta. Las releases y archivos de GitHub requieren acceso al repositorio; no están disponibles de forma anónima por URL. Se puede descargar el tarball con una sesión autorizada y ejecutarlo o instalarlo localmente. Un futuro paquete público npm distribuirá sus fuentes incluidas, sin cambiar la visibilidad del historial de GitHub.
+
 ## Release en GitHub
 
 1. Ejecutar `npm test`, `npm run test:package`, `npm run release:check` y `git diff --check`.
@@ -14,7 +16,7 @@ Versión preparada: **0.5.0-rc.1**, etiqueta Git `v0.5.0-rc.1`, canal npm `next`
 
 ## Primera publicación en npm, sin cuenta previa
 
-`npx` no es un registro distinto: ejecuta paquetes. Para usar `npx omni-spec@next`, el paquete debe estar publicado en npm. Hasta entonces se puede ejecutar el tarball de GitHub con `npx --package=<URL> omni-spec ...`.
+`npx` no es un registro distinto: ejecuta paquetes. Para usar `npx omni-spec@next`, el paquete debe estar publicado en npm. Hasta entonces descargar el tarball de la release privada y ejecutar `npx --package=/ruta/al/archivo.tgz omni-spec ...` o instalarlo globalmente mediante `npm install -g /ruta/al/archivo.tgz`. No poner tokens ni credenciales en URLs.
 
 1. Crear una cuenta en [npm](https://www.npmjs.com/signup), verificar el correo y configurar la autenticación que solicite npm para publicar. No compartir contraseña, códigos de un solo uso ni tokens con el agente.
 2. En una terminal propia ejecutar `npm login --auth-type=web --registry=https://registry.npmjs.org/` y completar el navegador. `npm whoami --registry=https://registry.npmjs.org/` confirma la identidad.
@@ -38,6 +40,8 @@ Después de tener el paquete y acceso a sus ajustes en npm, configurar un **Trus
 - Archivo workflow: `publish-npm.yml`.
 
 El workflow existe pero no se ejecuta al crear una release: se inicia manualmente en Actions con la etiqueta existente. Usa Node 24, npm 11 y OIDC (`id-token: write`); requiere haber configurado la relación de confianza en npm. Descarga el tarball de GitHub, valida el checksum y publica en `next` para prerelease o `latest` para estable, sin un token npm persistente. La configuración de esa cuenta no se crea desde el repositorio.
+
+La generación automática de provenance de npm tiene requisitos propios, entre ellos repositorio público; no se promete esa atestación desde este repositorio privado. La publicación del paquete y su integridad por checksum son comprobaciones distintas de provenance.
 
 Antes de una versión estable cambiar `publishConfig.tag` a `latest`; para cada versión actualizar `package.json`, el encabezado README, changelog y `docs/releases/<version>.md`. `release:check` rechaza inconsistencias. Las publicaciones por npm son permanentes para esa combinación nombre/versión.
 
@@ -63,10 +67,10 @@ npx --yes omni-spec@0.5.0-rc.1 update --dry-run
 npx --yes omni-spec@0.5.0-rc.1 update
 ```
 
-Sin npm por nombre, ejecutar el CLI de una copia nueva de OmniSpec o usar el tarball GitHub:
+Sin npm por nombre, ejecutar el CLI de una copia nueva de OmniSpec o usar el tarball descargado desde la release privada:
 
 ```sh
-npx --yes --package="https://github.com/brahiandres1999-oss/omni-spec/releases/download/v0.5.0-rc.1/omni-spec-0.5.0-rc.1.tgz" omni-spec update --dry-run
+npx --yes --package="/ruta/al/omni-spec-0.5.0-rc.1.tgz" omni-spec update --dry-run
 ```
 
 Después de revisar, repetir sin `--dry-run`. Se conservan contexto, constitución, especificaciones y selección de agente. Archivos administrados personalizados bloquean la operación; `--accept-updates` acepta su reemplazo con copia de respaldo después de revisar conflictos. Recargar el agente después de actualizar skills/comandos.

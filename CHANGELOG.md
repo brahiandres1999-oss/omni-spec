@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0-rc.1] - 2026-10-18
 
-Public release candidate. Previous local copies labeled `0.5.0` were unpublished development builds; see `docs/RELEASING.md` before migrating them to this prerelease.
+Release candidate distributed initially through the private GitHub repository; npm publication is separate and pending maintainer account setup. Previous local copies labeled `0.5.0` were unpublished development builds; see `docs/RELEASING.md` before migrating them to this prerelease.
 
 ### Added
 - Per-criterion `acceptance.json` coverage required by verify/complete, separate from general automated gate results. Pending, failed, missing, duplicated and stale criterion IDs block closure; evidence truth still requires agent/human review.
