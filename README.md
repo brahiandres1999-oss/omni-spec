@@ -1,338 +1,193 @@
-<p align="center">
-  <img src="assets/omni-spec-banner.svg" alt="OmniSpec Banner" width="100%">
-</p>
+# OmniSpec 0.5.0-rc.1
 
-<p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.4.0-blue.svg" alt="Version 0.4.0"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
-  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="CI Build Passing"></a>
-</p>
+Desarrollo guiado por especificaciones desde el chat de tu agente, con un motor CLI local y sin dependencias npm externas. Requiere Node.js >=18.19.0 y un agente capaz de leer archivos y ejecutar comandos.
 
-<p align="center">
-  <strong>A zero-dependency Spec-Driven Development (SDD) framework and CLI for autonomous AI coding agents and human software engineers.</strong>
-</p>
+**Prerelease candidata: `0.5.0-rc.1`.** El motor y el paquete tienen pruebas automatizadas; la experiencia de todos los agentes y entornos aún requiere aceptación. Consulta las [notas de versión](docs/releases/0.5.0-rc.1.md), [evidencia y límites](docs/VALIDATION-0.5.0.md) y [fuentes de los adaptadores](docs/STANDARDS.md).
 
----
+OmniSpec ayuda a reconocer el repositorio, explorar ideas, definir cambios, corregir fallos y conservar decisiones entre sesiones. Separa hechos, hipótesis y preguntas; comprueba estructura documental y exige evidencia antes de cerrar trabajo. No garantiza ausencia de alucinaciones ni certifica cumplimiento regulatorio.
 
-## Table of Contents
+## Instalar en un proyecto
 
-- [Overview & The Problem](#overview)
-- [Quick Start](#quick-start)
-  - [Option A: AI Agent Guided Adoption (Prompt Setup)](#option-a-ai-agent-guided-adoption-prompt-installation)
-  - [Option B: Manual Installation (Human Engineers)](#option-b-manual-installation-human-engineers)
-- [Architectural Principles](#architectural-principles)
-  - [Zero External Dependencies](#zero-dependencies)
-  - [Greenfield & Brownfield Adaptation](#greenfield--brownfield-adaptation)
-  - [The Four Engineering Archetypes](#the-four-engineering-archetypes)
-  - [State Machine Manifest & Concurrency](#state-machine-manifest--concurrency)
-  - [Domain Regulatory Profiles](#domain-regulatory-profiles)
-- [Command-Line Interface (CLI Reference)](#command-line-interface)
-  - [1. Initialization (`omni-spec init`)](#1-initialization)
-  - [2. Creating Specifications (`omni-spec create`)](#2-creating-specifications)
-  - [3. Specification Health Auditor (`omni-spec audit`)](#3-specification-quality-audit-anti-hallucination-gate)
-  - [4. Lifecycle & Status Management (`status` & `complete`)](#4-inspection-and-lifecycle-management)
-  - [5. Version Verification & Upgrades (`check` & `update`)](#5-version-verification--non-destructive-upgrades)
-- [AI Agent Integration & Chat Slash Commands (`/omni-*`)](#ai-agent-integration--chat-slash-commands)
-- [Architectural Rationale: Node.js vs. Python](#architectural-rationale-nodejs-vs-python)
-- [Automated Verification](#automated-verification)
-- [Repository Governance](#repository-governance)
+Desde una release de GitHub puedes usar `npx` sin instalar el CLI globalmente. Ejecuta en la raíz del proyecto destino:
 
----
+```sh
+npx --yes --package="https://github.com/brahiandres1999-oss/omni-spec/releases/download/v0.5.0-rc.1/omni-spec-0.5.0-rc.1.tgz" omni-spec init --yes --agent antigravity
+```
 
-## Overview
+Después de la primera publicación del mantenedor en **npm**, también estarán disponibles estos comandos (GitHub y npm son publicaciones separadas):
 
-Modern software development with frontier AI coding models suffers from two systemic points of failure:
+```sh
+# Ejecución puntual desde npm
+npx --yes omni-spec@0.5.0-rc.1 init --yes --agent antigravity
 
-1. **Hallucination by Ambiguity:** When requirements are underspecified, AI agents fill gaps by silently inventing database columns, APIs, or unneeded third-party libraries.
-2. **Context Drift:** Over multi-turn sessions, agents lose alignment with architectural invariants, altering working code outside the task scope or leaving dead artifacts.
+# Instalación global opcional desde npm
+npm install --global omni-spec@next
+omni-spec init --yes --agent antigravity
+```
 
-OmniSpec introduces **Spec-Driven Development (SDD)**: an engineering contract where specifications are authored, clarified, and audited prior to code implementation.
+`npx` ejecuta paquetes; el registro donde se publica es npm. La candidata usa el canal `next`; `latest` queda reservado para una versión estable. El alta y primera publicación están explicadas en [RELEASING.md](docs/RELEASING.md).
 
-<p align="center">
-  <img src="assets/mermaid-diagram.svg" alt="OmniSpec SDD Architecture" width="100%">
-</p>
+Para probar esta copia local, abre una terminal **en el proyecto destino**, nuevo o existente:
 
----
+```sh
+node "/ruta/absoluta/omni-spec/bin/omni-spec.mjs" init --yes --agent antigravity
+```
 
-## Quick Start
+También puedes instalar el tarball local en un proyecto npm:
 
-OmniSpec requires only Node.js (version 18.19 or higher) and can be adopted through two frictionless pathways:
+```sh
+npm install --save-dev /ruta/absoluta/omni-spec-0.5.0-rc.1.tgz
+npx --no-install omni-spec init --yes --agent antigravity
+```
 
-### Option A: AI Agent Guided Adoption (Prompt Installation)
+`init` copia un runtime independiente dentro del proyecto. No necesitas instalar OmniSpec globalmente ni convertir una aplicación Python, Java u otro stack en una aplicación Node. Después del bootstrap:
 
-If you are using frontier AI coding agents (Google Antigravity, Cursor, Claude Code, GitHub Copilot, Roo Code), you can bootstrap OmniSpec in any repository with a single conversational prompt.
+```sh
+node specs/.omni/runtime/bin/omni-spec.mjs status
+node specs/.omni/runtime/bin/omni-spec.mjs doctor
+node specs/.omni/runtime/bin/omni-spec.mjs context-check --json
+```
 
-#### 🇬🇧 English Prompt:
+Abre el proyecto en Antigravity, revisa las skills disponibles y ejecuta:
+
 ```text
-Adopt Spec-Driven Development (SDD) in this repository using OmniSpec:
-1. Initialize the framework by running:
-   npx github:brahiandres1999-oss/omni-spec init --yes
-   (or install locally with `npm i -D github:brahiandres1999-oss/omni-spec` or globally with `npm i -g github:brahiandres1999-oss/omni-spec`).
-2. Inspect the newly generated CONSTITUTION.md and specs/manifest.json files.
-3. Verify that project quality gates (test runners, linters, and documentation standards) were accurately detected.
-4. For all subsequent tasks, strictly follow the SDD lifecycle:
-   - Run `npx github:brahiandres1999-oss/omni-spec create <feature|bugfix|debt|rfc> <task-name>`.
-   - Complete the generated specification folder under `specs/<id>-<task-name>/`:
-     * feature: fill Phase 0 Clarification in `spec.md`, design in `plan.md`, tasks in `tasks.md`.
-     * bugfix: reproduction in `bug.md`, 5 Whys RCA in `rca.md`, verification in `fix.md`.
-     * debt: blast radius in `audit.md`, strangler strategy in `migration-plan.md`, tasks in `tasks.md`.
-     * rfc: decision drivers and trade-offs in `rfc.md`.
-   - Run `npx github:brahiandres1999-oss/omni-spec audit` to verify required criteria and completeness.
-   - Only start implementing code after `npx github:brahiandres1999-oss/omni-spec audit` outputs [AUDIT PASSED].
+/omni-init
 ```
 
-#### 🇪🇸 Prompt en Español:
+La skill revisa el entorno y completa el contexto con evidencia. En un proyecto vacío ayuda a aclarar objetivos; en uno existente reconoce convenciones, comandos y fallos previos; en uno desconocido registra las dudas sin inventar un stack o runner de pruebas. Puede ser necesario recargar el proyecto para que el agente descubra archivos nuevos. Consulta las instrucciones de tu versión del agente.
+
+`/omni-init` se usa solo, sin un prompt de auditoría adicional. Su alcance predeterminado es leer el repositorio y actualizar `specs/project-context.md`; conserva el código, las decisiones existentes y la configuración de gates. Distingue hechos observados, requisitos declarados, inferencias y resultados ejecutados. No instala dependencias, inicia servicios ni ejecuta scripts de la aplicación durante ese reconocimiento.
+
+El contexto registra fuentes, módulos, objetivos, comandos con directorio y prerrequisitos, requisitos de calidad, cambios previos y pendientes. Los comandos detectados quedan `NOT_RUN`; un runtime de CI no demuestra una versión mínima compatible y una política de accesibilidad no demuestra cumplimiento. `CONTEXT_RECORDED` significa reconocimiento documentado; la aplicación continúa `APPLICATION_NOT_VALIDATED` si no hay resultados ejecutados. En proyectos nuevos con objetivos sin resolver, mantiene `CONTEXT_PENDING` y pregunta solo lo material. Consulta el [contrato de onboarding](docs/ONBOARDING.md).
+
+El agente compara declaraciones por módulo/entorno y registra discrepancias pendientes sin elegir una fuente por suposición. La respuesta final conserva esas limitaciones. Antes de terminar ejecuta `context-check`: revisa estados y enlaces locales del contexto, incluidos archivos y líneas inexistentes o rutas específicas de una computadora. Es una comprobación estructural; el agente también debe comprobar que cada pasaje citado respalda la afirmación. Los enlaces guardados son relativos al documento para funcionar al mover el proyecto.
+
+El bootstrap CLI instala la skill; `/omni-init` realiza el onboarding conversacional después. Un comando no puede aparecer antes de instalar su integración.
+
+## Recorridos desde el chat
+
+| Comando lógico | Propósito |
+| --- | --- |
+| `omni-init` | Reconocer o revisar el proyecto, sus restricciones y comandos reales. |
+| `omni-discuss` | Encontrar, explicar, comparar o proponer con evidencia; una consulta puede terminar sin crear archivos. |
+| `omni-specify` | Formalizar una necesidad en feature, bugfix, debt o RFC. |
+| `omni-clarify` | Resolver decisiones que afectan al resultado antes de diseñar. |
+| `omni-plan` | Diseñar una solución proporcional y su verificación. |
+| `omni-tasks` | Crear tareas desde el alcance; no impone capas, bases de datos ni 32 tareas prefabricadas. |
+| `omni-audit` | Ejecutar controles documentales y revisar coherencia entre artefactos. |
+| `omni-implement` | Implementar el trabajo acordado y registrar resultados reales. |
+| `omni-converge` | Contrastar criterios con el resultado, verificar y cerrar si corresponde. |
+
+Ejemplos en Antigravity:
+
 ```text
-Adopta Spec-Driven Development (SDD) en este repositorio usando OmniSpec:
-1. Inicializa el framework ejecutando:
-   npx github:brahiandres1999-oss/omni-spec init --yes
-   (o instálalo localmente con `npm i -D github:brahiandres1999-oss/omni-spec` o globalmente con `npm i -g github:brahiandres1999-oss/omni-spec`).
-2. Inspecciona los archivos CONSTITUTION.md y specs/manifest.json recién generados.
-3. Verifica que los quality gates del proyecto (pruebas, linters y estándar de documentación) hayan sido detectados correctamente.
-4. Para todas las tareas subsecuentes, sigue estrictamente el ciclo SDD:
-   - Ejecuta `npx github:brahiandres1999-oss/omni-spec create <feature|bugfix|debt|rfc> <nombre-tarea>`.
-   - Completa la carpeta de especificación generada en `specs/<id>-<nombre-tarea>/`:
-     * feature: resuelve la Fase 0 de Clarificación en `spec.md`, diseño en `plan.md`, tareas en `tasks.md`.
-     * bugfix: pasos de reproducción en `bug.md`, análisis 5 Whys RCA en `rca.md`, verificación en `fix.md`.
-     * debt: blast radius en `audit.md`, migración gradual en `migration-plan.md`, tareas en `tasks.md`.
-     * rfc: alternativas y justificación en `rfc.md`.
-   - Ejecuta `npx github:brahiandres1999-oss/omni-spec audit` para verificar los criterios obligatorios y la ausencia de placeholders.
-   - Solo comienza a programar código una vez que `npx github:brahiandres1999-oss/omni-spec audit` apruebe con [AUDIT PASSED].
+/omni-discuss Encuentra dónde se decide el precio y explica qué opciones tenemos para aplicar descuentos.
+/omni-specify Corrige el error al guardar un usuario sin segundo apellido.
+/omni-clarify
+/omni-plan
+/omni-tasks
+/omni-audit
+/omni-implement
+/omni-converge
 ```
 
----
+La discusión solo se transforma en trabajo de implementación cuando ese es el objetivo solicitado. No se exige una especificación para cada pregunta. La aclaración temprana no exige tener plan y tareas terminados.
 
-### Option B: Manual Installation (Human Engineers)
+| Tipo | Artefactos | Cierre |
+| --- | --- | --- |
+| `feature` (`feat`) | `spec.md`, `plan.md`, `tasks.md` | Criterios, tareas y verificación. |
+| `bugfix` (`bug`, `fix`) | `bug.md`, `rca.md`, `fix.md` con checklist | Reproducción, causa sustentada, arreglo y regresión. |
+| `debt` | `audit.md`, `migration-plan.md`, `tasks.md` | Mejora con comportamiento requerido preservado. |
+| `rfc` (`idea`) | `rfc.md` | Decisión ACCEPTED, REJECTED o DEFERRED; no exige código. |
 
-#### 1. Instant Run via NPX (Zero-Install)
-Run OmniSpec directly without permanent installation:
-```bash
-npx github:brahiandres1999-oss/omni-spec init
+Todos usan `verification.md` para vincular criterios y evidencia, y `acceptance.json` para registrar cada criterio con ID, estado, método y evidencia específica. `verify` y `complete` rechazan criterios pendientes, fallidos, omitidos o inventados aunque los gates generales pasen. Las plantillas dejan pendientes explícitos; el agente debe reemplazarlos con decisiones reales. La veracidad de la evidencia sigue requiriendo revisión: una inspección de código no demuestra por sí sola una interacción, un contraste medido ni compatibilidad universal.
+
+## Agentes y sintaxis
+
+Las ubicaciones se contrastaron con documentación oficial el 2026-10-18. Las pruebas locales comprueban archivos y contenido; la compatibilidad de cada versión del host necesita una prueba en su chat.
+
+| `--agent` | Archivos generados | Invocación |
+| --- | --- | --- |
+| `antigravity` | `.agents/skills/omni-*/SKILL.md` | `/omni-init` |
+| `cursor` | `.cursor/commands/omni-*.md` y regla | `/omni-init` |
+| `claude` | `.claude/skills/omni-*/SKILL.md` | `/omni-init` |
+| `copilot` | `.github/prompts/omni-*.prompt.md` e instrucciones | `/omni-init` en VS Code Chat |
+| `kilo` | `.kilo/commands/omni-*.md` y bloque en `AGENTS.md` | `/omni-init` |
+| `opencode` | `.opencode/commands/omni-*.md` y bloque en `AGENTS.md` | `/omni-init` |
+| `gemini` | `.gemini/commands/omni-*.toml` | `/omni-init` |
+| `codex` | `.agents/skills/omni-*/SKILL.md` y bloque en `AGENTS.md` | `$omni-init` o selector de skills |
+| `generic` | `specs/commands/omni-*.md` | Pedir al agente que lea y siga ese archivo; no registra un slash nativo. |
+
+`--agent all` instala los adaptadores concretos. Se pueden seleccionar varios separados por comas. Un nombre desconocido es un error; no se anuncia compatibilidad por haber escrito cero archivos. Copilot en otros hosts no queda certificado por el adaptador de VS Code.
+
+```sh
+node specs/.omni/runtime/bin/omni-spec.mjs setup-agent antigravity,cursor
 ```
 
-#### 2. Global CLI Installation
-Install OmniSpec globally to make the `omni-spec` binary available anywhere in your terminal:
-```bash
-npm install -g git+https://github.com/brahiandres1999-oss/omni-spec.git
+La selección se persiste para futuras actualizaciones. Cambiarla no borra configuraciones anteriores. Antigravity y Codex comparten el formato de skills. Ningún adaptador configura un modelo, claves, permisos amplios o instalaciones globales.
 
-# Test global installation:
-omni-spec version
-```
+## CLI y evidencia
 
-#### 3. Standalone Clone (Zero External Network Overhead)
-Clone the repository locally into your machine or tools directory and link it:
-```bash
-git clone https://github.com/brahiandres1999-oss/omni-spec.git
-cd omni-spec
-npm link
-```
-
----
-
-## Architectural Principles
-
-### Zero Dependencies
-OmniSpec contains zero runtime and development dependencies. It executes exclusively via native Node.js 18.19+ standard libraries (`node:fs/promises`, `node:readline/promises`, `node:test`, `node:assert/strict`). It requires no compilation, virtual environments, or external package installation steps.
-
-### Greenfield & Brownfield Adaptation
-OmniSpec automatically detects whether it is running in a blank folder (**Greenfield**) or an existing repository (**Brownfield**). When run in an existing codebase, it inspects your stack (React, Next.js, Express, Python FastAPI/Django, Java Maven/Gradle, Go, Rust) and extracts your existing quality gates (`npm test`, `pytest`, `mvn test`, etc.) directly into `CONSTITUTION.md` without disturbing existing code.
-
-### The Four Engineering Archetypes
-Software evolution comprises distinct task profiles. OmniSpec structures changes into four specialized archetypes:
-
-| Archetype | Identifier | Primary Artifacts | Methodological Standard |
-| :--- | :--- | :--- | :--- |
-| **Feature** | `feature` | `spec.md`, `plan.md`, `tasks.md` | Phase 0 Clarification, Contract-First Design |
-| **Bugfix** | `bugfix` | `bug.md`, `rca.md`, `fix.md` | Google SRE 5 Whys Root Cause Analysis |
-| **Tech Debt** | `debt` | `audit.md`, `migration-plan.md`, `tasks.md` | Martin Fowler Strangler Fig Pattern |
-| **RFC / ADR** | `rfc` | `rfc.md` | MADR (Markdown Architectural Decision Records) |
-
-### State Machine Manifest & Concurrency
-Active work is tracked in `specs/manifest.json`. AI agents inspect the manifest upon waking, identifying the active task, assigned Git branch, and completion state to prevent divergence across turns.
-
-To support high-concurrency multi-agent setups without database or daemon dependencies, OmniSpec coordinates processes on the local filesystem using a native [Lamport Bakery Algorithm](docs/locking.md) in `specs/manifest.lock/`:
-- **Atomic Manifest Updates:** Writes are staged to temporary files (`manifest.json.tmp.*`) and committed via atomic rename.
-- **Dead-Owner Recovery:** Live processes are never timed out arbitrarily; deceased processes (`process.kill(pid, 0)` with `ESRCH`) have their individual claim cleanly reclaimed without corrupting concurrent peers.
-- **Ordered Tickets:** Agents choose monotonically increasing tickets to serialize operations cleanly. Read more in [docs/locking.md](docs/locking.md).
-
-### Domain Regulatory Profiles
-Industry invariants are injected directly into `CONSTITUTION.md` during initialization:
-* **General SaaS:** OWASP Top 10, tenant isolation, structured telemetry.
-* **Fintech:** PCI-DSS Level 1 boundaries, double-entry ledger invariance, client-generated `Idempotency-Key` headers.
-* **Healthtech:** HIPAA compliance, Protected Health Information (PHI) encryption, immutable audit trails.
-* **BPO & Occupational Health:** k-Anonymity ($k \ge 5$) cohort protection, operator private journal isolation, anti-surveillance policies.
-* **E-Commerce:** Distributed locks, inventory reservation expiration, zero price-tampering constraints.
-
----
-
-## Command-Line Interface
-
-### 1. Initialization
-Initialize OmniSpec in the root of any repository:
-
-```bash
-# Interactive guided terminal setup (auto-detects project stack and gates)
-omni-spec init
-
-# Non-interactive initialization with defaults
-omni-spec init --yes --profile fintech --stack "Node.js / TypeScript" --doc "TSDoc"
-```
-
-Project scaffold created:
-```text
-my-project/
-├── CONSTITUTION.md          <-- Supreme architectural & quality gate rules
-└── specs/
-    ├── README.md            <-- Specification index & instructions
-    ├── manifest.json        <-- Machine-readable state machine
-    └── _templates/          <-- Local archetype templates
-        ├── 01-feature/
-        ├── 02-bugfix/
-        ├── 03-tech-debt/
-        └── 04-rfc-idea/
-```
-
-### 2. Creating Specifications
-
-```bash
-# User capability or API expansion
-omni-spec create feature user-onboarding
-
-# Incident postmortem and targeted regression fix
-omni-spec create bugfix null-pointer-dashboard
-
-# Legacy deprecation or framework migration
-omni-spec create debt remove-mock-storage
-
-# Architectural decision record
-omni-spec create rfc postgres-vs-clickhouse
-```
-
-### 3. Specification Quality Audit (Anti-Hallucination Gate)
-
-OmniSpec includes a programmatic specification health auditor. It verifies that requirements are mathematically sound and unambiguous before any human or AI agent writes code:
-
-```bash
-# Audit active specification
-omni-spec audit
-
-# Audit specific specification by sequence ID
-omni-spec audit 001
-```
-
-Verification enforced by `omni-spec audit`:
-* **Phase 0 Anti-Hallucination:** Verifies that ambiguity questions in Section 0 have substantive decisions documented (>30 non-whitespace characters outside headings).
-* **Comment Stripping:** Strips HTML comments before auditing; commented-out headings cannot bypass requirements.
-* **Non-Goals / Scope Creep:** Confirms explicit out-of-scope boundaries are defined.
-* **Data Contracts & Rollbacks:** Ensures API payloads, database schema changes, and rollback strategies are documented in `plan.md`.
-* **Zero AI-Slop & Placeholders:** Detects unreplaced template tokens (`SPEC-XXX`, `[Rol Autorizado]`, unedited sample questions).
-* **Task Checklist Validation:** Parses task checkboxes in `tasks.md` and reports completion percentages (`X/Y tasks, Z%`). Requires at least one actionable task (`- [ ]`).
-
-### 4. Inspection, Focus & Lifecycle Management
-
-```bash
-# Inspect current project state and active specification
-omni-spec status
-
-# List all specifications with status and active focus marker
+```sh
+omni-spec inspect --json
+omni-spec create feature gestion-usuarios
 omni-spec list
-
-# Switch active specification focus to another feature or bugfix
 omni-spec focus 001
-
-# Mark a specification as implemented and close active tracking
+omni-spec audit 001
+omni-spec configure --gates "node check.cjs"
+omni-spec verify 001
 omni-spec complete 001
 ```
 
-### 5. Version Verification & Non-Destructive Upgrades
+Estos ejemplos presuponen un binario disponible; el runtime local funciona siempre con `node specs/.omni/runtime/bin/omni-spec.mjs` en su lugar. Desde subdirectorios, el CLI resuelve el manifiesto del proyecto padre.
 
-OmniSpec protects brownfield projects by ensuring project configurations, templates, and AI agent skills can be upgraded without ever touching active specifications, in-progress tasks, or custom domain rules in \`CONSTITUTION.md\`:
+- `inspect`: inventario sin ejecutar scripts. Recorre hasta tres niveles y 200 directorios; detecta manifiestos comunes y comandos candidatos. No pretende comprender cualquier framework automáticamente.
+- `audit`: revisa artefactos, placeholders, estructura y checklist. No ejecuta pruebas ni demuestra corrección semántica.
+- `configure --gates`: guarda comandos revisados y actualiza la sección de gates de la constitución. Un argumento vacío los elimina explícitamente. Los comandos se separan por saltos de línea y se ejecutan cada uno desde la raíz; `&&` se conserva dentro de cada comando.
+- `verify`: requiere auditoría aprobada, tareas terminadas y evidencia escrita. **Ejecuta los comandos configurados mediante el shell del sistema**; revísalos antes de ejecutarlos. Registra resultados en `verification.json`; no instala runners faltantes.
+- `verify --manual "motivo específico"`: solo cuando no hay gates configurados. Registra evidencia manual, no un éxito de pruebas automáticas. Una RFC registra una decisión revisada.
+- `complete`: rechaza auditorías fallidas, tareas pendientes, evidencia ausente, pruebas fallidas y cambios posteriores al snapshot verificado.
+- `check` / `doctor`: revisan versión e integridad de archivos gestionados. No prueban el chat del agente ni la aplicación.
 
-```bash
-# Check if current project is synchronized with installed OmniSpec CLI version
-omni-spec check
+La verificación compara contenidos de fuente y especificación antes/después y al cerrar. Excluye dependencias, cachés y salidas habituales (`node_modules`, `.git`, `dist`, `build`, etc.); consulta la lista en `src/verification.mjs`. Tiene límites de 20.000 archivos y 256 MiB y rechaza fuentes enlazadas mediante symlinks. Los archivos de evidencia son locales y editables: esto detecta deriva accidental, no constituye una firma o protección contra manipulación deliberada. Las pruebas solo demuestran lo que comprueban.
 
-# Preview upgrade changes without writing to disk
-omni-spec update --dry-run
+## Archivos y actualización
 
-# Execute non-destructive project upgrade
-omni-spec update
-
-# Re-generate or configure multi-agent slash commands (.agents, .cursor, .claude, .kilo)
-omni-spec setup-agent
+```text
+CONSTITUTION.md                 Reglas del proyecto, preservadas al actualizar
+specs/project-context.md         Contexto y decisiones del usuario/agente
+specs/manifest.json              Configuración, foco e historial
+specs/_templates/                Plantillas editables con detección de conflictos
+specs/<id>-<nombre>/             Artefactos, tareas y evidencia de cada trabajo
+specs/.omni/runtime/             CLI portable y esquema local
+specs/.omni/managed.json         Huellas de archivos gestionados
+specs/.omni/backups/             Respaldos al aceptar reemplazos
 ```
 
----
+Para migrar usa el CLI de la **versión nueva** desde el proyecto destino:
 
-## AI Agent Integration & Chat Slash Commands
+```sh
+node "/ruta/al/nuevo/omni-spec/bin/omni-spec.mjs" update --dry-run
+node "/ruta/al/nuevo/omni-spec/bin/omni-spec.mjs" update
+```
 
-OmniSpec establishes clear guardrails for autonomous agents across the modern 2026 AI coding ecosystem: **Google Antigravity, Cursor, Claude Code, GitHub Copilot, OpenCode, and KiloCode**.
+La vista previa lista archivos y conflictos sin escribir. Si hay cambios locales o archivos antiguos de propiedad desconocida, la actualización se bloquea conservándolos. Después de revisar:
 
-### Universal Chat Slash Commands (\`/omni-*\`)
+```sh
+node "/ruta/al/nuevo/omni-spec/bin/omni-spec.mjs" update --accept-updates
+```
 
-Developers and agents can invoke the entire SDD lifecycle directly within the chat interface using native slash commands backed by OmniSpec's deterministic engine:
+Esa opción respalda los archivos en conflicto antes de reemplazarlos. Las especificaciones activas, la constitución y el contexto no se reemplazan. Los comandos antiguos de otros adaptadores se conservan; revisa posibles duplicados en el selector del host al migrar. `init --force` reemplaza expresamente constitución y plantillas y no es el mecanismo habitual de actualización.
 
-| Slash Command | Purpose | Underlying Deterministic Action |
-| :--- | :--- | :--- |
-| **\`/omni-specify\`** | Author Specification | Scaffolds \`specs/<slug>/\` and drafts \`spec.md\` respecting domain regulatory invariants. |
-| **\`/omni-clarify\`** | Phase 0 Gatekeeper | Conducts targeted clarification Q&A (Section 0) to eliminate assumptions before coding. |
-| **\`/omni-plan\`** | Technical Architecture | Drafts \`plan.md\` with system diagrams, data contracts, and anti-slop guidelines. |
-| **\`/omni-tasks\`** | Task Decomposition | Breaks down architecture into dependency-ordered checkboxes in \`tasks.md\`. |
-| **\`/omni-audit\`** | Spec Health Audit | Programmatically audits Phase 0, completeness, and quality gates via \`omni-spec audit\`. |
-| **\`/omni-implement\`** | Surgical Execution | Sequentially implements tasks, runs test gates, and marks completion via \`omni-spec complete\`. |
-| **\`/omni-converge\`** | Anti-Drift Verification | Verifies implemented code against \`spec.md\` & \`plan.md\`, checks quality gates, and completes lifecycle. |
+Una versión antigua instalada dentro del proyecto no descarga una nueva versión por sí misma. Las actualizaciones son locales y explícitas. No se hacen commits, cambios de rama ni publicaciones.
 
-### Supported AI Agent Adapters:
-- **Google Antigravity / Gemini CLI:** `.agents/skills/omni-*/SKILL.md` (interactive chat dropdown).
-- **Cursor:** `.cursor/rules/omni-spec.mdc` (system prompt steering rules).
-- **Claude Code:** `.claude/commands/omni-*.md` (custom slash command scripts).
-- **GitHub Copilot:** `.github/copilot-instructions.md` (persistent repo guidelines).
-- **OpenCode & KiloCode:** `AGENTS.md` and `.kilo/rules/omni-spec.md` + `kilo.jsonc`.
+## Desarrollo y comprobación
 
-### Operational Protocol for Agents
-
-Agents configured to work within an OmniSpec-enabled repository follow this protocol:
-
-1. **State Discovery:** Read `specs/manifest.json` using `omni-spec status` to identify the active spec.
-2. **Phase 0 Audit:** Inspect `spec.md` Section 0. If any requirement, data contract, or boundary is ambiguous, the agent must ask clarification questions before modifying code.
-3. **Constitutional Invariance:** Review `CONSTITUTION.md`. Do not introduce patterns, libraries, or side-effects prohibited by domain rules.
-4. **Task Execution:** Execute tasks defined in `tasks.md` sequentially following Minimal Touch surgery.
-5. **Quality Gates:** Verify all commands declared in `CONSTITUTION.md` pass with zero errors before reporting completion.
-
----
-
-## Architectural Rationale: Node.js vs. Python
-
-| Metric | OmniSpec (Node.js ESM) | Python-Based Alternatives |
-| :--- | :--- | :--- |
-| **Installation Friction** | Instant (`node bin/omni-spec.mjs` or `npx`). | Requires Python runtime, `pip`, `venv`, or `pipx`. |
-| **Startup Overhead** | Instantaneous execution without compiling (<30ms). | Slower initialization and module import overhead. |
-| **Platform Compatibility** | Native POSIX and Windows support without path normalization scripts. | Path and permission discrepancies across Windows/Linux (`python3` vs `py`). |
-| **Supply Chain Exposure** | Zero runtime dependencies (`node_modules` empty). | Vulnerable to upstream package supply-chain attacks. |
-
----
-
-## Automated Verification
-
-The repository includes a comprehensive, zero-dependency test suite executed via the native Node.js test runner:
-
-```bash
+```sh
 npm test
+npm run test:package
 ```
 
-Verification covers:
-* State machine persistence, updates, and Lamport bakery concurrency.
-* Scaffolding, re-initialization safety, and multi-archetype template generation.
-* Anti-hallucination auditor validation and comment-stripping defenses.
-* CLI arguments, interactive flags, and error boundary handling.
+La segunda orden empaqueta, instala sin red ni scripts de instalación y ejecuta recorridos contra el paquete, no contra imports del código fuente del CLI. Conserva sus proyectos temporales y muestra dónde están para inspección.
 
----
-
-## Repository Governance
-
-* [Contributing Guidelines](CONTRIBUTING.md)
-* [Changelog](CHANGELOG.md)
-* [Manifest Coordination & Locking Documentation](docs/locking.md)
-* [MIT License](LICENSE)
+La publicación de etiquetas valida la matriz de CI antes de crear la release y adjunta un tarball con SHA-256. Esta candidata conserva los límites de aceptación descritos en [VALIDATION-0.5.0.md](docs/VALIDATION-0.5.0.md); no equivale a una declaración de estabilidad universal. Ver [RELEASING.md](docs/RELEASING.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md) y [coordinación local](docs/locking.md).

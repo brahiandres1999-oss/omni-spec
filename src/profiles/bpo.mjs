@@ -1,18 +1,7 @@
 export const bpoProfile = {
-  id: 'bpo',
-  name: 'BPO, Contact Centers & Occupational Health (SST)',
-  description: 'k-anonymity (k >= 5) for supervisory analytics, private operator journal isolation, and workplace wellbeing.',
-  constitutionInvariants: `### 2.1 Occupational Wellbeing & Privacy (Ley 1581 / Res. 2646 & 2764)
-* **Operator Journal Isolation:** Private notes, emotional reflections, and personal journals are strictly confidential under Ley 1581 de 2012 (accessible exclusively by the author).
-* **k-Anonymity (k >= 5):** Aggregated metrics, trend reports, and team views for Supervisors or SST require cohorts of at least 5 distinct individuals (\`COUNT(DISTINCT user_id) >= 5\`).
-* **Server-Side Suppression:** If a cohort is smaller than 5 participants, the backend must suppress the nominal payload and return a protected status (\`"protected": true\`).
-* **Non-Punitive Wellbeing:** Wellbeing, stress indicators, and check-ins must never be used for disciplinary action, surveillance, or ranking agents by emotional state.
-
-### 2.2 Persistence & Clean Architecture
-* **Zero Dual Persistence:** Modules backed by PostgreSQL must not maintain parallel mutations in client-side mock storage.`,
-  specSecurityQuestions: `| BPO & Occupational Health Control | Required? | Technical Enforcement |
-| :--- | :---: | :--- |
-| **Does it access operator private journals?** | \`YES / NO\` | If YES: Restricted strictly to author ID. Reject supervisor/admin. |
-| **Does it show aggregated team metrics?** | \`YES / NO\` | If YES: Enforce \`HAVING COUNT(DISTINCT user_id) >= 5\` in SQL. |
-| **Does it generate stress or mood rankings?** | \`NO\` | Strictly forbidden. Ranking workers by mental state is prohibited. |`
+  "id": "bpo",
+  "name": "BPO, Contact Centers & Occupational Health (SST)",
+  "description": "Review worker privacy, access, aggregate disclosure risk and appropriate use.",
+  "constitutionInvariants": "### 2.1 Workplace privacy and wellbeing\n* Identify applicable privacy and occupational-health requirements for the actual jurisdiction. If Colombia is relevant, verify the applicability and current guidance for Ley 1581 and SST with appropriate sources/reviewers; this profile does not interpret or certify them.\n* For private notes or journals, establish authorized purposes and access from confirmed policy rather than silently granting supervisors access.\n* **k-Anonymity:** If aggregates are published, evaluate disclosure risk and choose a justified protection method. A fixed threshold of five people is not a universal guarantee.\n* Define permitted uses of wellbeing information and prevent uses outside the confirmed purpose.\n### 2.2 Existing architecture\n* Respect the real persistence and service boundaries; do not assume PostgreSQL, dashboards or private journals exist.",
+  "specSecurityQuestions": "| BPO & Occupational Health Control | Required? | Technical Enforcement |\n| :--- | :---: | :--- |\n| **Does it access operator private journals?** | [TODO] | Establish purpose, authorized access and verification, or N/A. |\n| **Does it show aggregated team metrics?** | [TODO] | Document disclosure-risk assessment and justified suppression/aggregation rules. |\n| **Does it use sensitive wellbeing information?** | [TODO] | Confirm permitted purpose, access and prohibited uses with domain stakeholders. |"
 };

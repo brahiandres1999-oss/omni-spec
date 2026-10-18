@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OmniSpec acceptance evidence",
+  "description": "Declared criterion coverage; structural validation does not prove the truth of evidence.",
+  "type": "object",
+  "required": ["schemaVersion", "criteria"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "method", "evidence"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^(AC-[0-9]+|DECISION)$" },
+          "status": { "enum": ["pending", "passed", "failed", "blocked"] },
+          "method": { "enum": [null, "automated", "manual", "inspection", "decision"] },
+          "evidence": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

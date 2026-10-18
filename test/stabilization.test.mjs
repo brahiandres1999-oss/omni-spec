@@ -76,7 +76,7 @@ async function interactive(t, flags = [], answers = []) {
   const child = spawn(process.execPath, [cli, 'init', ...flags], { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] });
   const closed = once(child, 'close');
   t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill(); await closed; });
-  const prompts = ['Project Name [', 'Select an option (1-7)', 'Preferred Documentation Standard [',
+  const prompts = ['Project Name [', 'Select an option (1-8)', 'Preferred Documentation Standard [',
     'Select an option (1-5)', 'Quality Gates command(s) [', 'Proceed with scaffolding?'];
   let output = '', stderr = '', index = 0;
   const timer = setTimeout(() => child.kill(), 25000);
@@ -134,17 +134,17 @@ test('only the acquiring lease can release its claim', async () => {
   await releaseLock(lock, successor);
 });
 
-test('init, create and completion serialize without dropping records or statuses', async () => {
+test('init, create and closure serialize without dropping records or statuses', async () => {
   await scaffoldProject(dir, { projectName: 'Mixed' });
   await createSpec(dir, 'feature', 'first');
   await Promise.all([
     ...Array.from({ length: 4 }, () => initManifest(dir)),
     ...Array.from({ length: 4 }, (_, i) => createSpec(dir, 'feature', 'task-' + i)),
-    updateSpecStatus(dir, '001', 'COMPLETED')
+    updateSpecStatus(dir, '001', 'CLOSED')
   ]);
   const manifest = await loadManifest(dir);
   assert.equal(manifest.specs.length, 5);
-  assert.equal(manifest.specs.find(spec => spec.id === '001').status, 'COMPLETED');
+  assert.equal(manifest.specs.find(spec => spec.id === '001').status, 'CLOSED');
 });
 
 test('automatic initialization preserves the package scripts that exist', async () => {
@@ -156,11 +156,11 @@ test('automatic initialization preserves the package scripts that exist', async 
   assert.ok(!(await readFile(join(dir, 'CONSTITUTION.md'), 'utf8')).includes('npm run lint'));
 });
 
-for (const [marker, command] of [['pom.xml', 'mvn test'], ['build.gradle', './gradlew test']]) {
+for (const [marker, command] of [['pom.xml', 'mvn test'], ['build.gradle', 'gradle test']]) {
   test(`interactive and automatic ${marker} use Java and retain build-tool gates`, async t => {
     await writeFile(join(dir, marker), '');
     const automatic = await runWizard(dir, { yes: true });
-    assert.equal(automatic.stack, 'Java / Spring Boot');
+    assert.equal(automatic.stack, marker === 'pom.xml' ? 'Java / Maven' : 'Java / Gradle');
     assert.equal(automatic.docStandard, 'JavaDoc');
     assert.ok(automatic.qualityGates.includes(command));
     const result = await interactive(t);

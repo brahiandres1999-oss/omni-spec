@@ -27,7 +27,7 @@ describe('Project Environment & Stack Detector', () => {
     assert.equal(result.isGreenfield, true);
     assert.equal(result.type, 'greenfield');
     assert.equal(result.detectedStack, null);
-    assert.equal(result.docStandard, 'JSDoc');
+    assert.equal(result.docStandard, 'Project conventions (review required)');
   });
 
   test('identifies brownfield Node.js with TypeScript and React', async () => {
@@ -71,7 +71,7 @@ describe('Project Environment & Stack Detector', () => {
     assert.equal(result.type, 'brownfield');
     assert.equal(result.detectedStack, 'Python (FastAPI)');
     assert.equal(result.docStandard, 'Python Docstrings (PEP 257)');
-    assert.match(result.qualityGates, /pytest/);
+    assert.equal(result.qualityGates, '', 'FastAPI does not imply pytest is installed');
   });
 
   test('identifies brownfield Java Maven project', async () => {
@@ -120,8 +120,8 @@ describe('Project Environment & Stack Detector', () => {
     const result = await detectProjectEnvironment(tempDir);
     assert.equal(result.isGreenfield, false);
     assert.equal(result.type, 'brownfield');
-    assert.match(result.detectedStack, /Full-Stack/);
-    assert.match(result.qualityGates, /--prefix frontend/);
+    assert.match(result.detectedStack, /Unknown/);
+    assert.equal(result.qualityGates, '', 'Empty frontend/backend directories do not imply test commands');
   });
 
   test('identifies monorepo with pure JavaScript ESM subdirectories', async () => {
@@ -134,7 +134,7 @@ describe('Project Environment & Stack Detector', () => {
     await writeFile(join(tempDir, 'backend', 'package.json'), JSON.stringify(backendPkg, null, 2));
 
     const result = await detectProjectEnvironment(tempDir);
-    assert.equal(result.detectedStack, 'Full-Stack (Node.js / JavaScript ESM)');
+    assert.equal(result.detectedStack, 'Monorepo: Express / JavaScript');
     assert.equal(result.docStandard, 'JSDoc');
   });
 
@@ -148,7 +148,7 @@ describe('Project Environment & Stack Detector', () => {
     await writeFile(join(tempDir, 'frontend', 'package.json'), JSON.stringify(frontendPkg, null, 2));
 
     const result = await detectProjectEnvironment(tempDir);
-    assert.equal(result.detectedStack, 'Full-Stack (Node.js / TypeScript)');
+    assert.equal(result.detectedStack, 'Monorepo: React / TypeScript');
     assert.equal(result.docStandard, 'TSDoc');
   });
 });

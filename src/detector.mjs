@@ -1,216 +1,100 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-/**
- * Inspects a directory to determine if it is a greenfield (new) or brownfield (existing) project,
- * auto-detecting the underlying tech stack, testing gates, and documentation standards.
- *
- * @param {string} baseDir Absolute path to the repository directory
- * @returns {Promise<Object>} Detection summary object
- */
+const ignored = new Set(['.git', 'node_modules', 'specs', '.agents', '.agent', '.claude', '.cursor', '.kilo', '.gemini', '.opencode', '.venv', 'venv', 'dist', 'build', 'target', 'coverage', '.next', '__pycache__']);
+const markers = new Set(['package.json', 'pyproject.toml', 'requirements.txt', 'Pipfile', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'go.mod', 'Cargo.toml', 'pubspec.yaml', 'composer.json', 'Gemfile', 'CMakeLists.txt']);
+const stripBom = s => s.replace(/^\uFEFF/, '');
+
 export async function detectProjectEnvironment(baseDir) {
-  let entries = [];
-  try {
-    entries = await readdir(baseDir);
-  } catch {
-    entries = [];
-  }
-
-  // Filter out system and git files
-  const projectEntries = entries.filter(
-    (e) => !['.git', '.DS_Store', 'Thumbs.db', 'specs', 'CONSTITUTION.md'].includes(e)
-  );
-
-  const isGreenfield = projectEntries.length === 0;
-
-  if (isGreenfield) {
-    return {
-      isGreenfield: true,
-      type: 'greenfield',
-      detectedStack: null,
-      docStandard: 'JSDoc',
-      qualityGates: 'npm test\nnpm run lint\nnpm run build',
-      framework: null
-    };
-  }
-
-  // 1. Check for Node.js / JavaScript / TypeScript (package.json)
-  const pkgPath = join(baseDir, 'package.json');
-  try {
-    const raw = await readFile(pkgPath, 'utf-8');
-    const pkg = JSON.parse(raw);
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-    const isTs = Boolean(deps.typescript || deps['@types/node']);
-
-    let stackName = isTs ? 'Node.js / TypeScript' : 'Node.js / JavaScript (ESM)';
-    let framework = null;
-
-    if (deps.react || deps['react-dom']) {
-      framework = 'React';
-      stackName = isTs ? 'React / TypeScript' : 'React / JavaScript';
-    } else if (deps.next) {
-      framework = 'Next.js';
-      stackName = isTs ? 'Next.js / TypeScript' : 'Next.js / JavaScript';
-    } else if (deps.vue) {
-      framework = 'Vue.js';
-      stackName = isTs ? 'Vue.js / TypeScript' : 'Vue.js / JavaScript';
-    } else if (deps.express) {
-      framework = 'Express';
-      stackName = isTs ? 'Express / TypeScript' : 'Express / Node.js';
-    } else if (deps['@nestjs/core']) {
-      framework = 'NestJS';
-      stackName = 'NestJS / TypeScript';
-    }
-
-    // Determine quality gates from package.json scripts
-    const scripts = pkg.scripts || {};
-    const gatesList = [];
-    if (scripts.test) gatesList.push('npm test');
-    if (scripts.lint) gatesList.push('npm run lint');
-    if (scripts.build) gatesList.push('npm run build');
-
-    const qualityGates = gatesList.length > 0 ? gatesList.join('\n') : 'npm test';
-
-    return {
-      isGreenfield: false,
-      type: 'brownfield',
-      detectedStack: stackName,
-      framework,
-      docStandard: isTs ? 'TSDoc' : 'JSDoc',
-      qualityGates,
-      projectName: pkg.name || null
-    };
-  } catch {
-    // Not a Node.js root or package.json unreadable
-  }
-
-  // Check subdirectories (e.g. monorepo / frontend+backend structure)
-  if (entries.includes('frontend') || entries.includes('backend')) {
-    let hasTs = false;
-    let hasJs = false;
-    for (const sub of ['backend', 'frontend']) {
-      if (entries.includes(sub)) {
-        try {
-          const subPkg = JSON.parse(await readFile(join(baseDir, sub, 'package.json'), 'utf-8'));
-          const allDeps = { ...subPkg.dependencies, ...subPkg.devDependencies };
-          if (allDeps.typescript || allDeps['@types/node']) {
-            hasTs = true;
+  const warnings = [], evidence = [], modules = [];
+  const rootEntries = await readdir(baseDir, { withFileTypes: true });
+  const meaningful = rootEntries.filter(e => !ignored.has(e.name) && !['CONSTITUTION.md', 'AGENTS.md', '.DS_Store', 'Thumbs.db'].includes(e.name));
+  let visited = 0;
+  async function scan(directory, relative = '', depth = 0) {
+    if (++visited > 200) { if (!warnings.includes('Detection limited to 200 directories. Inspect omitted modules manually.')) warnings.push('Detection limited to 200 directories. Inspect omitted modules manually.'); return; }
+    let entries;
+    try { entries = await readdir(directory, { withFileTypes: true }); }
+    catch (error) { warnings.push(`Cannot inspect ${relative || '.'}: ${error.message}`); return; }
+    const names = entries.map(e => e.name);
+    const detected = names.filter(n => markers.has(n) || /\.(sln|csproj|fsproj)$/.test(n));
+    for (const marker of detected) {
+      const source = relative ? `${relative}/${marker}` : marker;
+      let raw;
+      try { raw = stripBom(await readFile(join(directory, marker), 'utf8')); }
+      catch (error) { warnings.push(`${source}: ${error.message}`); continue; }
+      evidence.push(source);
+      let stack, framework = null, doc = 'Project conventions (review required)', commands = [], projectName = null;
+      let declaredRuntime = null, scriptDefinitions = {};
+      if (marker === 'package.json') {
+        let pkg;
+        try { pkg = JSON.parse(raw); if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) throw new Error('Expected object'); }
+        catch (error) { warnings.push(`${source} could not be parsed: ${error.message}`); continue; }
+        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+        const ts = Boolean(deps.typescript || deps['@types/node'] || names.includes('tsconfig.json'));
+        framework = deps.next ? 'Next.js' : deps.react ? 'React' : deps.vue ? 'Vue.js' : deps.express ? 'Express' : deps['@nestjs/core'] ? 'NestJS' : null;
+        stack = framework ? `${framework} / ${ts ? 'TypeScript' : 'JavaScript'}` : `Node.js / ${ts ? 'TypeScript' : pkg.type === 'module' ? 'JavaScript ESM' : 'JavaScript'}`;
+        doc = ts ? 'TSDoc' : 'JSDoc';
+        projectName = pkg.name || null;
+        if (typeof pkg.engines?.node === 'string') declaredRuntime = { tool: 'node', constraint: pkg.engines.node, source, state: 'DECLARED', compatibilityTested: false };
+        const manager = /^pnpm@/.test(pkg.packageManager || '') || names.includes('pnpm-lock.yaml') ? 'pnpm' : /^yarn@/.test(pkg.packageManager || '') || names.includes('yarn.lock') ? 'yarn' : /^bun@/.test(pkg.packageManager || '') || names.includes('bun.lock') ? 'bun' : 'npm';
+        for (const name of ['test', 'lint', 'build', 'typecheck', 'check']) {
+          if (typeof pkg.scripts?.[name] === 'string' && pkg.scripts[name].trim()) {
+            const command = `${manager} ${name === 'test' ? 'test' : `run ${name}`}`;
+            commands.push(command);
+            scriptDefinitions[command] = pkg.scripts[name];
           }
-          hasJs = true;
-        } catch {
-          // not a readable package.json in this sub
         }
+      } else if (['pyproject.toml', 'requirements.txt', 'Pipfile'].includes(marker)) {
+        framework = /fastapi/i.test(raw) ? 'Python (FastAPI)' : /django/i.test(raw) ? 'Python (Django)' : /flask/i.test(raw) ? 'Python (Flask)' : 'Python';
+        stack = framework; doc = 'Python Docstrings (PEP 257)';
+        if (/\bpytest\b/i.test(raw)) commands.push('python -m pytest');
+        if (/\bruff\b/i.test(raw)) commands.push('ruff check .');
+      } else if (marker === 'pom.xml') {
+        stack = 'Java / Maven'; doc = 'JavaDoc'; commands = [names.includes('mvnw') ? (process.platform === 'win32' ? '.\\mvnw.cmd test' : './mvnw test') : 'mvn test'];
+      } else if (marker.startsWith('build.gradle')) {
+        stack = 'Java / Gradle'; doc = 'JavaDoc'; commands = [names.includes('gradlew') ? (process.platform === 'win32' ? '.\\gradlew.bat test' : './gradlew test') : 'gradle test'];
+      } else if (marker === 'go.mod') { stack = 'Go'; doc = 'Go doc'; commands = ['go test ./...']; }
+      else if (marker === 'Cargo.toml') { stack = 'Rust'; doc = 'Rustdoc'; commands = ['cargo test']; }
+      else if (marker === 'pubspec.yaml') { stack = /sdk:\s*flutter/.test(raw) ? 'Flutter' : 'Dart'; doc = 'Dartdoc'; }
+      else if (marker === 'composer.json') { stack = 'PHP'; }
+      else if (marker === 'Gemfile') { stack = 'Ruby'; }
+      else if (marker === 'CMakeLists.txt') { stack = 'C/C++ (CMake)'; }
+      else { stack = '.NET'; }
+      modules.push({ directory: relative || '.', source, stack, framework, docStandard: doc, commands, projectName,
+        declaredRuntime,
+        commandCandidates: commands.map(command => ({ command, cwd: relative || '.', source,
+          basis: Object.hasOwn(scriptDefinitions, command) ? 'declared-script' : 'tool-convention',
+          ...(Object.hasOwn(scriptDefinitions, command) ? { definition: scriptDefinitions[command] } : {}),
+          execution: 'NOT_RUN', prerequisites: 'NOT_ASSESSED', gateSelection: 'REVIEW_REQUIRED' })) });
+    }
+    if (depth < 3) {
+      for (const entry of entries) {
+        if (entry.isDirectory() && !ignored.has(entry.name) && !entry.name.startsWith('.')) await scan(join(directory, entry.name), relative ? `${relative}/${entry.name}` : entry.name, depth + 1);
       }
     }
-
-    let detectedStack = 'Full-Stack (Frontend / Backend Architecture)';
-    let docStandard = 'JSDoc / TSDoc';
-    if (hasTs) {
-      detectedStack = 'Full-Stack (Node.js / TypeScript)';
-      docStandard = 'TSDoc';
-    } else if (hasJs) {
-      detectedStack = 'Full-Stack (Node.js / JavaScript ESM)';
-      docStandard = 'JSDoc';
-    }
-
-    return {
-      isGreenfield: false,
-      type: 'brownfield',
-      detectedStack,
-      framework: 'Polyglot Monorepo',
-      docStandard,
-      qualityGates: 'npm --prefix frontend test\nnpm --prefix backend test',
-      projectName: null
-    };
   }
-
-  // 2. Check for Python (pyproject.toml, requirements.txt, Pipfile)
-  if (
-    entries.includes('pyproject.toml') ||
-    entries.includes('requirements.txt') ||
-    entries.includes('Pipfile')
-  ) {
-    let framework = 'Python';
-    try {
-      const reqPath = join(baseDir, 'requirements.txt');
-      const reqContent = await readFile(reqPath, 'utf-8');
-      if (reqContent.includes('fastapi')) framework = 'Python (FastAPI)';
-      else if (reqContent.includes('django')) framework = 'Python (Django)';
-      else if (reqContent.includes('flask')) framework = 'Python (Flask)';
-    } catch {
-      // Ignore if requirements.txt missing
-    }
-
-    return {
-      isGreenfield: false,
-      type: 'brownfield',
-      detectedStack: framework,
-      framework,
-      docStandard: 'Python Docstrings (PEP 257)',
-      qualityGates: 'pytest --cov\nruff check .',
-      projectName: null
-    };
+  await scan(baseDir);
+  const isGreenfield = meaningful.length === 0;
+  const stacks = [...new Set(modules.map(m => m.stack))];
+  const nested = modules.some(m => m.directory !== '.');
+  const gates = [];
+  for (const module of modules) for (const command of module.commands) {
+    // Paths with shell metacharacters are never interpolated into executable suggestions.
+    if (module.directory !== '.' && !/^[a-zA-Z0-9_./-]+$/.test(module.directory)) { warnings.push(`Review command working directory manually: ${module.directory}`); continue; }
+    gates.push(module.directory === '.' ? command : `cd "${module.directory}" && ${command}`);
   }
-
-  // 3. Check for Java / Spring Boot (pom.xml, build.gradle)
-  if (entries.includes('pom.xml')) {
-    return {
-      isGreenfield: false,
-      type: 'brownfield',
-      detectedStack: 'Java / Maven',
-      framework: 'Spring Boot / Java',
-      docStandard: 'JavaDoc',
-      qualityGates: 'mvn test\nmvn checkstyle:check',
-      projectName: null
-    };
-  }
-
-  if (entries.includes('build.gradle') || entries.includes('build.gradle.kts')) {
-    return {
-      isGreenfield: false,
-      type: 'brownfield',
-      detectedStack: 'Java / Gradle',
-      framework: 'Spring Boot / Java',
-      docStandard: 'JavaDoc',
-      qualityGates: './gradlew test\n./gradlew check',
-      projectName: null
-    };
-  }
-
-  // 4. Check for Go (go.mod)
-  if (entries.includes('go.mod')) {
-    return {
-      isGreenfield: false,
-      type: 'brownfield',
-      detectedStack: 'Go',
-      framework: 'Go Modules',
-      docStandard: 'Go doc',
-      qualityGates: 'go test -v ./...\ngolangci-lint run',
-      projectName: null
-    };
-  }
-
-  // 5. Check for Rust (Cargo.toml)
-  if (entries.includes('Cargo.toml')) {
-    return {
-      isGreenfield: false,
-      type: 'brownfield',
-      detectedStack: 'Rust',
-      framework: 'Cargo',
-      docStandard: 'Rustdoc',
-      qualityGates: 'cargo test\ncargo clippy',
-      projectName: null
-    };
-  }
-
-  // Fallback for generic existing folder
+  if (!gates.length) warnings.push('No quality-gate commands detected. Configure reviewed commands or document manual verification; no test runner is assumed.');
+  const docs = [...new Set(modules.map(m => m.docStandard))];
   return {
-    isGreenfield: false,
-    type: 'brownfield',
-    detectedStack: 'General Existing Codebase',
-    framework: null,
-    docStandard: 'Standard Docstrings / JSDoc',
-    qualityGates: 'npm test',
-    projectName: null
+    isGreenfield, type: isGreenfield ? 'greenfield' : 'brownfield',
+    detectedStack: stacks.length ? `${nested ? 'Monorepo: ' : ''}${stacks.join(' + ')}` : isGreenfield ? null : 'Unknown / existing project',
+    framework: modules.find(m => m.framework)?.framework || null,
+    docStandard: docs.join(' / ') || 'Project conventions (review required)',
+    qualityGates: [...new Set(gates)].join('\n'),
+    projectName: modules.find(m => m.directory === '.')?.projectName || null,
+    evidence, modules, warnings,
+    assessment: { kind: 'REPOSITORY_INVENTORY', applicationValidation: 'APPLICATION_NOT_VALIDATED',
+      projectScriptsExecuted: false, runtimeCompatibility: 'NOT_ASSESSED', policyCompliance: 'NOT_ASSESSED' },
+    limits: 'Heuristic inventory, maximum depth 3 and 200 directories. Commands are discovered/candidate commands, not executed or certified.'
   };
 }

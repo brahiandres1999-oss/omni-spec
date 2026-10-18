@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0-rc.1] - 2026-10-18
+
+Public release candidate. Previous local copies labeled `0.5.0` were unpublished development builds; see `docs/RELEASING.md` before migrating them to this prerelease.
+
+### Added
+- Per-criterion `acceptance.json` coverage required by verify/complete, separate from general automated gate results. Pending, failed, missing, duplicated and stale criterion IDs block closure; evidence truth still requires agent/human review.
+- GitHub release matrix, version/tag validation, packaged assets with SHA-256 and prerelease detection. Optional manually dispatched npm trusted-publisher workflow, plus first-publication and existing-project update instructions.
+- Read-only `context-check` for onboarding state, source-conflict section presence and common local Markdown citations; explicit structural-only scope and required semantic source review.
+- Project onboarding (`omni-init`) and evidence-based exploration (`omni-discuss`) alongside the seven existing workflows.
+- A portable CLI copied into `specs/.omni/runtime/`, plus user-owned project context and a locally resolvable manifest schema.
+- Explicit `verify` and `configure` commands. Completion requires valid documents, finished checklists, authored evidence and a fresh successful source/specification snapshot. Manual and RFC decision evidence are labeled separately from executed automated gates.
+- Real command adapters for Cursor, Copilot in VS Code, Kilo, OpenCode and Gemini; skills for Antigravity, Claude Code and Codex; generic Markdown fallback.
+- Managed-file fingerprints, conflict previews and explicit backed-up replacement with `update --accept-updates`.
+- Read-only `inspect`, integrity-oriented `doctor`, JSON outputs and offline installed-package acceptance scenarios.
+
+### Changed
+- Semantic version precedence for rc/stable updates; downgrades require explicit `--allow-downgrade`. Package smoke verifies exact current version, temporary-prefix global installation and npm-exec/npx-style invocation.
+- Discussion checks current official tool documentation before ruling out alternatives, respects conditional architecture policies and distinguishes source-based UX hypotheses from observed behavior.
+- Onboarding reconciles source declarations by module and environment, carries unresolved differences into command prerequisites and the final response, and requires exact attribution for domain policies. Durable citations resolve relative to their document instead of a developer's computer.
+- Bare `/omni-init` now carries a bounded reconnaissance contract for empty, existing, broken, mixed and non-code projects: evidence categories, command provenance/cwd/prerequisites, pending validation and explicit context states. Default edits are limited to user-owned project context; application scripts and policy/gate changes are separate actions.
+- Bootstrap seeds seven context sections with `CONTEXT_PENDING` / `APPLICATION_NOT_VALIDATED`; `inspect` exposes unexecuted command candidates and declared runtime constraints without inferring installed versions or compatibility. Installation output distinguishes copied files from completed onboarding.
+- Unknown/new projects no longer inherit invented Node, npm, pytest or lint defaults. Bounded monorepo detection includes command working directories and reports uncertainty.
+- Workflows route by archetype and use project checks. Feature templates no longer impose a database or a fixed 32-task implementation.
+- `setup-agent` validates and persists the selected adapters; `check` fails for uninitialized or inconsistent installations.
+- Installation/update failures are reported, and required asset writes must finish before the manifest version is advanced. Legacy/custom files are treated conservatively.
+- The README describes structural checks, semantic review and executed verification separately. Earlier “zero hallucination” and mathematical-verification claims are not guarantees of this implementation.
+
+### Compatibility
+- Local changes only; no tag, commit, remote publication or host-chat certification is implied.
+- Existing specification folders and custom constitution/context remain intact on update. Legacy specs need an authored `verification.md`; bugfix closure now requires a checklist in `fix.md`.
+- Adapters use each host's documented invocation mechanism; a universal slash syntax is not promised. See `docs/STANDARDS.md` and `docs/VALIDATION-0.5.0.md`.
+
+## [0.4.1] - 2026-10-17
+
+### Fixed & Enhanced
+- **Real-World Field Adoption Hardening (Regressions R14–R21):**
+  - **Git-style project root discovery:** every command now locates the enclosing OmniSpec project by walking upward to `specs/manifest.json` or `CONSTITUTION.md`, so `status`, `create`, `audit`, and friends work from any subdirectory instead of failing or operating on the wrong folder.
+  - **Anti-bootstrap gate:** `create`, `focus`, `complete`, `update`, and `setup-agent` now refuse to run outside an initialized OmniSpec project instead of silently scaffolding a parallel `specs/` universe in arbitrary directories.
+  - **Nested universe prevention:** `omni-spec init` inside an already-initialized project is blocked with a clear, actionable error.
+  - **Loud wizard EOF handling:** a closed or non-interactive stdin during the interactive wizard now fails with exit code 1 and explicit `--yes` guidance, instead of exiting 0 silently while leaving the project uninitialized.
+  - **Windows UTF-8 BOM tolerance:** `package.json` and `manifest.json` saved with a BOM (PowerShell 5.x, Notepad, other Windows tooling) no longer break stack detection or the manifest state machine; the detector now reports fallback warnings instead of failing silently.
+  - **Honest template upgrades:** `omni-spec update` now genuinely refreshes `specs/_templates/` — the previous internal path pointed at a nonexistent folder and silently skipped the copy while still reporting success.
+  - **Published `schema/manifest.schema.json`:** manifests now reference a schema that actually exists; `omni-spec update` migrates stale `$schema` URLs from the previous dead link.
+  - **Spanish-friendly slug transliteration:** `create feature "Gestión Usuarios"` produces `001-gestion-usuarios` instead of the mangled `001-gesti-n-usuarios`.
+  - **Dynamic help version:** `omni-spec help` prints the installed version instead of a hardcoded release number.
+- **Selective Agent Integration (`src/integrations.mjs`):**
+  - Eliminated repository pollution: OmniSpec now selectively generates integration files for the specific target agent instead of cluttering repositories with multiple unused AI assistant directories.
+  - Supported targets: `antigravity` (default, `.agents/skills/omni-*/SKILL.md`), `cursor` (`.cursor/rules/omni-spec.mdc`), `claude` (`.claude/commands/omni-*.md`), `copilot` (`.github/copilot-instructions.md`), `kilo` (`.kilo/rules/omni-spec.md`, `kilo.jsonc`, `AGENTS.md`), and `all`.
+- **Target Agent Flag & Configuration (`src/cli.mjs`, `src/wizard.mjs`, `src/manifest.mjs`):**
+  - Added `--agent` and `--ai` CLI flags to `omni-spec init`.
+  - Added optional agent argument to `omni-spec setup-agent [agent]`.
+  - Persisted target `agent` in `manifest.json`.
+  - `omni-spec update` non-destructively respects the project's configured agent.
+- **AI-Guided Conversational Initialization (`OmniInit`):**
+  - Seamless IDE-agent workflow enabling developers to initialize OmniSpec directly through chat (e.g., asking the AI to install or configure OmniSpec), running background scaffolding without manual terminal friction.
+
 ## [0.4.0] - 2026-10-16
 
 ### Added

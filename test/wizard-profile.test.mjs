@@ -30,7 +30,7 @@ describe('Regression R07, R09 & R10: Wizard Configuration & Profile Security Que
     );
   });
 
-  test('runWizard in --yes mode maps Python stack to Python quality gates', async () => {
+  test('runWizard records explicit Python stack without inventing installed test tools', async () => {
     const config = await runWizard(tempDir, {
       yes: true,
       stack: 'Python',
@@ -39,8 +39,7 @@ describe('Regression R07, R09 & R10: Wizard Configuration & Profile Security Que
 
     assert.strictEqual(config.profile, 'fintech');
     assert.ok(config.stack.includes('Python'));
-    assert.ok(config.qualityGates.includes('pytest'));
-    assert.ok(config.qualityGates.includes('ruff'));
+    assert.equal(config.qualityGates, '');
   });
 
   test('createSpec in fintech profile injects specialized financial invariants into spec.md', async () => {

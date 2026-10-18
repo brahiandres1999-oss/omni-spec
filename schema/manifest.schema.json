@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/brahiandres1999-oss/omni-spec/main/schema/manifest.schema.json",
+  "title": "OmniSpec Project Manifest",
+  "description": "Machine-readable state machine tracking the active specification, project configuration, and spec history for an OmniSpec-enabled repository.",
+  "type": "object",
+  "required": ["schemaVersion", "project", "version", "specs"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Manifest structure revision. Bumped on breaking schema changes."
+    },
+    "project": {
+      "type": "string",
+      "description": "Human-readable project name."
+    },
+    "version": {
+      "type": "string",
+      "description": "OmniSpec CLI version this project is synchronized with."
+    },
+    "profile": {
+      "type": ["string", "null"],
+      "description": "Domain regulatory profile (general, fintech, healthtech, bpo, ecommerce)."
+    },
+    "stack": {
+      "type": ["string", "null"],
+      "description": "Detected or declared primary technology stack."
+    },
+    "documentationStandard": {
+      "type": ["string", "null"],
+      "description": "Documentation standard enforced by CONSTITUTION.md (e.g. TSDoc, JSDoc)."
+    },
+    "qualityGates": {
+      "type": ["string", "null"],
+      "description": "Commands (newline separated) that must pass before a task is considered complete."
+    },
+    "agent": {
+      "type": "string",
+      "description": "Selected adapters (comma-separated): antigravity, cursor, claude, copilot, kilo, opencode, gemini, codex, generic; all selects concrete adapters. Invocation syntax depends on the host."
+    },
+    "active_spec": {
+      "type": ["string", "null"],
+      "description": "Slug of the currently focused specification, or null when none is active."
+    },
+    "active_archetype": {
+      "type": ["string", "null"],
+      "description": "Archetype type of the active specification (feature, bugfix, debt, rfc)."
+    },
+    "specs": {
+      "type": "array",
+      "description": "Chronological registry of every specification created in this project.",
+      "items": {
+        "type": "object",
+        "required": ["id", "slug", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Zero-padded sequence identifier (e.g. 001)."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["feature", "bugfix", "debt", "rfc"],
+            "description": "Engineering archetype of the specification."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Folder name under specs/ (e.g. 001-user-auth)."
+          },
+          "title": {
+            "type": "string",
+            "description": "Human-readable specification title."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["IN_PROGRESS", "COMPLETED", "CLOSED", "SUPERSEDED"],
+            "description": "Lifecycle state of the specification."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Creation date (ISO-8601, YYYY-MM-DD)."
+          },
+          "branch": {
+            "type": "string",
+            "description": "Assigned Git branch for the specification work."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

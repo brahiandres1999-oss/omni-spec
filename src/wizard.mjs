@@ -76,6 +76,9 @@ export async function promptChoice(rl, question, choices, defaultIndex = 0) {
 export async function runWizard(baseDir, cliOptions = {}) {
   const defaultProjectName = basename(baseDir);
   const detected = await detectProjectEnvironment(baseDir);
+  for (const warning of detected.warnings || []) {
+    console.warn(`[WARN] ${warning}`);
+  }
   const existingManifest = await loadManifest(baseDir);
   const availableProfiles = listProfiles();
   const validProfileIds = availableProfiles.map(p => p.id);
@@ -87,7 +90,7 @@ export async function runWizard(baseDir, cliOptions = {}) {
   const isExplicitProfile = Boolean(cliOptions.profile);
   const isExplicitStack = Boolean(cliOptions.stack);
   const isExplicitDoc = Boolean(cliOptions.doc);
-  const isExplicitGates = Boolean(cliOptions.gates);
+  const isExplicitGates = cliOptions.gates !== undefined;
 
   // If non-interactive mode is requested (e.g. --yes or in CI)
   if (cliOptions.yes) {
@@ -95,23 +98,22 @@ export async function runWizard(baseDir, cliOptions = {}) {
       ? cliOptions.profile
       : (existingManifest?.profile || 'general');
 
-    let defaultGates = existingManifest?.qualityGates || detected.qualityGates || 'npm test\nnpm run lint\nnpm run build';
-    let defaultDoc = existingManifest?.documentationStandard || detected.docStandard || 'JSDoc';
+    let defaultGates = existingManifest?.qualityGates ?? detected.qualityGates ?? '';
+    let defaultDoc = existingManifest?.documentationStandard || detected.docStandard || 'Project conventions';
     let resolvedStack = isExplicitStack
       ? cliOptions.stack
-      : (existingManifest?.stack || detected.detectedStack || 'Node.js');
+      : (existingManifest?.stack || detected.detectedStack || 'Undecided');
 
     const presetIdx = findPresetIndex(resolvedStack);
     const preset = STACK_PRESETS[presetIdx];
     const changedStack = isExplicitStack && (!existingManifest?.stack || presetIdx !== findPresetIndex(existingManifest.stack));
     const detectedMatches = presetIdx >= 0 && presetIdx === findPresetIndex(detected.detectedStack);
     if (preset && (isExplicitStack || !existingManifest?.stack)) {
-      resolvedStack = preset.label;
       if (!isExplicitDoc && (changedStack || !existingManifest?.documentationStandard)) {
         defaultDoc = preset.doc;
       }
       if (!isExplicitGates && !detectedMatches && (changedStack || !existingManifest?.qualityGates)) {
-        defaultGates = preset.gates;
+        defaultGates = '';
       }
     }
 
@@ -120,15 +122,32 @@ export async function runWizard(baseDir, cliOptions = {}) {
       stack: resolvedStack,
       docStandard: isExplicitDoc ? cliOptions.doc : defaultDoc,
       profile: resolvedProfile,
-      qualityGates: (cliOptions.gates || defaultGates).replace(/ && /g, '\n'),
+      qualityGates: cliOptions.gates ?? defaultGates,
+      environment: detected,
+      agent: cliOptions.agent || cliOptions.ai || existingManifest?.agent || 'antigravity',
       force: Boolean(cliOptions.force),
       explicitProfile: isExplicitProfile,
       explicitStack: isExplicitStack,
-      explicitDoc: isExplicitDoc || changedStack
+      explicitDoc: isExplicitDoc || changedStack,
+      explicitGates: isExplicitGates
     };
   }
 
   const rl = readline.createInterface({ input, output });
+
+  // Fail loudly when the input stream ends before the wizard completes
+  // (non-interactive terminal, closed stdin, or Ctrl+D). Without this guard,
+  // pending readline questions never settle and Node exits silently with code 0
+  // while the project stays uninitialized.
+  let rejectOnInputEnd;
+  const inputEnded = new Promise((_, reject) => { rejectOnInputEnd = reject; });
+  const onInputEnd = () => rejectOnInputEnd(new Error(
+    'Interactive input ended before the wizard completed (non-interactive terminal or closed stdin). ' +
+    'Re-run with `--yes` to accept the detected defaults automatically.'
+  ));
+  input.once('end', onInputEnd);
+  inputEnded.catch(() => {}); // never surface as an unhandled rejection
+  const guarded = (promise) => Promise.race([promise, inputEnded]);
 
   console.log('\nOmniSpec — Universal Spec-Driven Development');
   if (detected.isGreenfield) {
@@ -139,45 +158,46 @@ export async function runWizard(baseDir, cliOptions = {}) {
 
   try {
     // 1. Project Name
-    const projectName = await promptUser(
+    const projectName = await guarded(promptUser(
       rl,
       'Project Name',
       cliOptions.name || existingManifest?.project || defaultProjectName
-    );
+    ));
 
     // 2. Tech Stack - resolve default index from CLI or detector
     const targetStack = cliOptions.stack || existingManifest?.stack || detected.detectedStack || '';
     const defaultStackIdx = Math.max(0, findPresetIndex(targetStack));
 
-    const selectedStack = await promptChoice(
+    const customStack = { label: targetStack || 'Undecided / custom stack', doc: detected.docStandard, gates: '' };
+    const selectedStack = await guarded(promptChoice(
       rl,
       'Select your primary technology stack:',
-      STACK_PRESETS,
-      defaultStackIdx
-    );
+      [...STACK_PRESETS, customStack],
+      findPresetIndex(targetStack) < 0 ? STACK_PRESETS.length : defaultStackIdx
+    ));
     const resolvedInteractiveStack = !isExplicitStack && existingManifest &&
       findPresetIndex(existingManifest.stack) === STACK_PRESETS.indexOf(selectedStack)
       ? existingManifest.stack : selectedStack.label;
 
     // 3. Documentation Standard - resolve default according to selected stack
-    const docStandard = await promptUser(
+    const docStandard = await guarded(promptUser(
       rl,
       'Preferred Documentation Standard',
       cliOptions.doc || (existingManifest && findPresetIndex(existingManifest.stack) === STACK_PRESETS.indexOf(selectedStack)
         ? existingManifest.documentationStandard : null) || selectedStack.doc
-    );
+    ));
 
     // 4. Domain & Regulatory Profile - resolve default index from CLI or existing manifest
     const targetProfile = cliOptions.profile || existingManifest?.profile || 'general';
     let defaultProfileIdx = availableProfiles.findIndex(p => p.id === targetProfile);
     if (defaultProfileIdx < 0) defaultProfileIdx = 0;
 
-    const selectedProfile = await promptChoice(
+    const selectedProfile = await guarded(promptChoice(
       rl,
       'Select the domain profile (regulatory & architectural invariants):',
       availableProfiles.map(p => ({ label: `${p.name} — ${p.description}`, id: p.id })),
       defaultProfileIdx
-    );
+    ));
 
     // 5. Quality Gates
     console.log('\nDefine your delivery quality gates (commands that must pass before merging):');
@@ -185,13 +205,13 @@ export async function runWizard(baseDir, cliOptions = {}) {
     const detectedMatchesSelected = findPresetIndex(detected.detectedStack) === selectedIndex;
     const existingMatchesSelected = existingManifest && findPresetIndex(existingManifest.stack) === selectedIndex;
     const defaultGatesSource = cliOptions.gates || (existingMatchesSelected ? existingManifest.qualityGates : null) ||
-      (detectedMatchesSelected ? detected.qualityGates : null) || selectedStack.gates;
-    const defaultGatesPrompt = defaultGatesSource.replace(/\n/g, ' && ');
-    const qualityGates = await promptUser(
+      (detectedMatchesSelected ? detected.qualityGates : null) || '';
+    const defaultGatesPrompt = defaultGatesSource.replace(/\n/g, '\\n');
+    const qualityGates = await guarded(promptUser(
       rl,
       'Quality Gates command(s)',
-      defaultGatesPrompt
-    );
+      defaultGatesPrompt || 'none'
+    ));
 
     console.log('\n[SUMMARY] Configuration:');
     console.log(`  - Project:       ${projectName}`);
@@ -200,7 +220,7 @@ export async function runWizard(baseDir, cliOptions = {}) {
     console.log(`  - Profile:       ${selectedProfile.id}`);
     console.log(`  - Quality Gates: ${qualityGates}\n`);
 
-    const confirm = await promptUser(rl, 'Proceed with scaffolding? (Y/n)', 'Y');
+    const confirm = await guarded(promptUser(rl, 'Proceed with scaffolding? (Y/n)', 'Y'));
     if (confirm.toLowerCase() === 'n') {
       console.log('Setup aborted by user.');
       return null;
@@ -211,13 +231,17 @@ export async function runWizard(baseDir, cliOptions = {}) {
       stack: resolvedInteractiveStack,
       docStandard,
       profile: selectedProfile.id,
-      qualityGates: qualityGates.replace(/ && /g, '\n'),
+      qualityGates: qualityGates === 'none' ? '' : qualityGates.replace(/\\n/g, '\n'),
+      environment: detected,
+      agent: cliOptions.agent || cliOptions.ai || existingManifest?.agent || 'antigravity',
       force: Boolean(cliOptions.force),
       explicitProfile: true,
       explicitStack: true,
-      explicitDoc: true
+      explicitDoc: true,
+      explicitGates: true
     };
   } finally {
+    input.removeListener('end', onInputEnd);
     rl.close();
   }
 }

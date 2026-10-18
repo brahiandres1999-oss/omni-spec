@@ -1,116 +1,48 @@
-import { readFile, cp } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
-import { installAgentIntegrations } from './integrations.mjs';
+import { readFile } from 'node:fs/promises';
+import { loadManifest, saveManifest, withManifestLock, MANIFEST_SCHEMA_URL } from './manifest.mjs';
+import { integrationEntries, normalizeAgents } from './integrations.mjs';
+import { packageEntries } from './assets.mjs';
+import { syncManagedFiles, checkManagedFiles } from './managed.mjs';
+import { ensureProjectContext } from './generator.mjs';
+import { compareVersions } from './versions.mjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-/**
- * Returns the currently installed OmniSpec CLI version from package.json.
- * @returns {Promise<string>}
- */
 export async function getCliVersion() {
-  try {
-    const pkgPath = join(__dirname, '..', 'package.json');
-    const raw = await readFile(pkgPath, 'utf-8');
-    const pkg = JSON.parse(raw);
-    return pkg.version;
-  } catch {
-    return '0.4.0';
-  }
+  const pkg = JSON.parse((await readFile(new URL('../package.json', import.meta.url), 'utf8')).replace(/^\uFEFF/, ''));
+  if (!pkg.version) throw new Error('Installed package has no version. Reinstall OmniSpec.');
+  return pkg.version;
 }
 
-/**
- * Checks project version status against the installed CLI version.
- *
- * @param {string} baseDir Absolute path to repository
- * @returns {Promise<Object>} Status object
- */
 export async function checkProjectVersion(baseDir) {
   const manifest = await loadManifest(baseDir);
   const cliVersion = await getCliVersion();
-
-  if (!manifest) {
-    return {
-      isInstalled: false,
-      cliVersion,
-      projectVersion: null,
-      isOutdated: false,
-      message: 'OmniSpec is not initialized in this directory. Run "omni-spec init" to get started.'
-    };
-  }
-
-  const projectVersion = manifest.version || '0.3.0';
-  const isOutdated = projectVersion !== cliVersion;
-
-  return {
-    isInstalled: true,
-    project: manifest.project || 'Unknown',
-    projectVersion,
-    cliVersion,
-    isOutdated,
-    message: isOutdated
-      ? `Project "${manifest.project}" is running OmniSpec v${projectVersion}, but CLI v${cliVersion} is available. Run "omni-spec update" to synchronize.`
-      : `Project "${manifest.project}" is up-to-date with OmniSpec v${cliVersion}.`
-  };
+  if (!manifest) return { isInstalled: false, cliVersion, projectVersion: null, isOutdated: false, healthy: false, message: 'OmniSpec is not initialized. Run init first.' };
+  const integrity = await checkManagedFiles(baseDir);
+  const isOutdated = manifest.version !== cliVersion;
+  const healthy = !isOutdated && integrity.tracked > 0 && !integrity.changed.length;
+  return { isInstalled: true, project: manifest.project, projectVersion: manifest.version, cliVersion, isOutdated, healthy, integrity,
+    message: isOutdated ? 'Version differs. Review update --dry-run.' : healthy ? 'Managed files match their installed fingerprints. Agent discovery and project tests still require verification.' : 'Installation needs review: missing/modified managed files or legacy installation. Run update --dry-run.' };
 }
 
-/**
- * Non-destructively upgrades an existing OmniSpec project.
- * Updates templates, AI agent integrations, and bumps manifest version,
- * while leaving existing specs, plans, tasks, and CONSTITUTION.md 100% untouched.
- *
- * @param {string} baseDir Absolute path to repository
- * @param {Object} options Options like dryRun
- * @returns {Promise<Object>} Upgrade result summary
- */
 export async function updateProject(baseDir, options = {}) {
-  const cliVersion = await getCliVersion();
-
-  return withManifestLock(baseDir, async () => {
+  async function update() {
     const manifest = await loadManifest(baseDir);
-    if (!manifest) {
-      throw new Error('Cannot update: OmniSpec is not initialized in this project. Run "omni-spec init" first.');
-    }
-
-    const previousVersion = manifest.version || '0.3.0';
-    const templatesDir = join(__dirname, '..', 'templates');
-    const destTemplatesDir = join(baseDir, 'specs', '_templates');
-
-    if (options.dryRun) {
-      return {
-        dryRun: true,
-        project: manifest.project,
-        fromVersion: previousVersion,
-        toVersion: cliVersion,
-        specsCount: (manifest.specs || []).length
-      };
-    }
-
-    // 1. Refresh templates in specs/_templates non-destructively
-    try {
-      await cp(templatesDir, destTemplatesDir, { recursive: true, force: true });
-    } catch {
-      // safe fallback if templates dir copying encounters race conditions
-    }
-
-    // 2. Install/update multi-agent slash commands and integrations
-    const agentSync = await installAgentIntegrations(baseDir, { ...manifest, version: cliVersion });
-
-    // 3. Bump manifest version and schema
+    if (!manifest) throw new Error('Cannot update: OmniSpec is not initialized. Run init first.');
+    const cliVersion = await getCliVersion();
+    const downgrade = compareVersions(manifest.version || '0.0.0', cliVersion) > 0;
+    if (downgrade && !options.allowDowngrade) throw new Error(`Refusing downgrade from ${manifest.version} to ${cliVersion}. Use the matching or newer CLI, or explicitly review update --allow-downgrade --dry-run.`);
+    const agent = normalizeAgents(options.agent || manifest.agent).join(',');
+    const entries = [...await packageEntries(), ...integrationEntries({ ...manifest, version: cliVersion, agent })];
+    const assets = await syncManagedFiles(baseDir, entries, options);
+    const result = { dryRun: Boolean(options.dryRun), downgrade, project: manifest.project, fromVersion: manifest.version, toVersion: cliVersion, specsCount: manifest.specs.length, specsPreserved: manifest.specs.length, assets, agentIntegrations: assets };
+    if (options.dryRun) return result;
+    await ensureProjectContext(baseDir);
     manifest.version = cliVersion;
     manifest.schemaVersion = 1;
+    manifest.$schema = MANIFEST_SCHEMA_URL;
+    manifest.agent = agent;
     await saveManifest(baseDir, manifest);
-
-    return {
-      success: true,
-      project: manifest.project,
-      fromVersion: previousVersion,
-      toVersion: cliVersion,
-      specsPreserved: (manifest.specs || []).length,
-      agentIntegrations: agentSync
-    };
-  });
+    return { ...result, success: true };
+  }
+  // A preview has no filesystem mutations, including lock directories.
+  return options.dryRun ? update() : withManifestLock(baseDir, update);
 }

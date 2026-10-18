@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fillSpec } from '../test-support/fixtures.mjs';
+import { verifySpec } from '../src/verification.mjs';
 import {
   initManifest,
   loadManifest,
@@ -89,6 +91,9 @@ describe('Manifest State Machine', () => {
       files: ['bug.md', 'rca.md', 'fix.md']
     });
 
+    await assert.rejects(updateSpecStatus(tempDir, '001', 'COMPLETED'), /Cannot verify\/complete/);
+    await fillSpec(tempDir, { slug: '001-fix-login', type: 'bugfix' });
+    await verifySpec(tempDir, '001', { manual: 'Reviewed the fixture greeting contract with explicit evidence.' });
     const updated = await updateSpecStatus(tempDir, '001', 'COMPLETED');
     assert.equal(updated.status, 'COMPLETED');
     assert.ok(updated.completed_at);

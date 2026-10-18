@@ -1,9 +1,27 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadManifest, getActiveSpec } from './manifest.mjs';
+import { safePath } from './managed.mjs';
 
 function stripHtmlComments(content) {
   return content.replace(/<!--[\s\S]*?-->/g, '');
+}
+
+function checklistStats(content) {
+  let fence = null, checked = 0, unchecked = 0;
+  for (const line of stripHtmlComments(content).split(/\r?\n/)) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const task = /^\s*- \[([ xX])\]\s+\S.*$/.exec(line);
+    if (task) task[1] === ' ' ? unchecked++ : checked++;
+  }
+  const total = checked + unchecked;
+  return { total, completed: checked, pending: unchecked, percentage: total ? Math.round(100 * checked / total) : 0 };
 }
 
 async function readRegularFile(filePath) {
@@ -54,7 +72,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     };
   }
 
-  const specDir = join(baseDir, 'specs', spec.slug);
+  const specDir = await safePath(baseDir, `specs/${spec.slug}`);
   const errors = [];
   const warnings = [];
   let taskStats = { total: 0, completed: 0, pending: 0, percentage: 0 };
@@ -73,7 +91,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
 
   // Common check across all archetypes: placeholder tokens and regular files
   for (const file of files) {
-    if (!file.endsWith('.md')) continue;
+    if (!file.endsWith('.md') || file === 'verification.md') continue;
     const readResult = await readRegularFile(join(specDir, file));
     if (readResult.error) {
       errors.push(`File ${file} could not be read as a regular file: ${readResult.error}`);
@@ -89,7 +107,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       content.includes('Nombre / Rol') ||
       content.includes('ej. ¿Esta operación') ||
       content.includes('[Rol Autorizado]') ||
-      content.includes('[TODO]')
+      content.includes('[TODO]') || content.includes('[NEEDS CLARIFICATION]')
     ) {
       errors.push(`File ${file} still contains unreplaced placeholder tokens or sample template text.`);
     }
@@ -149,7 +167,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
 
         // Non-Goals check
         if (!cleanSpec.includes('Non-Goals') && !cleanSpec.includes('Fuera de Alcance')) {
-          warnings.push('spec.md does not explicitly define Non-Goals (Scope creep risk).');
+          errors.push('spec.md does not explicitly define Non-Goals (Scope creep risk).');
         }
         // Acceptance criteria
         if (
@@ -157,7 +175,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
           !cleanSpec.includes('Criterios de Aceptación') &&
           !cleanSpec.includes('Acceptance Criteria')
         ) {
-          warnings.push('spec.md does not include structured Acceptance Criteria.');
+          errors.push('spec.md does not include structured Acceptance Criteria.');
         }
       }
 
@@ -166,24 +184,19 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       if (planData) {
         const cleanPlan = planData.clean;
         if (!cleanPlan.includes('Contratos') && !cleanPlan.includes('Contracts') && !cleanPlan.includes('API')) {
-          warnings.push('plan.md does not clearly define Data Contracts or API contracts.');
+          errors.push('plan.md does not clearly define Data Contracts or API contracts (or justified N/A).');
         }
         if (!cleanPlan.includes('Rollback') && !cleanPlan.includes('Reversión')) {
-          warnings.push('plan.md does not define a Rollback / Migration reversal strategy.');
+          errors.push('plan.md does not define a Rollback / Migration reversal strategy (or justified N/A).');
         }
       }
 
       // 3. Audit tasks.md & progress
       const tasksData = await getCleanMandatoryContent('tasks.md', 'feature');
       if (tasksData) {
-        const tasksContent = tasksData.clean;
-        const checked = (tasksContent.match(/- \[[xX]\]/g) || []).length;
-        const unchecked = (tasksContent.match(/- \[ \]/g) || []).length;
-        const total = checked + unchecked;
-        const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
-        taskStats = { total, completed: checked, pending: unchecked, percentage };
+        taskStats = checklistStats(tasksData.clean);
 
-        if (total === 0) {
+        if (taskStats.total === 0) {
           errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
         }
       }
@@ -198,9 +211,6 @@ export async function auditSpec(baseDir, specIdentifier = null) {
 
       const rcaData = await getCleanMandatoryContent('rca.md', 'bugfix');
       if (rcaData) {
-        if (!rcaData.clean.includes('5 Whys') && !rcaData.clean.includes('Por qué')) {
-          warnings.push('rca.md does not document a 5 Whys root cause analysis chain.');
-        }
         if (rcaData.clean.length < 30) {
           errors.push('rca.md lacks substantive root cause analysis.');
         }
@@ -209,6 +219,10 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       const fixData = await getCleanMandatoryContent('fix.md', 'bugfix');
       if (fixData && fixData.clean.length < 30) {
         errors.push('fix.md lacks substantive fix strategy and test verification details.');
+      }
+      if (fixData) {
+        taskStats = checklistStats(fixData.clean);
+        if (!taskStats.total) errors.push('fix.md requires an actionable regression/fix task checklist.');
       }
       break;
     }
@@ -226,13 +240,9 @@ export async function auditSpec(baseDir, specIdentifier = null) {
 
       const debtTasksData = await getCleanMandatoryContent('tasks.md', 'tech-debt');
       if (debtTasksData) {
-        const checked = (debtTasksData.clean.match(/- \[[xX]\]/g) || []).length;
-        const unchecked = (debtTasksData.clean.match(/- \[ \]/g) || []).length;
-        const total = checked + unchecked;
-        const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
-        taskStats = { total, completed: checked, pending: unchecked, percentage };
+        taskStats = checklistStats(debtTasksData.clean);
 
-        if (total === 0) {
+        if (taskStats.total === 0) {
           errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
         }
       }

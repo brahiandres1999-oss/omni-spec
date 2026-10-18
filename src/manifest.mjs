@@ -1,9 +1,21 @@
 import { readFile, writeFile, mkdir, unlink, rename, readdir, stat, rm } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const MANIFEST_FILE = 'manifest.json';
 const LOCK_FILE = 'manifest.lock';
+
+export const MANIFEST_SCHEMA_URL =
+  './.omni/runtime/schema/manifest.schema.json';
+
+/**
+ * Strips a leading UTF-8 byte order mark so that files saved by Windows
+ * editors (PowerShell 5.x, Notepad) never break JSON.parse.
+ */
+function stripBom(content) {
+  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+}
 
 export async function getManifestPath(baseDir) {
   return join(baseDir, 'specs', MANIFEST_FILE);
@@ -26,7 +38,7 @@ async function prepareLockDirectory(lockPath) {
       if ((await stat(lockPath)).isDirectory()) return;
       // Compatibility with the unpublished single-file implementation. Never
       // guess whether an empty legacy file belongs to a living writer.
-      const legacy = JSON.parse(await readFile(lockPath, 'utf8'));
+      const legacy = JSON.parse(stripBom(await readFile(lockPath, 'utf8')));
       if (!Number.isSafeInteger(legacy.pid) || legacy.pid <= 0 || !isDead(legacy.pid)) {
         throw new Error('Legacy manifest.lock has an active or unknown owner. Stop older OmniSpec processes before removing that file.');
       }
@@ -147,7 +159,16 @@ export async function loadManifest(baseDir) {
   const filePath = await getManifestPath(baseDir);
   try {
     const raw = await readFile(filePath, 'utf-8');
-    return JSON.parse(raw);
+    const manifest = JSON.parse(stripBom(raw));
+    if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.specs)) throw new Error('Expected a manifest object with a specs array.');
+    const ids = new Set(), slugs = new Set();
+    for (const spec of manifest.specs) {
+      if (!spec || !/^\d+-[a-z0-9_-]+$/.test(spec.slug) || typeof spec.id !== 'string') throw new Error('Invalid specification ID or folder name.');
+      if (ids.has(spec.id) || slugs.has(spec.slug)) throw new Error('Duplicate specification ID or folder name.');
+      ids.add(spec.id); slugs.add(spec.slug);
+    }
+    if (manifest.active_spec && !slugs.has(manifest.active_spec)) throw new Error('Active specification does not exist in specs.');
+    return manifest;
   } catch (err) {
     if (err.code === 'ENOENT') {
       return null;
@@ -172,10 +193,9 @@ async function getPackageVersion() {
     const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
     const raw = await readFile(pkgPath, 'utf-8');
     const pkg = JSON.parse(raw);
-    return pkg.version || '0.4.0';
-  } catch {
-    return '0.4.0';
-  }
+    if (!pkg.version) throw new Error('Missing package version');
+    return pkg.version;
+  } catch (error) { throw new Error(`Cannot read installed OmniSpec version: ${error.message}`); }
 }
 
 export async function _initManifestUnlocked(baseDir, options = {}) {
@@ -184,14 +204,16 @@ export async function _initManifestUnlocked(baseDir, options = {}) {
   const resolvedDoc = options.docStandard || options.documentationStandard;
   const pkgVersion = await getPackageVersion();
   const manifest = {
-    $schema: 'https://raw.githubusercontent.com/omni-spec/omni-spec/main/schema/manifest.schema.json',
+    ...existing,
+    $schema: MANIFEST_SCHEMA_URL,
     schemaVersion: 1,
     project: options.projectName || (existing && existing.project) || 'MyProject',
     version: options.version || existing?.version || pkgVersion,
     profile: (options.explicitProfile ? options.profile : null) || (existing && existing.profile) || options.profile || 'general',
-    stack: (options.explicitStack ? resolvedStack : null) || (existing && existing.stack) || resolvedStack || 'Node.js',
-    documentationStandard: (options.explicitDoc ? resolvedDoc : null) || (existing && existing.documentationStandard) || resolvedDoc || 'JSDoc',
-    qualityGates: options.qualityGates || existing?.qualityGates || null,
+    stack: (options.explicitStack ? resolvedStack : null) || (existing && existing.stack) || resolvedStack || 'Undecided',
+    documentationStandard: (options.explicitDoc ? resolvedDoc : null) || (existing && existing.documentationStandard) || resolvedDoc || 'Project conventions',
+    qualityGates: options.qualityGates ?? existing?.qualityGates ?? '',
+    agent: options.agent || options.ai || (existing && existing.agent) || 'antigravity',
     active_spec: (existing && existing.active_spec) || null,
     active_archetype: (existing && existing.active_archetype) || null,
     specs: (existing && Array.isArray(existing.specs)) ? existing.specs : []
@@ -237,6 +259,11 @@ export async function addSpec(baseDir, specEntry) {
 }
 
 export async function updateSpecStatus(baseDir, id, newStatus) {
+  if (newStatus === 'COMPLETED') {
+    const { completeSpec } = await import('./verification.mjs');
+    return completeSpec(baseDir, id);
+  }
+  if (!['IN_PROGRESS', 'CLOSED', 'SUPERSEDED'].includes(newStatus)) throw new Error(`Invalid status: ${newStatus}`);
   return withManifestLock(baseDir, async () => {
     const manifest = await loadManifest(baseDir);
     if (!manifest) {
@@ -280,9 +307,10 @@ export async function focusSpec(baseDir, identifier) {
       throw new Error('No OmniSpec manifest found. Run `omni-spec init` first.');
     }
 
-    const spec = manifest.specs.find(
-      s => s.id === identifier || s.slug === identifier || s.slug.includes(identifier)
-    );
+    const exact = manifest.specs.find(s => s.id === identifier || s.slug === identifier);
+    const matches = exact ? [exact] : manifest.specs.filter(s => s.slug.includes(identifier));
+    if (matches.length > 1) throw new Error(`Ambiguous specification "${identifier}". Use an exact ID or slug.`);
+    const spec = matches[0];
 
     if (!spec) {
       throw new Error(`Specification with identifier "${identifier}" not found in manifest.`);

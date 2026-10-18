@@ -1,329 +1,204 @@
-import { scaffoldProject, createSpec, ARCHETYPES } from './generator.mjs';
+import { readFile, writeFile, access } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { scaffoldProject, createSpec } from './generator.mjs';
 import { runWizard } from './wizard.mjs';
-import { loadManifest, updateSpecStatus, getActiveSpec, focusSpec, listSpecs } from './manifest.mjs';
+import { loadManifest, saveManifest, withManifestLock, updateSpecStatus, focusSpec, listSpecs } from './manifest.mjs';
 import { auditSpec } from './auditor.mjs';
+import { verifySpec } from './verification.mjs';
 import { checkProjectVersion, updateProject, getCliVersion } from './updater.mjs';
-import { installAgentIntegrations } from './integrations.mjs';
-import { readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { installAgentIntegrations, normalizeAgents, agentInstructions, AGENTS } from './integrations.mjs';
+import { detectProjectEnvironment } from './detector.mjs';
+import { auditProjectContext } from './context-auditor.mjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const mutating = new Set(['create', 'focus', 'complete', 'verify', 'update', 'setup-agent', 'configure']);
+const aliases = { switch: 'focus', specs: 'list', upgrade: 'update', 'setup-agents': 'setup-agent', 'omni-init': 'init' };
+const valueFlags = new Set(['profile', 'name', 'stack', 'doc', 'gates', 'agent', 'ai', 'manual', 'timeout']);
+const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade']);
 
-async function getVersion() {
-  return getCliVersion();
+function parse(args) {
+  const flags = {}, positionals = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] === '-y' ? '--yes' : args[i];
+    if (!arg.startsWith('-')) { positionals.push(arg); continue; }
+    const name = arg.slice(2);
+    if (booleanFlags.has(name)) flags[name] = true;
+    else if (valueFlags.has(name)) {
+      if (args[i + 1] === undefined || args[i + 1].startsWith('--')) throw new Error(`Missing value for ${arg}`);
+      flags[name] = args[++i];
+      if (name !== 'gates' && !flags[name].trim()) throw new Error(`Empty value for ${arg}`);
+    } else throw new Error(`Unknown option: ${arg}`);
+  }
+  flags.agent = flags.agent || flags.ai;
+  flags.dryRun = flags['dry-run']; flags.acceptUpdates = flags['accept-updates'];
+  flags.allowDowngrade = flags['allow-downgrade'];
+  if (flags.timeout !== undefined) {
+    flags.timeout = Number(flags.timeout);
+    if (!Number.isSafeInteger(flags.timeout) || flags.timeout < 1 || flags.timeout > 600000) throw new Error('--timeout must be 1..600000 milliseconds.');
+  }
+  return { flags, positionals };
 }
 
-export function printHelp() {
-  console.log(`
-OmniSpec — Universal Spec-Driven Development Framework (v0.4.0)
+async function findProjectRoot(start) {
+  let current = resolve(start);
+  while (true) {
+    try { await access(join(current, 'specs', 'manifest.json')); return current; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
 
-USAGE:
-  omni-spec <command> [options]
+export function printHelp(version = '') {
+  console.log(`OmniSpec v${version} — project-local Spec-Driven Development
 
-COMMANDS:
-  init                     Initialize OmniSpec in the current repository with interactive wizard
-  create <type> <name>     Create a new specification (feature, bugfix, debt, rfc)
-  focus <id|slug>          Switch the active specification focus (alias: switch)
-  list, specs              List all specifications with status and active indicator
-  audit [id]               Audit specification health, Phase 0 gates, and task progress
-  status                   Show the current active spec and project progress
-  complete <id>            Mark a specification as completed
-  update, upgrade          Non-destructively upgrade templates, manifest schema, and agent skills
-  check                    Check project synchronization and version status against CLI
-  setup-agent              Generate or refresh multi-agent slash commands (.agents, .cursor, .claude)
-  help                     Show this help message
-  version                  Show OmniSpec version
+omni-spec <command> [arguments] [options]
+  init [--yes] [--agent name]     Bootstrap project and chat workflows
+  inspect [--json]               Read-only environment inventory; no scripts executed
+  context-check [--json]         Check context structure/local links; semantic review required
+  create <type> <name>           feature, bugfix (bug/fix), debt, rfc (idea)
+  status | list [--json]         Resume active work or list specifications
+  focus <id|slug>                Select active work without creating duplicates
+  audit [id] [--json]            Structural document checks, not code verification
+  configure --gates <commands>   Set reviewed checks (newline separated; root cwd)
+  verify [id]                    Run configured checks and bind evidence to source
+    --manual <reason>           Explicit manual evidence when no checks apply
+    --timeout <ms>              Per-command timeout (default 120000)
+  complete <id>                 Require audit, completed tasks and fresh verification
+  check | doctor [--json]        Inspect version and managed-file integrity
+  update --dry-run              Preview exact changed files and conflicts
+  update [--accept-updates]      Preserve edits; opt in to backup and replacement
+    --allow-downgrade           Explicitly permit an older/pre-release CLI after review
+  setup-agent <name[,name]>      Select/persist adapters; keep other existing files
+  help | version
 
-TYPES FOR "create":
-  feature                  New user-facing capability (spec.md, plan.md, tasks.md)
-  bugfix                   Defect or runtime error RCA (bug.md, rca.md, fix.md)
-  debt                     Technical debt / refactor (audit.md, migration-plan.md, tasks.md)
-  rfc                      Architectural decision record / proposal (rfc.md)
-
-OPTIONS FOR "init":
-  --yes, -y                Use automatic defaults without interactive prompt
-  --force                  Overwrite existing constitution and templates
-  --profile <name>         Preselect domain profile (general, fintech, healthtech, bpo, ecommerce)
-  --name <projectName>     Specify project name
-  --stack <techStack>      Specify tech stack
-  --doc <standard>         Specify documentation standard (JSDoc, TSDoc, JavaDoc, etc.)
-  --gates <commands>       Specify quality gates commands
-
-EXAMPLES:
-  omni-spec init
-  omni-spec init --yes --profile fintech
-  omni-spec create feature user-authentication
-  omni-spec create bugfix null-pointer-dashboard
-  omni-spec create debt remove-legacy-mock
-  omni-spec create rfc websocket-vs-sse
-  omni-spec audit
-  omni-spec audit 001
-  omni-spec status
-  omni-spec complete 001
+init options: --name --stack --doc --profile --gates --agent (alias --ai)
+  --force explicitly replaces constitution/templates; existing specs are preserved.
+Agents: ${Object.keys(AGENTS).join(', ')}, all
+After bootstrap: /omni-init -> /omni-discuss or /omni-specify.
+Invocation syntax varies by host; use its installed skill/command picker.
+Local CLI: node specs/.omni/runtime/bin/omni-spec.mjs <command>
 `);
 }
 
 export async function runCli(args = process.argv.slice(2), workingDir = process.cwd()) {
-  const command = args[0];
-
-  if (!command || command === 'help' || command === '--help' || command === '-h') {
-    printHelp();
-    return 0;
-  }
-
-  if (command === 'version' || command === '--version' || command === '-v') {
-    const version = await getVersion();
-    console.log(`omni-spec v${version}`);
-    return 0;
-  }
-
-  // Parse simple flags
-  const flags = {};
-  for (let i = 1; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--yes' || arg === '-y') flags.yes = true;
-    else if (arg === '--force') flags.force = true;
-    else if (arg === '--dry-run') flags.dryRun = true;
-    else if (arg === '--profile' && args[i + 1]) flags.profile = args[++i];
-    else if (arg === '--name' && args[i + 1]) flags.name = args[++i];
-    else if (arg === '--stack' && args[i + 1]) flags.stack = args[++i];
-    else if (arg === '--doc' && args[i + 1]) flags.doc = args[++i];
-    else if (arg === '--gates' && args[i + 1]) flags.gates = args[++i];
-  }
-
+  let json = false;
   try {
+    const raw = args[0] || 'help';
+    if (['help', '--help', '-h'].includes(raw) || args.includes('--help')) { printHelp(await getCliVersion()); return 0; }
+    if (['version', '--version', '-v'].includes(raw)) { console.log(`omni-spec v${await getCliVersion()}`); return 0; }
+    const command = aliases[raw] || raw;
+    const { flags, positionals } = parse(args.slice(1));
+    json = Boolean(flags.json);
+    if (flags.dryRun && command !== 'update') throw new Error('--dry-run is supported only by update. No changes made.');
+    if (flags.allowDowngrade && command !== 'update') throw new Error('--allow-downgrade is supported only by update.');
+    if (flags.force && command !== 'init') throw new Error('--force is supported only by init. Use update --accept-updates after reviewing conflicts.');
+    if (flags.manual !== undefined && command !== 'verify') throw new Error('--manual is supported only by verify.');
+    if (flags.timeout !== undefined && command !== 'verify') throw new Error('--timeout is supported only by verify.');
+    if (flags.acceptUpdates && !['update', 'setup-agent'].includes(command)) throw new Error('--accept-updates is supported only by update and setup-agent.');
+    if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
+    const maxPositionals = { create: 2, focus: 1, complete: 1, verify: 1, audit: 1, 'setup-agent': 1 }[command] || 0;
+    if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
+    const emit = (value, human) => console.log(json ? JSON.stringify(value, null, 2) : human || JSON.stringify(value, null, 2));
+    if (flags.agent) normalizeAgents(flags.agent); // Validate before creating any files.
+    const root = await findProjectRoot(workingDir);
+    if (command === 'init' && root && root !== resolve(workingDir)) throw new Error(`Already inside an OmniSpec project (root: ${root}). Run init from its root; nested projects are not initialized implicitly.`);
+    if (command !== 'init' && root) workingDir = root;
+    if (mutating.has(command) && !root) throw new Error('No OmniSpec project found. Run omni-spec init first.');
     switch (command) {
       case 'init': {
-        const wizardOptions = await runWizard(workingDir, flags);
-        if (!wizardOptions) {
-          return 0;
-        }
-        console.log('[INFO] Scaffolding OmniSpec files...');
-        const result = await scaffoldProject(workingDir, wizardOptions);
-        console.log('[OK] OmniSpec initialized successfully!');
-        console.log(`   - Constitution:  ${result.constitutionPath}`);
-        console.log(`   - Specs folder:  ${result.specsDir}`);
-        console.log(`   - Manifest:      ${result.manifestPath}\n`);
-        console.log('Next step: create your first spec with:');
-        console.log('  omni-spec create feature <feature-name>\n');
+        const options = await runWizard(workingDir, flags);
+        if (!options) return 0;
+        const result = await scaffoldProject(workingDir, options);
+        emit(result, `[OK] OmniSpec files installed at ${workingDir}\n${agentInstructions(options.agent)}\nContext pending; application not validated. Run omni-init without extra instructions to recognize this project.\nLocal CLI: node specs/.omni/runtime/bin/omni-spec.mjs status`);
         return 0;
       }
-
+      case 'inspect': {
+        const environment = await detectProjectEnvironment(workingDir);
+        emit({ root: workingDir, ...environment }); return 0;
+      }
+      case 'context-check': {
+        if (!root) throw new Error('No OmniSpec project found. Run init first.');
+        const result = await auditProjectContext(workingDir);
+        emit(result, `[CONTEXT ${result.valid ? 'STRUCTURE PASSED' : 'BLOCKED'}] Structure and local links only; source-claim review required.\n${result.errors.join('\n')}\n${result.warnings.join('\n')}`);
+        return result.valid ? 0 : 1;
+      }
       case 'create': {
-        const type = args[1];
-        const name = args[2];
-        if (!type || !name) {
-          console.error('[ERROR] Both archetype type and name are required.');
-          console.log('Usage: omni-spec create <feature|bugfix|debt|rfc> <name>');
-          return 1;
+        if (positionals.length !== 2) throw new Error('Usage: create <feature|bugfix|debt|rfc> <name> (quote names containing spaces).');
+        const spec = await createSpec(workingDir, ...positionals);
+        emit(spec, `[OK] Created specs/${spec.slug} (${spec.archetype}).\nSuggested branch: ${spec.branch} (not created).\nClarify requirements, then plan the change; no implementation is verified yet.`); return 0;
+      }
+      case 'status': case 'list': {
+        const manifest = await loadManifest(workingDir);
+        if (!manifest) throw new Error('No OmniSpec manifest found. Run init first.');
+        if (command === 'status') emit(manifest, `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`);
+        else {
+          const listing = await listSpecs(workingDir);
+          emit(listing, `[SPECS] ${listing.project}\n${listing.specs.length ? listing.specs.map(s => `${s.slug === listing.active_spec ? '*' : ' '} ${s.id.padEnd(5)} ${s.type?.padEnd(8) || 'unknown '} ${s.status.padEnd(12)} ${s.slug}`).join('\n') : 'No specifications. Use omni-discuss for exploration or create for a defined change.'}`);
         }
-
-        console.log(`[CREATE] Creating new ${type} spec: "${name}"...`);
-        const spec = await createSpec(workingDir, type, name, flags);
-        console.log(`[OK] Spec created at: specs/${spec.slug}`);
-        console.log(`   - Archetype:  ${spec.archetype}`);
-        console.log(`   - Git Branch: ${spec.branch}`);
-        console.log(`   - Status:     Active\n`);
-        console.log(`Open specs/${spec.slug} to complete the specification.`);
         return 0;
       }
-
-      case 'focus':
-      case 'switch': {
-        const id = args[1];
-        if (!id) {
-          console.error('[ERROR] Please specify the spec ID or slug to focus.');
-          console.log('Usage: omni-spec focus <id|slug>');
-          return 1;
-        }
-
-        const focused = await focusSpec(workingDir, id);
-        console.log(`\n[OK] Focused specification: [${focused.id}] ${focused.slug} (${focused.type})`);
-        console.log(`   - Branch: ${focused.branch}`);
-        console.log(`   - Status: ${focused.status}\n`);
-        return 0;
+      case 'focus': {
+        if (positionals.length !== 1) throw new Error('Usage: focus <id|slug>');
+        const focused = await focusSpec(workingDir, positionals[0]);
+        emit(focused, `[ACTIVE] ${focused.slug} (${focused.type}) — ${focused.status}`); return 0;
       }
-
-      case 'list':
-      case 'specs': {
-        const data = await listSpecs(workingDir);
-        if (!data) {
-          console.log('[INFO] No OmniSpec manifest found. Run `omni-spec init` to get started.');
-          return 1;
-        }
-
-        console.log(`\n[OMNISPEC SPECS] Project: ${data.project} (${data.profile} profile)`);
-        console.log(`Total Specifications: ${data.specs.length}\n`);
-        if (data.specs.length === 0) {
-          console.log('No specifications found. Create one with `omni-spec create <type> <name>`.');
-          return 0;
-        }
-
-        console.log('  ACT  ID    SLUG                                TYPE       STATUS');
-        console.log('  ---  ----  ----------------------------------  ---------  -----------');
-        for (const s of data.specs) {
-          const isAct = s.slug === data.active_spec ? '*' : ' ';
-          const idPad = String(s.id).padEnd(4);
-          const slugPad = String(s.slug).padEnd(34);
-          const typePad = String(s.type).padEnd(9);
-          console.log(`  [${isAct}]  ${idPad}  ${slugPad}  ${typePad}  ${s.status}`);
-        }
-        console.log('');
-        return 0;
-      }
-
       case 'audit': {
-        const id = args[1] || null;
-        console.log('[AUDIT] Running specification health audit...');
-        const report = await auditSpec(workingDir, id);
-
-        if (!report.spec) {
-          console.error(`[ERROR] ${report.errors.join(' ')}`);
-          return 1;
-        }
-
-        console.log('\n=============================================================');
-        console.log(` AUDIT REPORT: [${report.spec.id}] ${report.spec.slug} (${report.spec.type})`);
-        console.log(` Directory: specs/${report.spec.slug}`);
-        console.log('=============================================================');
-
-        if (report.tasks && report.tasks.total > 0) {
-          console.log(` Progress: ${report.tasks.completed}/${report.tasks.total} tasks completed (${report.tasks.percentage}%)`);
-        }
-
-        if (report.warnings.length > 0) {
-          console.log(`\n[WARNINGS] (${report.warnings.length}):`);
-          report.warnings.forEach(w => console.log(`  - [WARN] ${w}`));
-        }
-
-        if (report.valid) {
-          console.log('\n[AUDIT PASSED] Specification structure, required artifacts, and Phase 0 criteria verified.');
-          console.log('  Quality gates satisfied. Proceed with implementation.\n');
-          return 0;
-        } else {
-          console.log('\n[AUDIT BLOCKED] Specification fails mandatory SDD criteria:');
-          report.errors.forEach(e => console.log(`  - [BLOCKER] ${e}`));
-          console.log(`\nAction required: Complete missing sections in specs/${report.spec.slug} before coding.\n`);
-          return 1;
-        }
+        const report = await auditSpec(workingDir, positionals[0]);
+        emit(report, `[AUDIT ${report.valid ? 'PASSED' : 'BLOCKED'}] Structural document checks only.\n${report.errors.join('\n')}\n${report.warnings.map(w => '[WARN] ' + w).join('\n')}\nTasks: ${report.tasks?.completed || 0}/${report.tasks?.total || 0}. Code tests were not executed.`);
+        return report.valid ? 0 : 1;
       }
-
-      case 'status': {
-        const manifest = await loadManifest(workingDir);
-        if (!manifest) {
-          console.log('[INFO] No OmniSpec manifest found. Run `omni-spec init` to get started.');
-          return 1;
-        }
-
-        console.log(`\n[PROJECT] ${manifest.project} (${manifest.profile} profile)`);
-        console.log(`   Stack:   ${manifest.stack} | Docs: ${manifest.documentationStandard}`);
-        
-        const active = await getActiveSpec(workingDir);
-        if (active) {
-          console.log(`\n[ACTIVE] [${active.id}] ${active.title}`);
-          console.log(`   Type:    ${active.type}`);
-          console.log(`   Folder:  specs/${active.slug}`);
-          console.log(`   Branch:  ${active.branch}`);
-          console.log(`   Status:  ${active.status}`);
-        } else {
-          console.log('\n[NONE] No active spec. Run `omni-spec create <type> <name>` to start one.');
-        }
-
-        console.log(`\n[HISTORY] Total Specs Recorded: ${manifest.specs.length}`);
-        if (manifest.specs.length > 0) {
-          manifest.specs.forEach(s => {
-            const marker = s.slug === manifest.active_spec ? '*' : ' ';
-            console.log(`   [${marker}] [${s.id}] ${s.slug} (${s.type}) - ${s.status}`);
-          });
-        }
-
-        const cliVersion = await getVersion();
-        if (manifest.version && manifest.version !== cliVersion) {
-          console.log(`\n[NOTICE] Project is running OmniSpec v${manifest.version}, but CLI v${cliVersion} is available.`);
-          console.log(`         Run 'omni-spec update' to synchronize templates and agent skills non-destructively.`);
-        }
-        console.log('');
-        return 0;
+      case 'verify': {
+        const result = await verifySpec(workingDir, positionals[0], flags);
+        emit(result, `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}`).join('\n')}\n${result.sourceChangedDuringVerification ? 'Source changed during verification; run again after reviewing generated changes.' : 'Evidence is bound to the current source/specification snapshot.'}`);
+        return result.passed ? 0 : 1;
       }
-
       case 'complete': {
-        const id = args[1];
-        if (!id) {
-          console.error('[ERROR] Please specify the spec ID or slug to complete.');
-          console.log('Usage: omni-spec complete <id>');
-          return 1;
-        }
-
-        const updated = await updateSpecStatus(workingDir, id, 'COMPLETED');
-        console.log(`[OK] Spec [${updated.id}] ${updated.slug} marked as COMPLETED.`);
-        return 0;
+        if (positionals.length !== 1) throw new Error('Usage: complete <id>');
+        const updated = await updateSpecStatus(workingDir, positionals[0], 'COMPLETED');
+        emit(updated, `[OK] ${updated.slug} COMPLETED; verification mode: ${updated.verification.mode}.`); return 0;
       }
-
-      case 'check': {
+      case 'configure': {
+        if (flags.gates === undefined) throw new Error('Usage: configure --gates "<reviewed commands>". Use an empty string to explicitly clear gates.');
+        await withManifestLock(workingDir, async () => {
+          const manifest = await loadManifest(workingDir);
+          const path = join(workingDir, 'CONSTITUTION.md');
+          const content = await readFile(path, 'utf8');
+          const section = `## 4. Delivery Quality Gates\n\nConfigured commands, executed from the project root by verify. Review commands before execution.\n\n\`\`\`text\n${flags.gates || '# No automated checks configured; explicit manual evidence is required.'}\n\`\`\`\n\n`;
+          const pattern = /^## 4\. Delivery Quality Gates[^\n]*\n[\s\S]*?(?=^## |$(?![\s\S]))/m;
+          if (!pattern.test(content)) throw new Error('Custom constitution has no recognizable Delivery Quality Gates section. Add that section before configuring commands; custom text was preserved.');
+          await writeFile(path, content.replace(pattern, () => section));
+          manifest.qualityGates = flags.gates;
+          await saveManifest(workingDir, manifest);
+        });
+        emit({ configured: true, qualityGates: flags.gates }, '[OK] Gates configured, not executed. Prior verification becomes stale.'); return 0;
+      }
+      case 'check': case 'doctor': {
         const check = await checkProjectVersion(workingDir);
-        console.log('\n[OMNISPEC CHECK] Version & Synchronization Report');
-        console.log(`   Project:          ${check.project || 'N/A'}`);
-        console.log(`   Project Version:  ${check.projectVersion ? 'v' + check.projectVersion : 'Not initialized'}`);
-        console.log(`   CLI Version:      v${check.cliVersion}`);
-        console.log(`   Status:           ${check.isOutdated ? 'UPDATE AVAILABLE' : 'SYNCHRONIZED'}`);
-        console.log(`\n${check.message}\n`);
-        return check.isOutdated ? 1 : 0;
+        emit(check, `[${!check.isInstalled ? 'NOT INITIALIZED' : check.healthy ? 'FILES SYNCHRONIZED' : 'NEEDS REVIEW'}] ${check.message}\n${check.integrity?.changed.join('\n') || ''}`);
+        return check.healthy ? 0 : 1;
       }
-
-      case 'update':
-      case 'upgrade': {
-        console.log('[UPDATE] Initiating non-destructive project upgrade...');
+      case 'update': {
         const result = await updateProject(workingDir, flags);
-        if (result.dryRun) {
-          console.log(`\n[DRY RUN] Upgrade preview for "${result.project}":`);
-          console.log(`   From version:     v${result.fromVersion}`);
-          console.log(`   To version:       v${result.toVersion}`);
-          console.log(`   Specs preserved:  ${result.specsCount}`);
-          console.log('\nRun "omni-spec update" without --dry-run to apply changes.\n');
-          return 0;
-        }
-
-        console.log(`\n[OK] Project "${result.project}" successfully upgraded to v${result.toVersion}!`);
-        console.log(`   - Previous version:  v${result.fromVersion}`);
-        console.log(`   - Specs preserved:   ${result.specsPreserved} specifications intact`);
-        console.log(`   - Templates:         Refreshed in specs/_templates/`);
-        console.log(`   - AI Agent Skills:   Synchronized (${result.agentIntegrations.created.length} created, ${result.agentIntegrations.updated.length} updated)`);
-        console.log(`   - Constitution:      100% preserved\n`);
-        return 0;
+        const { created, updated, conflicts, backups } = result.assets;
+        emit(result, `[${result.dryRun ? 'DRY RUN' : 'UPDATED'}] ${result.project}: ${result.fromVersion} -> ${result.toVersion}\nFiles: ${created.length} new, ${updated.length} changed, ${conflicts.length} conflicts. Specs preserved: ${result.specsPreserved}.\n${result.dryRun ? [...created.map(p => 'CREATE ' + p), ...updated.map(p => 'UPDATE ' + p)].join('\n') : ''}\n${conflicts.map(p => 'CONFLICT ' + p).join('\n')}\n${backups.map(p => 'BACKUP ' + p).join('\n')}`);
+        return conflicts.length ? 1 : 0;
       }
-
-      case 'setup-agent':
-      case 'setup-agents': {
-        const manifest = await loadManifest(workingDir);
-        if (!manifest) {
-          console.error('[ERROR] Cannot setup agent integrations: project is not initialized. Run "omni-spec init" first.');
-          return 1;
-        }
-        console.log('[AGENT] Generating universal multi-agent slash commands and rules...');
-        const result = await installAgentIntegrations(workingDir, manifest);
-        console.log('[OK] Agent integrations configured successfully!');
-        console.log(`   - Created files (${result.created.length}):`);
-        result.created.forEach(f => console.log(`     * ${f}`));
-        if (result.updated.length > 0) {
-          console.log(`   - Updated files (${result.updated.length}):`);
-          result.updated.forEach(f => console.log(`     * ${f}`));
-        }
-        console.log('\nAvailable Slash Commands in Chat:');
-        console.log('  /omni-specify   /omni-clarify   /omni-plan');
-        console.log('  /omni-tasks     /omni-audit     /omni-implement   /omni-converge\n');
-        return 0;
+      case 'setup-agent': {
+        const result = await withManifestLock(workingDir, async () => {
+          const manifest = await loadManifest(workingDir);
+          const agent = normalizeAgents(positionals[0] || flags.agent || manifest.agent).join(',');
+          const assets = await installAgentIntegrations(workingDir, { ...manifest, agent }, flags);
+          manifest.agent = agent;
+          await saveManifest(workingDir, manifest);
+          return { agent, ...assets, invocation: agentInstructions(agent) };
+        });
+        emit(result, `[OK] Selected adapters: ${result.agent}\nFiles: ${result.created.length} new, ${result.updated.length} updated.\n${result.invocation}\nReload the project if the host has not discovered the commands. File generation is not a host-chat test.`); return 0;
       }
-
-      default: {
-        console.error(`[ERROR] Unknown command: "${command}".`);
-        printHelp();
-        return 1;
-      }
+      default: throw new Error(`Unknown command: ${command}. Run help.`);
     }
-  } catch (err) {
-    console.error(`\n[ERROR] ${err.message}\n`);
+  } catch (error) {
+    console.error(json ? JSON.stringify({ error: error.message }) : `[ERROR] ${error.message}`);
     return 1;
   }
 }

@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFile, access } from 'node:fs/promises';
+import { releaseMetadata } from './release-meta.mjs';
+const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const meta = releaseMetadata(pkg, process.env.RELEASE_REF || (process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME : undefined));
+assert.equal(pkg.publishConfig?.tag, meta.npmTag, 'publishConfig.tag must follow prerelease/stable channel');
+assert.equal(pkg.publishConfig?.access, 'public');
+assert.equal(pkg.repository?.url, 'git+https://github.com/brahiandres1999-oss/omni-spec.git');
+assert.equal(pkg.bin?.['omni-spec'], 'bin/omni-spec.mjs');
+assert.ok(!Object.keys(pkg.dependencies || {}).length, 'Runtime must have no external dependencies');
+const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+assert.ok(readme.startsWith(`# OmniSpec ${meta.version}`), 'README version must match package');
+assert.ok(changelog.includes(`## [${meta.version}]`), 'Changelog must include this release');
+await access(new URL('../' + meta.notes, import.meta.url));
+console.log(JSON.stringify({ ready: true, ...meta, publication: 'Not performed by this check' }, null, 2));

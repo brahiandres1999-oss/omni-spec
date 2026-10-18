@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runCli } from '../src/cli.mjs';
 import { loadManifest } from '../src/manifest.mjs';
+import { fillSpec } from '../test-support/fixtures.mjs';
 
 describe('OmniSpec CLI', () => {
   let tempDir;
@@ -77,7 +78,10 @@ describe('OmniSpec CLI', () => {
     assert.equal(manifest.active_spec, '001-user-profile');
     assert.equal(manifest.specs[0].status, 'IN_PROGRESS');
 
-    // 4. Complete Spec
+    // 4. Draft completion is blocked; authored evidence is required.
+    assert.equal(await runCli(['complete', '001'], tempDir), 1);
+    await fillSpec(tempDir, { slug: '001-user-profile', type: 'feature' });
+    assert.equal(await runCli(['verify', '001', '--manual', 'Manually checked the deterministic greeting contract.'], tempDir), 0);
     code = await runCli(['complete', '001'], tempDir);
     assert.equal(code, 0);
 
@@ -123,5 +127,25 @@ describe('OmniSpec CLI', () => {
     // Clean spec -> should exit with code 0 (passed)
     code = await runCli(['audit'], tempDir);
     assert.equal(code, 0);
+  });
+
+  test('init with --agent and setup-agent commands configure selective targets', async () => {
+    let code = await runCli(['init', '--yes', '--name', 'AgentApp', '--agent', 'antigravity'], tempDir);
+    assert.equal(code, 0);
+
+    const manifest = await loadManifest(tempDir);
+    assert.equal(manifest.agent, 'antigravity');
+
+    const hasAntigravity = await access(join(tempDir, '.agents')).then(() => true, () => false);
+    const hasCursor = await access(join(tempDir, '.cursor')).then(() => true, () => false);
+    assert.equal(hasAntigravity, true);
+    assert.equal(hasCursor, false);
+
+    // Now configure cursor via setup-agent
+    code = await runCli(['setup-agent', 'cursor'], tempDir);
+    assert.equal(code, 0);
+
+    const hasCursorAfter = await access(join(tempDir, '.cursor', 'rules', 'omni-spec.mdc')).then(() => true, () => false);
+    assert.equal(hasCursorAfter, true);
   });
 });

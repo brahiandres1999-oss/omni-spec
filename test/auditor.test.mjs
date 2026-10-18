@@ -149,7 +149,7 @@ Add Stripe payments.
     // Replace bug.md, rca.md, fix.md without BUG-XXX
     await writeFile(join(specDir, 'bug.md'), '# BUG-001: Crash on null user\nError log here', 'utf-8');
     await writeFile(join(specDir, 'rca.md'), '# RCA-001\n5 Whys root cause analysis...', 'utf-8');
-    await writeFile(join(specDir, 'fix.md'), '# FIX-001\nRegression test and patch', 'utf-8');
+    await writeFile(join(specDir, 'fix.md'), '# FIX-001\nRegression test and patch\n- [ ] Reproduce the null input and verify the regression.', 'utf-8');
 
     const report = await auditSpec(tempDir);
     assert.strictEqual(report.valid, true);

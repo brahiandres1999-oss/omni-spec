@@ -101,7 +101,7 @@ describe('Project & Spec Generator', () => {
       assert.equal(spec.branch, 'feat/001-user-onboarding');
 
       const files = await readdir(spec.specDir);
-      assert.deepEqual(files.sort(), ['plan.md', 'spec.md', 'tasks.md'].sort());
+      assert.deepEqual(files.sort(), ['acceptance.json', 'plan.md', 'spec.md', 'tasks.md', 'verification.md'].sort());
 
       const specContent = await readFile(join(spec.specDir, 'spec.md'), 'utf-8');
       assert.match(specContent, /SPEC-001/);
@@ -121,19 +121,19 @@ describe('Project & Spec Generator', () => {
       assert.equal(s2.id, '002');
       assert.equal(s2.branch, 'fix/002-stripe-webhook-timeout');
       const s2Files = await readdir(s2.specDir);
-      assert.deepEqual(s2Files.sort(), ['bug.md', 'fix.md', 'rca.md'].sort());
+      assert.deepEqual(s2Files.sort(), ['acceptance.json', 'bug.md', 'fix.md', 'rca.md', 'verification.md'].sort());
 
       const s3 = await createSpec(tempDir, 'debt', 'upgrade-node-22');
       assert.equal(s3.id, '003');
       assert.equal(s3.branch, 'debt/003-upgrade-node-22');
       const s3Files = await readdir(s3.specDir);
-      assert.deepEqual(s3Files.sort(), ['audit.md', 'migration-plan.md', 'tasks.md'].sort());
+      assert.deepEqual(s3Files.sort(), ['acceptance.json', 'audit.md', 'migration-plan.md', 'tasks.md', 'verification.md'].sort());
 
       const s4 = await createSpec(tempDir, 'rfc', 'graphql-vs-trpc');
       assert.equal(s4.id, '004');
       assert.equal(s4.branch, 'rfc/004-graphql-vs-trpc');
       const s4Files = await readdir(s4.specDir);
-      assert.deepEqual(s4Files, ['rfc.md']);
+      assert.deepEqual(s4Files.sort(), ['acceptance.json', 'rfc.md', 'verification.md']);
 
       const manifest = await loadManifest(tempDir);
       assert.equal(manifest.specs.length, 4);

@@ -1,19 +1,7 @@
 export const fintechProfile = {
-  id: 'fintech',
-  name: 'Fintech, Banking & Payments',
-  description: 'PCI-DSS, double-entry ledger invariance, strict financial idempotency, and audit trails.',
-  constitutionInvariants: `### 2.1 Financial Invariants & PCI-DSS
-* **Idempotency Keys:** Every mutation involving balances, payments, or ledger movements must require a client-generated \`Idempotency-Key\` header.
-* **Double-Entry Ledger:** Money can never be created or destroyed. Debits must equal credits in all balance mutations.
-* **Zero Raw Card Data:** Raw PAN / CVV data must never touch application databases or logs (PCI-DSS Level 1 compliance).
-* **Audit Trail Immutability:** Financial events must be written to append-only tables; updates and deletes to audit logs are strictly forbidden.
-
-### 2.2 Concurrency & Race Conditions
-* **Row-Level Locking:** Balance updates must utilize pessimistic locks (\`SELECT ... FOR UPDATE\`) or serializable isolation to prevent double-spending.
-* **Reversible Migrations:** DDL changes must be tested against rollback scripts (\`down.sql\`) without data loss.`,
-  specSecurityQuestions: `| Financial & Security Control | Required? | Technical Enforcement |
-| :--- | :---: | :--- |
-| **Does it touch balances, money, or ledger?** | \`YES / NO\` | If YES: Double-entry ledger transaction with \`Idempotency-Key\`. |
-| **Does it handle cardholder data?** | \`NO\` | Strictly forbidden. Delegate to certified payment gateway tokenization. |
-| **Does it emit immutable audit logs?** | \`YES\` | Append-only event in \`financial_audit_logs\` with actor and hash integrity. |`
+  "id": "fintech",
+  "name": "Fintech, Banking & Payments",
+  "description": "Review financial integrity, retries, payment-data scope and audit evidence.",
+  "constitutionInvariants": "### 2.1 Financial scope and PCI-DSS applicability\n* Determine whether payment-card requirements apply using current PCI SSC guidance and the actual integration boundary; this profile does not certify compliance.\n* For retryable financial operations, design an idempotency mechanism appropriate to the provider and transport. Do not impose an HTTP header on non-HTTP workflows.\n* **Double-Entry Ledger:** If the product maintains a ledger, specify and test its accounting invariants; do not introduce a ledger into unrelated features.\n* Identify sensitive payment data, minimize exposure and document the chosen provider boundary and audit requirements.\n### 2.2 Consistency and recovery\n* For concurrent balance changes, demonstrate a suitable consistency strategy with tests. Select locks, transactions or other mechanisms based on the actual datastore.\n* Document recoverability and data migration constraints rather than assuming every migration has a lossless inverse.",
+  "specSecurityQuestions": "| Financial & Security Control | Required? | Technical Enforcement |\n| :--- | :---: | :--- |\n| **Does it touch balances, money, or ledger?** | [TODO] | Evaluate, when applicable: Double-entry ledger transaction with `Idempotency-Key`. Record the actual mechanism and contract; do not assume it is universal. |\n| **Does it handle cardholder data?** | [TODO] | Establish scope, provider responsibilities and current applicable requirements. |\n| **Does it emit audit events?** | [TODO] | Define integrity, retention and authorized access requirements for this project. |"
 };

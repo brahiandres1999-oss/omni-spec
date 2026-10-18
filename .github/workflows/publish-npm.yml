@@ -1,0 +1,45 @@
+name: Publish npm (configured trusted publisher required)
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag, e.g. v0.5.0-rc.1
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: npm-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_REF: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global npm@11
+      - run: npm run release:check
+      - id: meta
+        run: node scripts/release-meta.mjs
+      - name: Download exact GitHub release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release download "$RELEASE_REF" --pattern 'omni-spec-*.tgz' --pattern '*.sha256' --dir artifacts/npm
+      - run: node scripts/release-assets.mjs verify artifacts/npm
+      - name: Publish public package through npm OIDC
+        env:
+          NPM_CHANNEL: ${{ steps.meta.outputs.npmTag }}
+          PACKAGE_FILE: ${{ steps.meta.outputs.filename }}
+        run: npm publish "./artifacts/npm/$PACKAGE_FILE" --tag "$NPM_CHANNEL" --access public --registry=https://registry.npmjs.org/
