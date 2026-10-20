@@ -29,41 +29,31 @@ OmniSpec ayuda a reconocer el repositorio, explorar ideas, definir cambios, corr
 
 ## Instalar en un proyecto
 
-El repositorio GitHub se mantiene **privado**. Con una cuenta que tenga acceso, descarga el `.tgz` y su checksum desde la release. Después puedes usar `npx` con el archivo descargado, sin instalar el CLI globalmente. Ejecuta en la raíz del proyecto destino:
+Puedes inicializar OmniSpec directamente en tu proyecto usando `npx`:
 
 ```sh
-npx --yes --package="/ruta/al/omni-spec-0.5.1.tgz" omni-spec init --yes --agent antigravity
+# Ejecutar directamente desde npm para tu editor preferido:
+npx omni-spec init --agent cursor       # Para Cursor
+npx omni-spec init --agent copilot      # Para VS Code (GitHub Copilot)
+npx omni-spec init --agent claude       # Para Claude Code
+npx omni-spec init --agent antigravity  # Para Google Antigravity
+npx omni-spec init --agent all          # Para configurar todos los editores a la vez
 ```
 
-Después de la primera publicación del mantenedor en **npm**, también estarán disponibles estos comandos (GitHub y npm son publicaciones separadas):
+O si prefieres instalar el CLI globalmente:
 
 ```sh
-# Ejecución puntual desde npm
-npx --yes omni-spec@0.5.1 init --yes --agent antigravity
-
-# Instalación global opcional desde npm
 npm install --global omni-spec@latest
-omni-spec init --yes --agent antigravity
+omni-spec init --agent all
 ```
 
-`npx` ejecuta paquetes; el registro donde se publica es npm. La versión normal usa el canal `latest`; las candidatas futuras usarán `next`. El alta y primera publicación están explicadas en [RELEASING.md](docs/RELEASING.md).
+> **Instalación sin conexión / Tarball local:**
+> Si descargas el archivo empaquetado `.tgz` de una release de GitHub o entorno local:
+> ```sh
+> npx --yes --package="/ruta/al/omni-spec-0.5.1.tgz" omni-spec init --agent all
+> ```
 
-Antes de publicar en npm también puedes instalar globalmente el archivo descargado: `npm install --global /ruta/al/omni-spec-0.5.1.tgz`. Un enlace de descarga de un repositorio privado no permite instalación anónima; no incluyas credenciales en URLs o comandos compartidos.
-
-Para probar esta copia local, abre una terminal **en el proyecto destino**, nuevo o existente:
-
-```sh
-node "/ruta/absoluta/omni-spec/bin/omni-spec.mjs" init --yes --agent antigravity
-```
-
-También puedes instalar el tarball local en un proyecto npm:
-
-```sh
-npm install --save-dev /ruta/absoluta/omni-spec-0.5.1.tgz
-npx --no-install omni-spec init --yes --agent antigravity
-```
-
-`init` copia un runtime independiente dentro del proyecto. No necesitas instalar OmniSpec globalmente ni convertir una aplicación Python, Java u otro stack en una aplicación Node. Después del bootstrap:
+`init` copia un runtime independiente dentro del proyecto (`specs/.omni/runtime`). No necesitas instalar OmniSpec globalmente ni convertir una aplicación Python, Java u otro stack en una aplicación Node. Después del bootstrap:
 
 ```sh
 node specs/.omni/runtime/bin/omni-spec.mjs status
@@ -71,7 +61,7 @@ node specs/.omni/runtime/bin/omni-spec.mjs doctor
 node specs/.omni/runtime/bin/omni-spec.mjs context-check --json
 ```
 
-Abre el proyecto en Antigravity, revisa las skills disponibles y ejecuta:
+Abre tu editor de código preferido (Cursor, VS Code, Claude Code, Antigravity, etc.), revisa los comandos disponibles en el chat y ejecuta:
 
 ```text
 /omni-init
@@ -101,7 +91,7 @@ El bootstrap CLI instala la skill; `/omni-init` realiza el onboarding conversaci
 | `omni-implement` | Implementar el trabajo acordado y registrar resultados reales. |
 | `omni-converge` | Contrastar criterios con el resultado, verificar y cerrar si corresponde. |
 
-Ejemplos en Antigravity:
+Ejemplos de uso en el chat del agente (Cursor, VS Code, Claude Code, Antigravity, etc.):
 
 ```text
 /omni-discuss Encuentra dónde se decide el precio y explica qué opciones tenemos para aplicar descuentos.
