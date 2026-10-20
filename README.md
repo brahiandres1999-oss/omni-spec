@@ -3,18 +3,18 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.5.0-blue.svg" alt="Version 0.5.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.5.1-blue.svg" alt="Version 0.5.1"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
   <a href="https://github.com/brahiandres1999-oss/omni-spec/actions/workflows/ci.yml"><img src="https://github.com/brahiandres1999-oss/omni-spec/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
-# OmniSpec 0.5.0
+# OmniSpec 0.5.1
 
 Desarrollo guiado por especificaciones desde el chat de tu agente, con un motor CLI local y sin dependencias npm externas. Requiere Node.js >=18.19.0 y un agente capaz de leer archivos y ejecutar comandos.
 
-**Versión 0.5.0.** Base de desarrollo con instalación por proyecto, nueve flujos y verificación explícita. Consulta las [notas de versión](https://github.com/brahiandres1999-oss/omni-spec/releases/tag/v0.5.0), [compatibilidad y límites](docs/COMPATIBILITY.md) y [fuentes de los adaptadores](docs/STANDARDS.md).
+**Versión 0.5.1.** Base de desarrollo con instalación por proyecto, nueve flujos, precisión de primer pase (anti-slop backend y frontend) y verificación explícita. Consulta las [notas de versión](docs/releases/0.5.1.md), [compatibilidad y límites](docs/COMPATIBILITY.md) y [fuentes de los adaptadores](docs/STANDARDS.md).
 
 OmniSpec ayuda a reconocer el repositorio, explorar ideas, definir cambios, corregir fallos y conservar decisiones entre sesiones. Separa hechos, hipótesis y preguntas; comprueba estructura documental y exige evidencia antes de cerrar trabajo. No garantiza ausencia de alucinaciones ni certifica cumplimiento regulatorio.
 
@@ -32,14 +32,14 @@ OmniSpec ayuda a reconocer el repositorio, explorar ideas, definir cambios, corr
 El repositorio GitHub se mantiene **privado**. Con una cuenta que tenga acceso, descarga el `.tgz` y su checksum desde la release. Después puedes usar `npx` con el archivo descargado, sin instalar el CLI globalmente. Ejecuta en la raíz del proyecto destino:
 
 ```sh
-npx --yes --package="/ruta/al/omni-spec-0.5.0.tgz" omni-spec init --yes --agent antigravity
+npx --yes --package="/ruta/al/omni-spec-0.5.1.tgz" omni-spec init --yes --agent antigravity
 ```
 
 Después de la primera publicación del mantenedor en **npm**, también estarán disponibles estos comandos (GitHub y npm son publicaciones separadas):
 
 ```sh
 # Ejecución puntual desde npm
-npx --yes omni-spec@0.5.0 init --yes --agent antigravity
+npx --yes omni-spec@0.5.1 init --yes --agent antigravity
 
 # Instalación global opcional desde npm
 npm install --global omni-spec@latest
@@ -48,7 +48,7 @@ omni-spec init --yes --agent antigravity
 
 `npx` ejecuta paquetes; el registro donde se publica es npm. La versión normal usa el canal `latest`; las candidatas futuras usarán `next`. El alta y primera publicación están explicadas en [RELEASING.md](docs/RELEASING.md).
 
-Antes de publicar en npm también puedes instalar globalmente el archivo descargado: `npm install --global /ruta/al/omni-spec-0.5.0.tgz`. Un enlace de descarga de un repositorio privado no permite instalación anónima; no incluyas credenciales en URLs o comandos compartidos.
+Antes de publicar en npm también puedes instalar globalmente el archivo descargado: `npm install --global /ruta/al/omni-spec-0.5.1.tgz`. Un enlace de descarga de un repositorio privado no permite instalación anónima; no incluyas credenciales en URLs o comandos compartidos.
 
 Para probar esta copia local, abre una terminal **en el proyecto destino**, nuevo o existente:
 
@@ -59,7 +59,7 @@ node "/ruta/absoluta/omni-spec/bin/omni-spec.mjs" init --yes --agent antigravity
 También puedes instalar el tarball local en un proyecto npm:
 
 ```sh
-npm install --save-dev /ruta/absoluta/omni-spec-0.5.0.tgz
+npm install --save-dev /ruta/absoluta/omni-spec-0.5.1.tgz
 npx --no-install omni-spec init --yes --agent antigravity
 ```
 

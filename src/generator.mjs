@@ -79,6 +79,11 @@ export function buildConstitutionContent(options) {
 3. **Evidence and uncertainty:** Distinguish verified facts, hypotheses and unresolved decisions. Inspect repository evidence first; ask the user about material ambiguity. Never invent business rules or claim certainty from a structural audit.
 4. **Minimal Touch Surgery:** Modify exclusively the files necessary to achieve the verified objective. Do not touch adjacent working code or reformat unrelated modules.
 5. **Demonstrable Quality Gates:** Record actual results and pre-existing failures. Automated gates must pass for automated verification; when none apply, document explicitly labeled manual evidence. A checklist is not proof of behavior.
+6. **Backend Pragmatic Craft & Zero Code Slop:**
+   - *Strict YAGNI & Direct Implementation:* Never add speculative abstraction layers, premature interfaces, DTOs, factories, or wrapper classes when a direct, idiomatic function or standard module satisfies the acceptance criteria.
+   - *Zero Comment Slop:* Strictly forbid obvious, narrative, or parrot comments that paraphrase code syntax (\`// return user\`, \`// initialize variable\`). Self-documenting code with clean naming is mandatory; preserve comments only for non-obvious business invariants or non-trivial domain edge-cases.
+   - *Fail-Fast & Transparent Failures:* Strictly forbid defensive \`try/catch\` wrappers that swallow exceptions, return dummy nulls, or silently mask errors without a documented business requirement.
+   - *Zero Spec & Plan Slop:* Specifications and plans must maintain high technical density: tabular evidence, explicit non-goals, and atomic, falsable criteria (\`AC-01\`). No marketing fluff, corporate filler, or conversational apologies.
 
 ---
 
@@ -107,11 +112,14 @@ ${qualityGates}
 
 ---
 
-## 5. UI Ergonomics & Anti-Slop (Frontend Only)
+## 5. UI Ergonomics & Frontend Craft (Anti-Slop)
 
-* **Zero Visual Slop:** Avoid generic AI-generated templates, excessive card-nesting (card-itis), and ungrounded gradients.
-* **4 Mandatory Interface States:** Loading (skeleton/spinner), Empty (clear explanation), Error (with retry trigger), and Protected/Restricted.
-* **Accessibility:** Full keyboard navigation (\`Tab\`, \`Enter\`, \`Escape\`) and WCAG AA contrast compliance.
+When modifying or generating user interfaces, apply deliberate design craftsmanship:
+* **Zero Visual Slop:** Strictly avoid generic AI clichés: default purple-to-blue gradients, centered pill badges with ungrounded outer glow, and repetitive nested bordered cards with diffuse drop shadows ("card-itis").
+* **Intentional Typography & Whitespace:** Establish a clear typographic scale and deliberate whitespace hierarchy rather than partitioning every element with artificial boxes and borders.
+* **Interactive Polish & Micro-Interactions:** Provide responsive visual feedback on interactive elements with hover, active, and accessible \`focus-visible\` styling.
+* **4 Mandatory Interface States:** Loading (skeletons/indicators), Empty (contextual explanation with actionable next step), Error (human-readable message with clear retry trigger), and Protected/Restricted.
+* **Accessibility (WCAG AA):** Full keyboard navigation (\`Tab\`, \`Enter\`, \`Escape\`), semantic HTML, and verified color contrast ratios on measured foreground/background color pairs.
 `;
 }
 

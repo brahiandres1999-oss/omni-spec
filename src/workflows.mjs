@@ -8,6 +8,10 @@ Treat saved context as a summary to revalidate against relevant sources before m
 Use the user's language. Separate verified facts (file/line, command/result, official source), hypotheses and unresolved decisions.
 Inspect existing code and tests before asking questions. Ask only questions whose answers materially change the result; never invent answers for the user.
 Keep scope proportional. Do not add databases, services, dependencies or mandatory architecture without a requirement. Record justified N/A where a section does not apply.
+Enforce first-pass precision: deliver clean, production-grade output on the very first attempt without requiring follow-up iterations to strip slop.
+- Code craft: direct, idiomatic implementation. Strictly avoid premature abstraction layers (unneeded factories, DTOs, wrappers) when standard functions or modules suffice. Strictly ban obvious, syntax-narrating comments. Fail fast: never write defensive try/catch wrappers that silently swallow exceptions or return dummy fallbacks.
+- Spec and plan craft: maintain high information density, technical conciseness, structured tables/bullets, explicit non-goals, and atomic AC-01 criteria. Strictly eliminate conversational filler, AI apologies, and corporate buzzword padding.
+- UI craft (when touching interfaces): deliberate typography and whitespace; strictly avoid generic AI visual clichés (ungrounded purple/blue gradients, card-itis, glowing pills); implement micro-interactions and the 4 mandatory states (Loading, Empty, Error with retry, Protected).
 Do not create branches, commits, publish or deploy unless requested. Preserve existing work and unrelated files.
 Do not claim zero hallucinations, regulatory certification or tests passed without evidence.
 Keep evidence categories distinct throughout every workflow: OBSERVED (file/location), DECLARED (documentation/configuration requirement), EXECUTED (command, cwd, timestamp, exit code and result), INFERRED (reason and uncertainty), UNKNOWN, or NOT APPLICABLE (reason). Translate labels for the user. A configured command is not an executed check; a documented policy is not implemented or verified compliance. Dependency ranges are declarations, not installed versions. A CI/container runtime is a configured target, not proof of a minimum supported version.
@@ -76,15 +80,18 @@ Do not demand a completed plan/tasks or run the full audit at this stage. Procee
   ['omni-plan', 'Diseña una solución proporcional al tipo activo y al proyecto; úsalo después de aclarar requisitos.', `Read the primary artifact and project context. Resolve critical unknowns before committing to design.
 feature: author plan.md. bugfix: investigate rca.md with reproducible evidence and plan the minimal fix in fix.md. debt: author migration-plan.md. rfc: compare options and consequences in rfc.md.
 Document affected files, interfaces/data contracts or justified N/A, failure modes, verification and rollback/recovery or justified N/A. Do not impose five whys or a strangler migration when inappropriate.
+Strictly avoid speculative architecture or unrequested abstraction layers (services, repositories, DTOs, factories) when direct functions or modules fit the repository. Keep design proportional to the approved change.
 Use official documentation for new external API assumptions. Keep existing conventions unless a change is explicitly justified. Continue with tasks for implementation work; an RFC can proceed to decision review.`],
   ['omni-tasks', 'Descompone el plan del trabajo activo en tareas y verificaciones trazables; no aplica como implementación de una RFC.', `For feature/debt edit tasks.md; for bugfix edit the checklist in fix.md. For RFC explain that decision review replaces implementation tasks.
 Create only tasks needed by the approved scope, in dependency order. Link each to an acceptance criterion and affected files. Include regression/acceptance verification.
+Avoid task inflation: do not fragment a simple change into dozens of micro-tasks. Keep tasks atomic, in dependency order, and mapped to acceptance criteria.
 Remove template examples and all TODO tokens; never mark unperformed work complete. Do not invent layers or a fixed number of files per task.
 Run audit and resolve document blockers before implementation. Audit checks documents, not whether the implementation is correct.`],
   ['omni-audit', 'Revisa estructura y coherencia entre necesidad, plan, tareas y evidencia del trabajo activo.', `Run audit for the active spec, then review semantic consistency yourself: requirement -> plan -> task -> intended verification.
 Report mechanical errors separately from reasoning findings. Check that scope and non-goals agree and that assumptions have evidence. An audit pass is not a code-test result.
 For unresolved blockers, identify the owning artifact and remediation. Do not silently approve contradictory requirements or claim semantic certainty from a text-length check.`],
   ['omni-implement', 'Implementa tareas de feature, bugfix o deuda con comprobaciones del proyecto; úsalo cuando el plan está listo.', `Run audit; stop implementation if it fails. Read the active type's checklist and implement the next pending task within scope.
+Perform minimal touch surgery. Deliver clean, self-documenting code without parrot comments or speculative fallbacks. Do not add files or layers outside the approved plan.
 For bugfix, reproduce the failure and add an appropriate regression check before fixing it when feasible. Execute only reviewed project commands in their correct working directory; do not assume npm.
 Record actual results and pre-existing failures. Mark tasks only when their work is complete. If requirements change, update artifacts before expanding code.
 For RFC do not implement code: review and record a decision, or create a separate feature only when requested.

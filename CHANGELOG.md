@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-10-19
+
+### Fixed
+- Eliminate first-pass AI slop across backend, frontend, and specification generation without requiring corrective follow-up iterations.
+- Instate Backend Pragmatic Craft in `CONSTITUTION.md`: strict YAGNI against premature abstractions, zero comment slop (forbidding obvious parrot comments), and fail-fast requirements (banning blind defensive `try/catch` error swallowing).
+- Elevate UI Ergonomics in `CONSTITUTION.md` to Impeccable-grade Frontend Craft: strict prohibition of AI visual clichés (ungrounded gradients, card-itis, glowing pill badges), deliberate whitespace and typography scale, interactive micro-interactions, WCAG AA measured contrast, and 4 mandatory interface states (*Loading, Empty, Error, Protected*).
+- Enforce first-pass precision and high information density across universal skills in `src/workflows.mjs` (`common`, `omni-plan`, `omni-tasks`, `omni-implement`, `omni-converge`) and persistent agent rules in `src/integrations.mjs`.
+
 ## [0.5.0] - 2026-10-18
 
 ### Changed

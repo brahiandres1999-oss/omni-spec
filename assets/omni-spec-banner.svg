@@ -165,7 +165,7 @@
       </text>
 
       <!-- Version Text (Clean Typography, No Badge Box, No Status Dot) -->
-      <text x="216" y="40" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', monospace" font-size="14" font-weight="500" fill="#8B949E">v0.4.0</text>
+      <text x="216" y="40" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', monospace" font-size="14" font-weight="500" fill="#8B949E">v0.5.1</text>
     </g>
 
     <!-- Subtitle: Methodological Proposition -->

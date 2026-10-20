@@ -1,6 +1,6 @@
 # Compatibilidad y verificación
 
-OmniSpec 0.5.0 es una versión normal de la base de desarrollo 0.x. Su contrato es instalar flujos por proyecto, conservar contexto y especificaciones al actualizar y exigir auditoría, cobertura de criterios y verificación antes de cerrar trabajo nuevo. No certifica la aplicación ni el razonamiento de un modelo por instalarse.
+OmniSpec 0.5.1 es una versión de precisión y endurecimiento de la base de desarrollo 0.x. Su contrato es instalar flujos por proyecto con precisión de primer pase (eliminación de AI slop en backend, frontend y especificaciones), conservar contexto y especificaciones al actualizar y exigir auditoría, cobertura de criterios y verificación antes de cerrar trabajo nuevo. No certifica la aplicación ni el razonamiento de un modelo por instalarse.
 
 ## Plataformas y paquete
 
