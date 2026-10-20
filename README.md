@@ -191,6 +191,14 @@ npx omni-spec update
 
 ---
 
+## Estado del Proyecto & Visión
+
+OmniSpec nace como una iniciativa personal con el propósito de contar con un framework de *Spec-Driven Development* verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, sin ataduras a dependencias externas ni flujos rígidos.
+
+El proyecto se encuentra en **desarrollo activo continuo**. De forma constante se revisan optimizaciones, refinamientos ergonómicos y nuevas capacidades para elevar la precisión del código generado por agentes. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
+
+---
+
 ## Documentación
 
 - [Notas de la versión 0.5.1](docs/releases/0.5.1.md)
