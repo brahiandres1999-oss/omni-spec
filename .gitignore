@@ -10,6 +10,15 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Environment and secrets
+.env
+.env.*
+*.env
+
+# Packages and archives
+*.tgz
+*.tar.gz
+
 # Test artifacts
 test-temp/
 temp-*/

@@ -1,6 +1,6 @@
 # Compatibilidad y verificación
 
-OmniSpec 0.5.1 es una versión de precisión y endurecimiento de la base de desarrollo 0.x. Su contrato es instalar flujos por proyecto con precisión de primer pase (eliminación de AI slop en backend, frontend y especificaciones), conservar contexto y especificaciones al actualizar y exigir auditoría, cobertura de criterios y verificación antes de cerrar trabajo nuevo. No certifica la aplicación ni el razonamiento de un modelo por instalarse.
+OmniSpec 0.6.0 es una versión de precisión, soporte nativo de Plugin en Google Antigravity y subagentes autónomos de calidad sobre la base de desarrollo 0.x. Su contrato es instalar flujos por proyecto con precisión de primer pase (eliminación de AI slop en backend, frontend y especificaciones), conservar contexto y especificaciones al actualizar, destrabar el diagnóstico de bugs con pruebas empíricas y exigir auditoría, cobertura de criterios y verificación antes de cerrar trabajo nuevo. No certifica la aplicación ni el razonamiento de un modelo por instalarse.
 
 ## Plataformas y paquete
 
@@ -10,7 +10,7 @@ La matriz de GitHub Actions comprueba Windows y Ubuntu con Node 18.19, 20, 22 y 
 
 ## Agentes
 
-Antigravity es la integración principal. El usuario ha recorrido onboarding, discusión y una feature en ese host con la base de desarrollo previa a la publicación. Las nueve skills y sus contratos actuales tienen comprobaciones automatizadas; no se ha registrado un nuevo recorrido completo de chat con cada versión/modelo de Antigravity.
+Antigravity es la integración principal, soportando instalación en workspace (`.agents/skills/`) y modo Plugin modular (`plugin.json` enlazable mediante `npm run sync:plugin`) junto con el subagente independiente `omni-auditor`. Las nueve skills y sus contratos actuales tienen comprobaciones automatizadas; no se ha registrado un nuevo recorrido completo de chat con cada versión/modelo de Antigravity.
 
 Cursor, Claude Code, Copilot en VS Code, Kilo, OpenCode, Gemini y Codex tienen adaptadores según sus formatos documentados y pruebas de generación. Su invocación y comportamiento deben comprobarse en la versión del host utilizada. `generic` ofrece archivos para lectura explícita, sin registrar comandos nativos. Ver [fuentes y formatos](STANDARDS.md).
 

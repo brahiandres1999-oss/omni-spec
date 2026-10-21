@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.5.1-blue.svg" alt="Version 0.5.1"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.6.0-blue.svg" alt="Version 0.6.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -12,12 +12,12 @@
 
 ---
 
-# OmniSpec 0.5.1
+# OmniSpec 0.6.0
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
 
-Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un framework universal, sin dependencias externas y 100% portable que vive dentro de tu repositorio. Funciona directamente desde el chat de tu editor preferido (Cursor, VS Code, Claude Code, Antigravity y más).
+Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un framework universal, sin dependencias externas y 100% portable que vive dentro de tu repositorio. Funciona directamente desde el chat de tu editor preferido (Cursor, VS Code, Claude Code, Antigravity y más), soportando instalación directa como **Plugin nativo en Google Antigravity** y subagentes autónomos de auditoría (`omni-auditor`).
 
 ---
 
@@ -115,11 +115,22 @@ OmniSpec genera adaptadores nativos para cada entorno sin dependencias propietar
 | **Cursor** | `.cursor/commands/omni-*.md` + regla de proyecto | `/omni-init` en Cursor Composer / Chat |
 | **VS Code (GitHub Copilot)** | `.github/prompts/omni-*.prompt.md` + instrucciones | `/omni-init` en Chat de Copilot |
 | **Claude Code** | `.claude/skills/omni-*/SKILL.md` | `/omni-init` en Claude CLI |
-| **Google Antigravity** | `.agents/skills/omni-*/SKILL.md` | `/omni-init` en chat o selector |
+| **Google Antigravity** | `.agents/skills/omni-*/SKILL.md` o Plugin nativo | `/omni-init` o gestor `/plugin` |
 | **Kilo / OpenCode** | `.kilo/` o `.opencode/` + bloque en `AGENTS.md` | `/omni-init` en consola interactiva |
 | **Gemini CLI** | `.gemini/commands/omni-*.toml` | `/omni-init` en Gemini Code Assist |
 | **Codex** | `.agents/skills/omni-*/SKILL.md` | `$omni-init` o selector de skills |
 | **Genérico / Cualquier LLM** | `specs/commands/omni-*.md` | Pide al agente que lea y ejecute el prompt |
+
+### Uso como Plugin Nativo en Google Antigravity
+
+OmniSpec incluye un manifiesto `plugin.json` en la raíz para ser consumido como un plugin modular con espacio de nombres en Google Antigravity:
+
+```sh
+# Enlaza OmniSpec directamente a tu configuración local de plugins de Antigravity:
+npm run sync:plugin
+```
+
+Esto expone los 9 comandos de slash, la Constitución y el subagente `omni-auditor` en todos tus proyectos dentro de Antigravity sin necesidad de instalar archivos en cada repositorio.
 
 Para añadir o cambiar adaptadores en cualquier momento:
 
@@ -201,6 +212,7 @@ El proyecto se encuentra en **desarrollo activo continuo**. De forma constante s
 
 ## Documentación
 
+- [Notas de la versión 0.6.0 (Plugin Antigravity & Subagentes)](docs/releases/0.6.0.md)
 - [Notas de la versión 0.5.1](docs/releases/0.5.1.md)
 - [Contrato de Onboarding (/omni-init)](docs/ONBOARDING.md)
 - [Estándares de los Adaptadores de Agentes](docs/STANDARDS.md)

@@ -1,4 +1,4 @@
-# Contrato de onboarding — 0.5.1 local
+# Contrato de onboarding — 0.6.0 local
 
 El usuario invoca `/omni-init` sin instrucciones de auditoría adicionales. El agente adapta su recorrido a la evidencia del proyecto y documenta su contexto. Las mismas instrucciones se distribuyen mediante todos los adaptadores; cambia su formato e invocación según el host.
 

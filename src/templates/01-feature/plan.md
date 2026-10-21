@@ -9,6 +9,9 @@
 ## Contracts and compatibility
 [TODO] Define interfaces, inputs, outputs and failure behavior; justify N/A where appropriate.
 
+## UI & Interaction Design
+[TODO] When touching interfaces, detail typographic hierarchy, spacing scale and the 4 mandatory states (Loading, Empty, Error, Protected). Record justified N/A if not applicable.
+
 ## Verification
 [TODO] Map acceptance criteria to tests or explicit manual observations and working directories.
 

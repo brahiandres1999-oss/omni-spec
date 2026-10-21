@@ -16,7 +16,7 @@ Consulta: 2026-10-18. Las siguientes fuentes son documentación oficial o especi
 | [OpenAI: skills in repositories](https://developers.openai.com/blog/skills-agents-sdk) y [build skills](https://learn.chatgpt.com/docs/build-skills) | Skills de proyecto en `.agents/skills`, con invocación propia del host. No anunciar `/` universal donde corresponde un selector o `$`. | Generación del adaptador; sesión real pendiente. |
 | [GitHub Spec Kit: SDD](https://github.github.com/spec-kit/reference/agentic-sdd.html) y [existing projects](https://github.github.io/spec-kit/guides/existing-projects.html) | Separar necesidad, aclaración, plan, tareas y revisión; adoptar reglas realistas del repositorio. | Protocolos por arquetipo y recorridos de paquete nuevo/existente. |
 | [NIST SSDF 1.1](https://csrc.nist.gov/pubs/sp/800/218/final) | Usado como referencia de prácticas de desarrollo seguro y verificación integrables en el ciclo de vida; no como supuesta certificación SDD. | Evidencia explícita, resultados de pruebas y límites documentados. |
-| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | 0.5.1 por precisión de primer pase (anti-slop backend y frontend) sobre la base 0.5.0; versión única obtenida de package.json. | Versión única obtenida de package.json. |
+| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | 0.6.0 por soporte nativo de Plugin en Antigravity, subagente omni-auditor y desbloqueo del diagnóstico en bugfix sobre la base 0.5.x; versión única obtenida de package.json. | Versión única obtenida de package.json. |
 
 ## Qué significa SDD en esta implementación
 

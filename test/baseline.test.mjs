@@ -166,9 +166,9 @@ test('legacy upgrade supplies local runtime and missing project context without 
 
 test('newer project versions cannot be downgraded by update', async () => {
   await scaffoldProject(root);
-  const manifest = await loadManifest(root); manifest.version = '0.6.0'; await saveManifest(root, manifest);
+  const manifest = await loadManifest(root); manifest.version = '0.7.0'; await saveManifest(root, manifest);
   await assert.rejects(updateProject(root), /Refusing downgrade/);
-  assert.equal((await loadManifest(root)).version, '0.6.0');
+  assert.equal((await loadManifest(root)).version, '0.7.0');
 });
 
 test('downgrade requires explicit consent and preserves authored state', async () => {

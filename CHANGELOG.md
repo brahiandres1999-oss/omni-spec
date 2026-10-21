@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-20
+
+### Added
+- Native Google Antigravity Plugin manifest `plugin.json` supporting modular namespaced installation and suggested prompts (`/omni-init`, `/omni-discuss`, `/omni-specify`).
+- Local plugin synchronization script `scripts/sync-plugin.mjs` exposed via `npm run sync:plugin` to link OmniSpec directly into `~/.gemini/config/plugins/omni-spec/`.
+- Pre-built plugin directory assets (`rules/AGENTS.md`, `agents/omni-auditor.md`, `skills/`) generated and maintained via `scripts/build-plugin-skills.mjs`.
+- Autonomous quality auditor subagent `omni-auditor` (`agents/omni-auditor.md` and `src/agents/omni-auditor.md`) for independent criteria verification, gate validation, and zero-slop enforcement in a dedicated context window.
+- UI & Interaction Design section in `src/templates/01-feature/plan.md` to formalize spacing tokens, typographic hierarchy, and the 4 mandatory interface states before implementation.
+
+### Changed
+- Authorized read-only test execution and terminal log inspection in `/omni-plan` for `02-bugfix` to establish empirical root cause before authoring `rca.md`, eliminating speculative analysis delay.
+- Updated release, compatibility, and onboarding documentation to version 0.6.0 across all guides and branding assets.
+
 ## [0.5.1] - 2026-10-19
 
 ### Fixed

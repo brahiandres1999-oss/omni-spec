@@ -1,6 +1,6 @@
 {
   "name": "omni-spec",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding.",
   "type": "module",
   "main": "src/cli.mjs",
@@ -15,9 +15,11 @@
     "test": "node --test --test-concurrency=1",
     "test:package": "node scripts/package-smoke.mjs",
     "release:check": "node scripts/release-check.mjs",
-    "release:pack": "node scripts/release-assets.mjs"
+    "release:pack": "node scripts/release-assets.mjs",
+    "build:skills": "node scripts/build-plugin-skills.mjs",
+    "sync:plugin": "node scripts/sync-plugin.mjs"
   },
-  "files": ["bin/", "src/", "schema/", "assets/", "docs/ONBOARDING.md", "docs/STANDARDS.md", "docs/COMPATIBILITY.md", "docs/RELEASING.md", "docs/locking.md", "README.md", "CHANGELOG.md", "LICENSE"],
+  "files": ["bin/", "src/", "schema/", "assets/", "agents/", "rules/", "skills/", "plugin.json", "docs/ONBOARDING.md", "docs/STANDARDS.md", "docs/COMPATIBILITY.md", "docs/RELEASING.md", "docs/locking.md", "README.md", "CHANGELOG.md", "LICENSE"],
   "keywords": [
     "spec-driven-development",
     "sdd",
