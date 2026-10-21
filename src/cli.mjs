@@ -6,12 +6,13 @@ import { loadManifest, saveManifest, withManifestLock, updateSpecStatus, focusSp
 import { auditSpec } from './auditor.mjs';
 import { verifySpec } from './verification.mjs';
 import { checkProjectVersion, updateProject, getCliVersion } from './updater.mjs';
+import { installPlugin, updatePlugin, getPluginStatus, cleanProject } from './plugin-manager.mjs';
 import { installAgentIntegrations, normalizeAgents, agentInstructions, AGENTS } from './integrations.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { auditProjectContext } from './context-auditor.mjs';
 
-const mutating = new Set(['create', 'focus', 'complete', 'verify', 'update', 'setup-agent', 'configure']);
-const aliases = { switch: 'focus', specs: 'list', upgrade: 'update', 'setup-agents': 'setup-agent', 'omni-init': 'init' };
+const mutating = new Set(['create', 'focus', 'complete', 'verify', 'update', 'setup-agent', 'configure', 'clean']);
+const aliases = { switch: 'focus', specs: 'list', upgrade: 'update', 'setup-agents': 'setup-agent', 'omni-init': 'init', prune: 'clean' };
 const valueFlags = new Set(['profile', 'name', 'stack', 'doc', 'gates', 'agent', 'ai', 'manual', 'timeout']);
 const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade']);
 
@@ -69,6 +70,8 @@ omni-spec <command> [arguments] [options]
   update --dry-run              Preview exact changed files and conflicts
   update [--accept-updates]      Preserve edits; opt in to backup and replacement
     --allow-downgrade           Explicitly permit an older/pre-release CLI after review
+  clean [--dry-run]              Migrate project to plugin mode (removes in-repo runtime/.agents)
+  plugin <install|update|status> Manage Antigravity global plugin (~180 KB clean install)
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
   help | version
 
@@ -90,14 +93,14 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     const command = aliases[raw] || raw;
     const { flags, positionals } = parse(args.slice(1));
     json = Boolean(flags.json);
-    if (flags.dryRun && command !== 'update') throw new Error('--dry-run is supported only by update. No changes made.');
+    if (flags.dryRun && !['update', 'clean'].includes(command)) throw new Error('--dry-run is supported only by update and clean. No changes made.');
     if (flags.allowDowngrade && command !== 'update') throw new Error('--allow-downgrade is supported only by update.');
     if (flags.force && command !== 'init') throw new Error('--force is supported only by init. Use update --accept-updates after reviewing conflicts.');
     if (flags.manual !== undefined && command !== 'verify') throw new Error('--manual is supported only by verify.');
     if (flags.timeout !== undefined && command !== 'verify') throw new Error('--timeout is supported only by verify.');
     if (flags.acceptUpdates && !['update', 'setup-agent'].includes(command)) throw new Error('--accept-updates is supported only by update and setup-agent.');
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
-    const maxPositionals = { create: 2, focus: 1, complete: 1, verify: 1, audit: 1, 'setup-agent': 1 }[command] || 0;
+    const maxPositionals = { create: 2, focus: 1, complete: 1, verify: 1, audit: 1, 'setup-agent': 1, plugin: 1 }[command] || 0;
     if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
     const emit = (value, human) => console.log(json ? JSON.stringify(value, null, 2) : human || JSON.stringify(value, null, 2));
     if (flags.agent) normalizeAgents(flags.agent); // Validate before creating any files.
@@ -194,6 +197,33 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           return { agent, ...assets, invocation: agentInstructions(agent) };
         });
         emit(result, `[OK] Selected adapters: ${result.agent}\nFiles: ${result.created.length} new, ${result.updated.length} updated.\n${result.invocation}\nReload the project if the host has not discovered the commands. File generation is not a host-chat test.`); return 0;
+      }
+      case 'plugin': {
+        const sub = positionals[0] || 'status';
+        if (sub === 'install') {
+          const res = await installPlugin(flags);
+          emit(res, `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nPlugin is immediately ready in Antigravity.`);
+          return 0;
+        } else if (sub === 'update' || sub === 'upgrade') {
+          const res = await updatePlugin(flags);
+          emit(res, `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at:\n${res.targetDir}\nFiles updated: ${res.copied.join(', ')}`);
+          return 0;
+        } else if (sub === 'status') {
+          const res = await getPluginStatus(flags);
+          emit(res, `[PLUGIN ${res.installed ? 'INSTALLED' : 'NOT INSTALLED'}] Target: ${res.targetDir}\nVersion: ${res.version || 'none'} (CLI: ${res.currentCliVersion})${res.isOutdated ? ' -> Run plugin update' : ''}`);
+          return res.installed ? 0 : 1;
+        } else {
+          throw new Error(`Unknown plugin subcommand: ${sub}. Valid: install, update, status.`);
+        }
+      }
+      case 'clean': {
+        const result = await cleanProject(workingDir, flags);
+        if (result.dryRun) {
+          emit(result, `[DRY RUN] OmniSpec clean for ${result.project} (${result.fromAgent} -> ${result.toAgent})\nFiles/directories to remove:\n${result.toRemove.map(p => '- ' + p).join('\n') || 'None'}\nSpecs preserved: ${result.specsCount}`);
+        } else {
+          emit(result, `[CLEANED] ${result.project} migrated to plugin mode (v${result.version}).\nRemoved:\n${result.removed.map(p => '- ' + p).join('\n') || 'None'}\nSpecs preserved: ${result.specsCount}.\nWorkspace is clean (no in-repo engine or .agents folder).`);
+        }
+        return 0;
       }
       default: throw new Error(`Unknown command: ${command}. Run help.`);
     }

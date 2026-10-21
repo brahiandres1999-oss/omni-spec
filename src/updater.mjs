@@ -18,9 +18,10 @@ export async function checkProjectVersion(baseDir) {
   if (!manifest) return { isInstalled: false, cliVersion, projectVersion: null, isOutdated: false, healthy: false, message: 'OmniSpec is not initialized. Run init first.' };
   const integrity = await checkManagedFiles(baseDir);
   const isOutdated = manifest.version !== cliVersion;
-  const healthy = !isOutdated && integrity.tracked > 0 && !integrity.changed.length;
+  const isPlugin = manifest.agent === 'plugin';
+  const healthy = !isOutdated && (isPlugin || (integrity.tracked > 0 && !integrity.changed.length));
   return { isInstalled: true, project: manifest.project, projectVersion: manifest.version, cliVersion, isOutdated, healthy, integrity,
-    message: isOutdated ? 'Version differs. Review update --dry-run.' : healthy ? 'Managed files match their installed fingerprints. Agent discovery and project tests still require verification.' : 'Installation needs review: missing/modified managed files or legacy installation. Run update --dry-run.' };
+    message: isOutdated ? 'Version differs. Review update --dry-run.' : healthy ? (isPlugin ? 'Plugin mode active. Workspace is clean and specs are preserved.' : 'Managed files match their installed fingerprints. Agent discovery and project tests still require verification.') : 'Installation needs review: missing/modified managed files or legacy installation. Run update --dry-run.' };
 }
 
 export async function updateProject(baseDir, options = {}) {
