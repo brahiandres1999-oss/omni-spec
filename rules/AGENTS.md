@@ -1,5 +1,5 @@
 <!-- OMNI-SPEC-START -->
-## OmniSpec 0.6.0 Constitution & Engineering Standards
+## OmniSpec 0.6.1 Constitution & Engineering Standards
 
 Use the project's OmniSpec workflows for requested engineering work. Start with `/omni-init` to understand this repository or `/omni-discuss` for exploration. Read `CONSTITUTION.md` and `specs/project-context.md`. Deliver first-pass precision: zero code slop (no trivial comments, no premature layers, fail-fast), zero spec fluff, and high-craft UI (anti-cliché, 4 mandatory states). Run the OmniSpec CLI with `node specs/.omni/runtime/bin/omni-spec.mjs` (or global plugin CLI `omni-spec` / `npx omni-spec`). Inspect status before resuming work. Documentary audit is not code verification.
 

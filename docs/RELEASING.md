@@ -1,6 +1,6 @@
 # Publicación e instalación de OmniSpec
 
-Versión preparada: **0.6.0**, etiqueta Git `v0.6.0`, canal npm `latest`. Es la versión con soporte nativo de Plugin en Antigravity, subagentes de calidad y optimización del ciclo de vida de bugs. Publicar en GitHub no publica automáticamente en npm.
+Versión preparada: **0.6.1**, etiqueta Git `v0.6.1`, canal npm `latest`. Es la versión con soporte nativo de Plugin Manager (`npx omni-spec plugin install/update`), modo Zero-Bloat y comando de limpieza `clean`. Publicar en GitHub no publica automáticamente en npm.
 
 Decisión del mantenedor: conservar GitHub privado y publicar npm más adelante, cuando exista una cuenta. Las releases y archivos de GitHub requieren acceso al repositorio; no están disponibles de forma anónima por URL. Se puede descargar el tarball con una sesión autorizada y ejecutarlo o instalarlo localmente. Un futuro paquete público npm distribuirá sus fuentes incluidas, sin cambiar la visibilidad del historial de GitHub.
 
@@ -8,7 +8,7 @@ Decisión del mantenedor: conservar GitHub privado y publicar npm más adelante,
 
 1. Ejecutar `npm test`, `npm run test:package`, `npm run release:check` y `git diff --check`.
 2. Revisar y crear el commit con código, pruebas, workflows y documentación. Excluir `artifacts/`.
-3. Crear una etiqueta anotada `v0.6.0` sobre ese commit y enviar commit y etiqueta. No mover una etiqueta ya publicada para cambiar sus bytes.
+3. Crear una etiqueta anotada `v0.6.1` sobre ese commit y enviar commit y etiqueta. No mover una etiqueta ya publicada para cambiar sus bytes.
 4. El workflow `release.yml` valida Ubuntu/Windows con Node 18.19, 20, 22 y 24, comprueba la correspondencia versión/etiqueta/notas y crea una GitHub release normal cuando todo pasa (prerelease solo para etiquetas con sufijo).
 5. La release adjunta `omni-spec-0.6.0.tgz` y `omni-spec-0.6.0.tgz.sha256`. Comprobar el resultado del workflow, no solo que exista la etiqueta.
 

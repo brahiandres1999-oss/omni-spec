@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-10-21
+
+### Added
+- Native Antigravity Plugin Manager commands: `npx omni-spec plugin install`, `update`, and `status` to deploy clean ~180 KB plugin bundles directly to `~/.gemini/config/plugins/omni-spec/` without git clone or repository slop.
+- Zero-Bloat project mode: support `"agent": "plugin"` in `specs/manifest.json`, decoupling the CLI engine from user repositories and keeping projects free of `.agents/` or `specs/.omni/runtime/` folders.
+- Safe project clean/migration command: `npx omni-spec clean [--dry-run]` to safely strip legacy in-repo runtimes and `.agents/skills` while preserving 100% of specifications and context.
+- Dedicated unit test suite `test/plugin-manager.test.mjs` verifying clean plugin installation, version detection, and non-destructive project cleaning.
+
+### Changed
+- Updated all 9 official skills in `src/workflows.mjs` to resolve CLI execution dynamically: Global Plugin CLI -> Project Local CLI (legacy) -> `npx omni-spec`.
+- Synchronized Antigravity plugin installation guides and official website copy (`OmniPage`) to use `npx omni-spec plugin install`.
+
 ## [0.6.0] - 2026-10-20
 
 ### Added

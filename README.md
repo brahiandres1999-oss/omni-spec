@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.6.0-blue.svg" alt="Version 0.6.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.6.1-blue.svg" alt="Version 0.6.1"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -12,7 +12,7 @@
 
 ---
 
-# OmniSpec 0.6.0
+# OmniSpec 0.6.1
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
