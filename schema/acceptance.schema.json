@@ -5,7 +5,9 @@
   "type": "object",
   "required": ["schemaVersion", "criteria"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": {
+      "enum": [1, 2]
+    },
     "criteria": {
       "type": "array",
       "minItems": 1,
@@ -13,23 +15,168 @@
         "type": "object",
         "required": ["id", "status", "method", "evidence"],
         "properties": {
-          "id": { "type": "string", "pattern": "^(AC-[0-9]+|DECISION)$" },
-          "status": { "enum": ["pending", "passed", "failed", "blocked"] },
-          "method": { "enum": [null, "automated", "manual", "inspection", "decision"] },
-          "evidence": { "type": "string" },
+          "id": {
+            "type": "string",
+            "pattern": "^(AC-[0-9]+|DECISION)$"
+          },
+          "status": {
+            "enum": ["pending", "passed", "failed", "blocked"]
+          },
+          "method": {
+            "enum": [null, "automated", "manual", "inspection", "decision"]
+          },
+          "evidence": {
+            "type": "string"
+          },
           "checkCommands": {
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1 }
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "kind": {
+            "enum": ["functional", "visual", "interaction", "accessibility", "decision"]
+          },
+          "checkIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "observations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "actor",
+                "observer",
+                "surface",
+                "environment",
+                "steps",
+                "expected",
+                "actual",
+                "observedAt",
+                "result",
+                "artifact"
+              ],
+              "properties": {
+                "actor": {
+                  "enum": ["agent", "human"]
+                },
+                "observer": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "surface": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "environment": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "steps": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "expected": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actual": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "result": {
+                  "const": "passed"
+                },
+                "artifact": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "viewport": {
+                  "type": "object",
+                  "required": ["width", "height"],
+                  "properties": {
+                    "width": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "height": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "allOf": [
-          { "if": { "properties": { "method": { "const": "automated" } } }, "then": { "required": ["checkCommands"] } }
+          {
+            "if": {
+              "properties": {
+                "method": {
+                  "const": "automated"
+                }
+              }
+            },
+            "then": {
+              "oneOf": [
+                {
+                  "required": ["checkCommands"],
+                  "not": {
+                    "required": ["checkIds"]
+                  }
+                },
+                {
+                  "required": ["checkIds"],
+                  "not": {
+                    "required": ["checkCommands"]
+                  }
+                }
+              ]
+            }
+          }
         ],
         "additionalProperties": true
       }
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "items": {
+              "required": ["kind"]
+            }
+          }
+        }
+      }
+    }
+  ]
 }

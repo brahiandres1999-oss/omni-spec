@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { classifyFit, validateFitAnswers, specRoute, FIT_QUESTIONS, FIT_SCHEMA_VERSION } from '../src/fit.mjs';
+import {
+  classifyFit,
+  validateFitAnswers,
+  specRoute,
+  FIT_QUESTIONS,
+  FIT_SCHEMA_VERSION,
+  fitQuestionnaire,
+} from '../src/fit.mjs';
 import { auditSpec } from '../src/auditor.mjs';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
 import { runCli } from '../src/cli.mjs';
@@ -115,7 +122,10 @@ describe('Spec Fit answer validation', () => {
     assert.match(validateFitAnswers({ ...baseAnswers, reasoning: 'maybe' }).errors.join(' '), /"reasoning" is invalid/);
     assert.match(validateFitAnswers({ ...baseAnswers, files: 0 }).errors.join(' '), /"files" is invalid/);
     assert.match(validateFitAnswers({ ...baseAnswers, extra: 1 }).errors.join(' '), /unknown answer "extra"/);
-    assert.match(validateFitAnswers({ ...baseAnswers, schemaVersion: 2 }).errors.join(' '), /schemaVersion must be 1/);
+    assert.match(
+      validateFitAnswers({ ...baseAnswers, schemaVersion: 3 }).errors.join(' '),
+      /schemaVersion must be 1 or 2/,
+    );
   });
 
   test('the questionnaire covers every validated answer', () => {
@@ -125,6 +135,49 @@ describe('Spec Fit answer validation', () => {
         .filter(k => k !== 'schemaVersion')
         .sort(),
     );
+  });
+});
+
+describe('Spec Fit risk-aware opt-in version 2', () => {
+  const lowRisk = { ...baseAnswers, schemaVersion: 2, risk: 'low', uncertainty: 'clear', reversibility: 'easy' };
+
+  test('v1 stays the default while v2 requires all risk answers', () => {
+    assert.equal(fitQuestionnaire().schemaVersion, 1);
+    assert.equal(fitQuestionnaire(2).questions.length, FIT_QUESTIONS.length + 3);
+    assert.equal(validateFitAnswers(lowRisk).valid, true);
+    for (const field of ['risk', 'uncertainty', 'reversibility'])
+      assert.equal(validateFitAnswers({ ...lowRisk, [field]: undefined }).valid, false);
+    assert.equal(validateFitAnswers({ ...baseAnswers, risk: 'low' }).valid, false);
+    assert.throws(() => fitQuestionnaire(3), /schemaVersion must be 1 or 2/);
+  });
+
+  test('a localized low-risk covered bugfix can be light only with v2', () => {
+    assert.equal(classifyFit(baseAnswers, { type: 'bugfix' }).route, 'full');
+    assert.equal(classifyFit(lowRisk, { type: 'bugfix' }).route, 'light');
+    assert.equal(classifyFit({ ...lowRisk, existingTests: false }, { type: 'bugfix' }).route, 'standard');
+  });
+
+  test('one-file security or irreversible changes escalate despite their small size', () => {
+    for (const risk of ['high', 'critical']) {
+      const result = classifyFit({ ...lowRisk, risk }, { type: 'bugfix' });
+      assert.equal(result.route, 'full');
+      assert.match(result.reasons.join(' '), new RegExp(`consequence is ${risk}`));
+    }
+    assert.equal(classifyFit({ ...lowRisk, reversibility: 'difficult' }, { type: 'feature' }).route, 'full');
+  });
+
+  test('material uncertainty, ambiguity, contract changes and incomplete reasoning remain explicit blockers', () => {
+    for (const change of [
+      { uncertainty: 'material' },
+      { uncertainty: 'blocked' },
+      { ambiguity: 'material' },
+      { crossesContract: true },
+      { reasoning: 'partial' },
+      { modules: 2 },
+      { files: 3 },
+    ])
+      assert.equal(classifyFit({ ...lowRisk, ...change }, { type: 'feature' }).route, 'full');
+    assert.equal(classifyFit({ ...lowRisk, risk: 'critical' }, { type: 'rfc' }).route, 'decision');
   });
 });
 
@@ -282,7 +335,12 @@ describe('Spec Fit in the working project', () => {
     }
     const report = JSON.parse(lines.join('\n'));
     assert.equal(report.classified, false);
-    assert.equal(report.questions.length, FIT_QUESTIONS.length);
+    assert.equal(report.schemaVersion, 2);
+    assert.equal(report.questions.length, 9);
+    assert.deepEqual(
+      report.questions.slice(-3).map(question => question.id),
+      ['risk', 'uncertainty', 'reversibility'],
+    );
   });
 
   test('the CLI reports the derived route and its reasons', async () => {

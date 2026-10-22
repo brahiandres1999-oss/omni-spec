@@ -1,40 +1,42 @@
-# Estado del candidato local — 2026-10-22
+# Candidato local 0.7.0-rc.1 — 2026-10-22
 
-Este punto de conservación no es una release estable. No autoriza publicación, instalación en los hosts del usuario ni el reinicio del piloto IPS. El usuario hará ese piloto posteriormente desde cero. IPS y Pulso360 son fuentes de observaciones, no plantillas de arquitectura.
+El alcance de implementación identificado para preparar el piloto está integrado. El siguiente paso de aceptación es desarrollar un proyecto independiente con el usuario, preferiblemente IPS desde cero. Este estado no autoriza publicar, hacer push, cambiar una instalación global ni declarar una release pública estable. IPS y Pulso360 aportaron observaciones; el motor no contiene reglas de esos dominios.
 
-## Implementado y comprobado con alcance acotado
+## Correcciones incorporadas
 
-- Auditoría y workflows respetan rutas light/standard/full para feature y debt.
-- La huella incluye evidencia anidada de la spec, con límites de tamaño y rechazo de symlinks.
-- Criterios automatizados referencian gates configurados; verify registra resultados y complete exige bindings válidos. Los registros antiguos requieren una ejecución nueva. La suficiencia de las assertions y la evidencia manual siguen requiriendo revisión.
-- Timeout acotado y diagnóstico explícito cuando no puede confirmarse la limpieza. Terminación efectiva del hijo y rechazo de symlinks comprobados en este Windows con permisos suficientes.
-- Protocolos compartidos de preguntas, versiones con fuentes oficiales, documentación por lenguaje, preparación/Git y diseño contextual, distribuidos en constitución, workflows y adaptadores.
-- Corrección de detección JavaScript/TypeScript y límites de exploración del onboarding.
-- Fixtures de evaluación conductual: tres escenarios con un agente real y una repetición. Observación renderizada independiente de dos defectos sembrados; no equivale a construir una UI satisfactoria.
-
-Últimas evidencias: suite general de 186 aprobadas y una omitida; la prueba omitida y el timeout se comprobaron después con permisos suficientes (dos aprobadas). Tras el ajuste de onboarding, 13 pruebas dirigidas aprobadas. Lint y paquete local aprobados en los incrementos documentados. Son corridas diferentes, no una única certificación total.
-
-## Lo que aún falta, además del piloto IPS
-
-| Bloque del roadmap | Estado real y pendiente |
+| Bloque | Resultado verificable |
 | --- | --- |
-| R04 — aceptación | Vinculación mecánica implementada mediante comandos de gates. No existe todavía todo el catálogo ampliado de checks propuesto, con ejecución configurable por directorio y tipos de evidencia especializados. |
-| R05 — estados y próxima acción | Pendiente de implementar un contrato estructurado común para status, bloqueos, próxima acción y entregas parciales. |
-| R06–R08 — UI/UX integrada | Hay protocolos y pruebas diagnósticas. Falta completar la integración de capacidades y evidencia visual con el cierre, y ejecutar construcción/corrección de una UI con navegador y recorrido funcional. Un gate genérico no acredita por sí solo un criterio visual. |
-| R09 — contexto vigente | Hay instrucciones de reconciliación. Falta completar y comprobar actualización del contexto durante evolución real, cambios de scripts/arquitectura y reanudación. |
-| R10 — contratos vigentes por capacidad | Propuesto; no implementado. Es evolución posterior, no requisito para cada tarea pequeña. |
-| R11 — fit por riesgo | Se corrigió el uso de rutas y se identificaron umbrales como heurísticas. El algoritmo no se ha rediseñado por riesgo, incertidumbre y reversibilidad; bugfix continúa en full. |
-| R12 — evaluación | Diagnósticos iniciales, sin comparación controlada ni evaluación completa de construcción de producto. Falta selección tecnológica con web disponible y preguntas nativas en un host interactivo. |
-| R13 — continuidad/hosts | Generación y preservación de adaptadores probadas; falta el recorrido real entre sesiones y hosts y la actualización con decisiones propias preservadas. |
-| R14 — runner | Timeout Windows comprobado con límites explícitos. Falta otro sistema operativo y el resto del alcance propuesto: cwd por check, salida completa/truncada y clasificación de errores. |
+| R01 — afirmaciones y fuentes | Se distinguen declaraciones, observaciones, ejecución y límites; las heurísticas no se presentan como conclusiones científicas universales. |
+| R02 — rutas | Feature/debt y bugfix v2 respetan light/standard/full. Standard bugfix requiere causa y diseño; full añade tareas. La promoción conserva artefactos. |
+| R03–R04 — cierre y aceptación | Evidencia recursiva, aceptación v2 por tipo y catálogo de checks con ID/cwd. Un build genérico o inspección de código no satisface por sí solo un criterio visual. |
+| R05 — continuidad operativa | status devuelve bloqueos, pendientes por criterio y próxima acción. READY_TO_COMPLETE y complete comparten inspector. RFC y entregas parciales conservan sus diferencias. |
+| R06–R08 — UI | Capacidades observadas por sesión, guía de diseño incluida, referencias/dirección/prototipo proporcionales y evidencia UI con pasos, fecha, esperado/real, artefacto y viewport visual. Sin render se conserva el bloqueo dependiente. |
+| R09 — contexto | Huella de fuentes/contexto, detección de obsolescencia y baseline anterior conservado. Registrar una nueva huella exige reconciliación semántica; no corrige requisitos copiando defectos. |
+| R10 — contratos | Contratos por capacidad, revisiones/deltas y estado efectivo conservado frente a propuestas posteriores. Activación/retirada exige spec completada y evidencia. |
+| R11 — rigor | Fit v2 agrega riesgo, incertidumbre y reversibilidad; conserva compatibilidad v1. Un cambio crítico pequeño escala. |
+| R12 — evaluación | Regresiones negativas, recorridos de paquete y producto sintético renderizado con corrección y reobservación. La comparación de eficacia entre modelos y el piloto independiente no se han convertido en resultados inexistentes. |
+| R13 — distribución | Nueve skills derivadas de workflows comunes; preservación de decisiones/contexto/contratos al actualizar. Los formatos de adaptadores tienen tests; el descubrimiento real depende del host del piloto. |
+| R14 — runner | Timeout/limpieza acotados, cwd validado, clasificación de errores, cola con aviso y log limitado con hash. Comprobado en Windows y Ubuntu mediante WSL. |
 
-R01–R03 tienen sus correcciones principales implementadas. Esto no cierra los hitos A, B y C completos. Tampoco implica que todo el backlog de evolución deba completarse antes de cualquier piloto: se debe fijar y verificar el alcance del candidato antes de llamarlo estable. No se ha aprobado una reducción del alcance para declarar estabilidad.
+## Validación local
 
-## Orden para retomar
+- Node 22.23.4: Windows, 228 pruebas aprobadas, ninguna omitida; Ubuntu mediante WSL, 227 aprobadas y una omitida porque comprueba ComSpec de Windows.
+- Node 22.19.0, mínimo declarado: 228 pruebas aprobadas en Windows, sin omisiones.
+- Paquete instalado: instalación offline, npm-exec, prefijo global temporal aislado, runtime local, arquetipos, onboarding, actualización, checks por módulo, rechazo de contexto obsoleto, contrato efectivo y rechazo de evidencia visual basada solo en código.
+- Lint, generación de nueve skills, comprobación de release y whitespace: aprobados. La comprobación de release no publica.
+- Cobertura del runtime (src/bin): 95,43 % de líneas y 87,12 % de ramas. El gate existente incluye además tests/tooling y obtuvo 97,05 % de líneas, superior a su mínimo de 85 %; son alcances distintos.
+- Producto sintético ATRIL: ocho criterios UI observados, un check automático de sintaxis, verificación, cierre y contrato activo. Reconciliación posterior y actualización a rc.1 conservan evidencia/decisiones y permiten volver a verificar nueve criterios. El estado queda sin trabajo activo; la spec completada permanece en historial.
 
-1. Completar estados/bloqueos y el recorrido integrado UI: referencias, dirección, implementación, ejecución y evidencia por resultado.
-2. Comprobar selección tecnológica actual y preguntas con herramientas disponibles; verificar contexto actualizado y continuidad en proyecto nuevo y existente.
-3. Cerrar la matriz de compatibilidad y la robustez operativa correspondientes al alcance del candidato.
-4. Ejecutar el piloto IPS que realizará el usuario. Registrar defectos y corregirlos antes de decidir publicación.
+Los logs, fallos intermedios, fuentes oficiales, capturas y trazas están en .research/evidence-2026-10-22/, fuera del paquete y de Git. El informe final identifica cada corrida; no suma corridas repetidas como si fueran casos independientes.
 
-La investigación completa, roadmap y trazas permanecen bajo `.research`, excluidos de Git. Se conserva un archivo local de respaldo separado del commit; no se incorporan cachés de dependencias al historial. No usar una rama o un commit como prueba de estabilidad.
+## Lo que se valida en el piloto
+
+1. Descubrimiento de las skills de este candidato en el host elegido y uso de preguntas nativas, o chat/consola cuando no existan.
+2. Reconocimiento de una carpeta nueva o proyecto existente; decisiones entendibles, stack investigado/aprobado, preparación local y convenciones documentales/Git.
+3. Resultado de dominio y UI conforme a lo solicitado, con evidencia ejecutada, revisión del usuario y corrección de defectos observados.
+
+No queda una corrección conocida del motor aplazada deliberadamente para ese piloto. La prueba real puede descubrir defectos nuevos: se conservan como evidencia, se corrigen y se repiten las comprobaciones afectadas antes de considerar publicación. Las evaluaciones masivas entre modelos y versiones de hosts siguen siendo trabajo de investigación; no se exige al usuario realizarlas para ejecutar su piloto ni se anuncia superioridad universal.
+
+El diseño original del producto sintético utilizó una skill externa en una evaluación separada. La revisión integrada posterior usó la guía incluida en OmniSpec. Es evidencia de integración y validación del resultado; no demuestra que OmniSpec causó por sí solo el diseño original ni sustituye crear un producto nuevo con el candidato.
+
+Para ejecutar el piloto con el paquete exacto y evitar una versión antigua de npm/plugin, seguir [PILOT](PILOT.md). Para los formatos operativos, ver [DELIVERY](DELIVERY.md).

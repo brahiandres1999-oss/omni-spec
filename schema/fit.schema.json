@@ -5,20 +5,20 @@
   "type": "object",
   "required": ["schemaVersion", "reasoning", "files", "modules", "crossesContract", "ambiguity", "existingTests"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "enum": [1, 2] },
     "reasoning": {
       "enum": ["done", "partial", "skipped"],
-      "description": "Whether the problem was reasoned about before drafting. Reasoning, not the specification, is what raises correctness on small changes."
+      "description": "Recorded reasoning before drafting. The answer is a declaration, not proof of understanding."
     },
     "files": {
       "type": "integer",
       "minimum": 1,
-      "description": "Files the change touches. Planning overhead only pays back from three files upwards."
+      "description": "Estimated affected files. Routing thresholds are project heuristics, not experimentally universal limits."
     },
     "modules": {
       "type": "integer",
       "minimum": 1,
-      "description": "Separate modules or packages the change touches. Cross-module work is the primary failure surface."
+      "description": "Estimated affected modules or packages requiring coordination."
     },
     "crossesContract": {
       "type": "boolean",
@@ -26,12 +26,27 @@
     },
     "ambiguity": {
       "enum": ["none", "material", "blocked"],
-      "description": "Remaining ambiguity in the request. Models cannot detect ambiguity on their own."
+      "description": "Remaining ambiguity in the request after inspection and clarification."
     },
     "existingTests": {
       "type": "boolean",
       "description": "Whether automated tests already cover the area being changed."
+    },
+    "risk": {
+      "enum": ["low", "high", "critical"],
+      "description": "Version 2 assessed consequence; high or critical escalates even a one-file change."
+    },
+    "uncertainty": {
+      "enum": ["clear", "material", "blocked"],
+      "description": "Version 2 remaining technical or product uncertainty."
+    },
+    "reversibility": {
+      "enum": ["easy", "difficult"],
+      "description": "Version 2 ability to recover without irreversible data loss or external effects."
     }
   },
+  "if": { "properties": { "schemaVersion": { "const": 2 } } },
+  "then": { "required": ["risk", "uncertainty", "reversibility"] },
+  "else": { "properties": { "risk": false, "uncertainty": false, "reversibility": false } },
   "additionalProperties": false
 }

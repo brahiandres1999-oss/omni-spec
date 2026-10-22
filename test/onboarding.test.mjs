@@ -105,7 +105,10 @@ test('every adapter carries the bare-command evidence and bounded onboarding con
         )
       : entry.content;
     assert.match(content, /bare command \/omni-init is sufficient/);
-    assert.match(content, /Only edit specs\/project-context.md by default/);
+    assert.match(
+      content,
+      /Only edit specs\/project-context.md and associated project-state\/context-history records by default/,
+    );
     assert.match(content, /CONTEXT_PENDING/);
     assert.match(content, /CONTEXT_RECORDED/);
     assert.match(content, /APPLICATION_NOT_VALIDATED/);

@@ -3,23 +3,25 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.6.1-blue.svg" alt="Version 0.6.1"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.7.0-rc.1-blue.svg" alt="Version 0.7.0-rc.1"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.19.0-black.svg" alt="Node.js >=18.19.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
   <a href="https://github.com/brahiandres1999-oss/omni-spec/actions/workflows/ci.yml"><img src="https://github.com/brahiandres1999-oss/omni-spec/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 ---
 
-# OmniSpec 0.6.1
+# OmniSpec 0.7.0-rc.1
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
 
-Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un framework universal, sin dependencias externas y 100% portable que vive dentro de tu repositorio. Funciona directamente desde el chat de tu editor preferido (Cursor, VS Code, Claude Code, Antigravity y más), soportando instalación directa como **Plugin nativo en Google Antigravity** y subagentes autónomos de auditoría (`omni-auditor`).
+Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un framework universal, sin dependencias runtime externas, con CLI portable y adaptadores según formatos documentados que vive dentro de tu repositorio. Funciona directamente desde el chat de tu editor preferido (Cursor, VS Code, Claude Code, Antigravity y más), soportando instalación directa como **Plugin nativo en Google Antigravity** y subagentes autónomos de auditoría (`omni-auditor`).
 
 ---
+
+> **Candidato local para piloto.** Esta versión aún no se ha publicado. Usa el tarball local verificado para probarla; `npx omni-spec` sin una versión/ruta explícita puede ejecutar otra versión. Consulta [entrega y evidencia](docs/DELIVERY.md).
 
 ## ¿Por qué OmniSpec?
 
@@ -28,7 +30,7 @@ Los agentes de IA son rápidos, pero sin un marco estructurado sufren de amnesia
 OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
 - **Criterios de calidad explícitos:** Aporta instrucciones de UI/UX y backend para guiar la implementación y revisión. La calidad visual, accesibilidad y corrección requieren comprobaciones pertinentes; las instrucciones no garantizan un resultado correcto al primer intento.
-- **Zero Dependencies & Zero Lock-in:** 100% Node.js nativo (>=18.19.0). No instala paquetes npm pesados ni altera el runtime de proyectos en Python, Go, Rust, Java o TypeScript.
+- **Zero Dependencies & Zero Lock-in:** Node.js nativo (>=22.19.0). No instala paquetes npm pesados ni altera el runtime de proyectos en Python, Go, Rust, Java o TypeScript.
 - **Universal Multi-Agent:** Un único comando configura Cursor, GitHub Copilot, Claude Code, Google Antigravity, OpenCode, Kilo, Codex o cualquier LLM con soporte Markdown.
 - **Verificación con alcance declarado:** Ejecuta los gates configurados y vincula el registro al contenido del proyecto y de la spec. `acceptance.json` registra evidencia declarada por criterio; los criterios automatizados deben referenciar gates configurados mediante `checkCommands`, y el CLI los vincula con sus resultados ejecutados. La suficiencia de esas pruebas y la veracidad de evidencia manual requieren revisión. Un snapshot detecta cambios posteriores, no demuestra ausencia de regresiones.
 
@@ -173,8 +175,8 @@ npx omni-spec complete 001           # Cierra el trabajo tras comprobar evidenci
 ### Spec Fit: cuánta ceremonia merece un cambio
 
 No todo cambio necesita el ciclo completo. `omni-spec fit` deriva la ruta a partir de un
-cuestionario **que se pregunta, no que se infiere** (los modelos no detectan la ambigüedad por
-sí solos, y razonar antes de escribir es lo que sube la corrección en cambios pequeños):
+cuestionario **que se pregunta, no que se infiere**. La clasificación es una heurística
+explícita; requiere respuestas sustentadas y puede aumentar el rigor según el riesgo:
 
 | Ruta | Artefactos | Cuándo |
 | :--- | :--- | :--- |
@@ -183,8 +185,10 @@ sí solos, y razonar antes de escribir es lo que sube la corrección en cambios 
 | **full** | + desglose de tareas | ≥3 archivos, varios módulos, cambio de contrato, ambigüedad o razonamiento incompleto |
 
 La ruta se **deriva** de `specs/<slug>/fit.json`; nunca se escribe a mano. Sin `fit.json` se
-mantiene la ruta completa. Un bugfix conserva siempre la ruta completa: el análisis de causa
-raíz y la verificación independiente son justo el valor del arquetipo.
+mantiene la ruta completa. Fit v1 conserva su comportamiento anterior. En v2 se evalúan
+también riesgo, incertidumbre y reversibilidad: un cambio crítico puede requerir full aunque
+afecte un archivo. Un bugfix light documenta reproducción, causa y regresión en bug.md;
+standard añade rca.md y fix.md; full añade el desglose de tareas en fix.md.
 
 ---
 

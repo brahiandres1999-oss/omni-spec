@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { safePath } from './managed.mjs';
 
 export const FIT_SCHEMA_VERSION = 1;
+export const FIT_SUPPORTED_SCHEMA_VERSIONS = [1, 2];
 
 export const FIT_QUESTIONS = [
   {
@@ -45,6 +46,28 @@ export const FIT_QUESTIONS = [
   },
 ];
 
+export const FIT_V2_QUESTIONS = [
+  ...FIT_QUESTIONS,
+  {
+    id: 'risk',
+    prompt: 'What is the consequence of a defective change, including security, safety, money and data integrity?',
+    values: ['low', 'high', 'critical'],
+    why: 'One file can cause a critical failure. Record the assessed consequence rather than inferring safety from size.',
+  },
+  {
+    id: 'uncertainty',
+    prompt: 'Are the intended behavior, dependencies and verification approach understood?',
+    values: ['clear', 'material', 'blocked'],
+    why: 'Unresolved technical or product uncertainty needs a decision before implementation.',
+  },
+  {
+    id: 'reversibility',
+    prompt: 'Can the change be rolled back easily without irreversible data loss or external effects?',
+    values: ['easy', 'difficult'],
+    why: 'A difficult rollback requires an explicit recovery and verification design.',
+  },
+];
+
 export const ROUTES = {
   light: {
     label: 'light',
@@ -75,15 +98,19 @@ const VALUE_CHECKS = {
   crossesContract: value => typeof value === 'boolean',
   ambiguity: value => ['none', 'material', 'blocked'].includes(value),
   existingTests: value => typeof value === 'boolean',
+  risk: value => ['low', 'high', 'critical'].includes(value),
+  uncertainty: value => ['clear', 'material', 'blocked'].includes(value),
+  reversibility: value => ['easy', 'difficult'].includes(value),
 };
 
 export function validateFitAnswers(answers) {
   const errors = [];
   if (!answers || typeof answers !== 'object' || Array.isArray(answers))
     return { valid: false, errors: ['fit.json must be a JSON object with the recorded answers.'] };
-  if (answers.schemaVersion !== FIT_SCHEMA_VERSION)
-    errors.push(`fit.json schemaVersion must be ${FIT_SCHEMA_VERSION}.`);
-  for (const question of FIT_QUESTIONS) {
+  if (!FIT_SUPPORTED_SCHEMA_VERSIONS.includes(answers.schemaVersion))
+    errors.push('fit.json schemaVersion must be 1 or 2.');
+  const questions = answers.schemaVersion === 2 ? FIT_V2_QUESTIONS : FIT_QUESTIONS;
+  for (const question of questions) {
     if (!Object.hasOwn(answers, question.id) || answers[question.id] === undefined) {
       errors.push(`fit.json is missing the answer "${question.id}".`);
       continue;
@@ -91,7 +118,7 @@ export function validateFitAnswers(answers) {
     if (!VALUE_CHECKS[question.id](answers[question.id]))
       errors.push(`fit.json answer "${question.id}" is invalid. Allowed: ${allowedValues(question)}.`);
   }
-  const known = new Set(FIT_QUESTIONS.map(q => q.id));
+  const known = new Set(questions.map(q => q.id));
   for (const key of Object.keys(answers))
     if (!known.has(key) && key !== 'schemaVersion') errors.push(`fit.json has an unknown answer "${key}".`);
   return { valid: errors.length === 0, errors };
@@ -108,6 +135,8 @@ export function classifyFit(answers, spec = {}) {
 
   if (spec.type === 'rfc')
     return { route: 'decision', reasons: ['RFCs are decided, not implemented.'], ...ROUTES.decision };
+
+  if (answers.schemaVersion === 2) return classifyRiskFit(answers);
 
   if (spec.type === 'bugfix') {
     reasons.push(
@@ -146,6 +175,37 @@ export function classifyFit(answers, spec = {}) {
   return { route, reasons, ...ROUTES[route] };
 }
 
+function classifyRiskFit(answers) {
+  const reasons = [];
+  const fullConditions = [
+    [
+      answers.risk !== 'low',
+      `Assessed consequence is ${answers.risk}; record mitigation and independent verification.`,
+    ],
+    [
+      answers.uncertainty !== 'clear',
+      `Technical or product uncertainty is ${answers.uncertainty}; resolve decisions first.`,
+    ],
+    [answers.ambiguity !== 'none', `The request still holds ${answers.ambiguity} ambiguity.`],
+    [answers.reversibility !== 'easy', 'Rollback is difficult; plan recovery and irreversible effects explicitly.'],
+    [answers.reasoning !== 'done', 'Reasoning was not completed; templates cannot establish understanding.'],
+    [answers.crossesContract, 'A public contract changes; design compatibility, rollback and verification.'],
+    [answers.modules >= 2, `${answers.modules} modules need coordinated design and verification.`],
+    [answers.files >= 3, `${answers.files} affected files exceed the current local-change heuristic.`],
+  ];
+  for (const [condition, reason] of fullConditions) if (condition) reasons.push(reason);
+  let route = reasons.length ? 'full' : 'light';
+  if (route === 'light' && !answers.existingTests) {
+    route = 'standard';
+    reasons.push('No existing test coverage; design meaningful regression verification before implementing.');
+  }
+  if (!reasons.length)
+    reasons.push(
+      'Declared low consequence, clear intent, easy rollback and local covered scope allow the light route, including a bugfix.',
+    );
+  return { route, reasons, ...ROUTES[route] };
+}
+
 export async function readFit(root, spec) {
   const path = await safePath(root, `specs/${spec.slug}/fit.json`);
   try {
@@ -169,11 +229,12 @@ export async function specRoute(root, spec) {
   return classifyFit(fit.answers, spec);
 }
 
-export function fitQuestionnaire() {
+export function fitQuestionnaire(schemaVersion = FIT_SCHEMA_VERSION) {
+  if (!FIT_SUPPORTED_SCHEMA_VERSIONS.includes(schemaVersion)) throw new Error('fit schemaVersion must be 1 or 2.');
   return {
-    schemaVersion: FIT_SCHEMA_VERSION,
+    schemaVersion,
     file: 'specs/<slug>/fit.json',
-    questions: FIT_QUESTIONS,
+    questions: schemaVersion === 2 ? FIT_V2_QUESTIONS : FIT_QUESTIONS,
     note: 'Answer every question with the recorded value, then run `omni-spec fit <id>` to read the route. The route is derived, never written by hand.',
   };
 }

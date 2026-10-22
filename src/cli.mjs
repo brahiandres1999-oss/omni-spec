@@ -11,8 +11,26 @@ import { installAgentIntegrations, normalizeAgents, agentInstructions, AGENTS } 
 import { detectProjectEnvironment } from './detector.mjs';
 import { auditProjectContext } from './context-auditor.mjs';
 import { fitQuestionnaire, specRoute } from './fit.mjs';
+import { projectStatus, recordContext, recordSession, recordDecision } from './project-state.mjs';
+import { loadChecks, validateChecks } from './checks.mjs';
+import { safePath } from './managed.mjs';
+import { listContracts, readContract, updateContract } from './contracts.mjs';
+import { fileURLToPath } from 'node:url';
 
-const mutating = new Set(['create', 'focus', 'complete', 'verify', 'update', 'setup-agent', 'configure', 'clean']);
+const mutating = new Set([
+  'create',
+  'focus',
+  'complete',
+  'verify',
+  'update',
+  'setup-agent',
+  'configure',
+  'clean',
+  'context-record',
+  'session-record',
+  'decision-record',
+  'contract-record',
+]);
 const aliases = {
   switch: 'focus',
   specs: 'list',
@@ -21,7 +39,7 @@ const aliases = {
   'omni-init': 'init',
   prune: 'clean',
 };
-const valueFlags = new Set(['profile', 'name', 'stack', 'doc', 'gates', 'agent', 'ai', 'manual', 'timeout']);
+const valueFlags = new Set(['profile', 'name', 'stack', 'doc', 'gates', 'agent', 'ai', 'manual', 'timeout', 'from']);
 const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade']);
 
 function acceptanceSummary(acceptance) {
@@ -60,8 +78,8 @@ function parse(args) {
   flags.allowDowngrade = flags['allow-downgrade'];
   if (flags.timeout !== undefined) {
     flags.timeout = Number(flags.timeout);
-    if (!Number.isSafeInteger(flags.timeout) || flags.timeout < 1 || flags.timeout > 600000)
-      throw new Error('--timeout must be 1..600000 milliseconds.');
+    if (!Number.isSafeInteger(flags.timeout) || flags.timeout < 100 || flags.timeout > 3600000)
+      throw new Error('--timeout must be 100..3600000 milliseconds.');
   }
   return { flags, positionals };
 }
@@ -88,6 +106,13 @@ omni-spec <command> [arguments] [options]
   init [--yes] [--agent name]     Bootstrap project and chat workflows
   inspect [--json]               Read-only environment inventory; no scripts executed
   context-check [--json]         Check context structure/local links; semantic review required
+  context-record                Snapshot reconciled context inputs; retain previous baseline
+  guide <design|setup>          Read bundled procedures; no external skill installation
+  session-record --from <file>   Record actual host capabilities (does not grant tools)
+  decision-record --from <file>  Record answer/delegation and dated technology sources
+  checks [--from <file>]         List/configure reviewed checks with IDs and module cwd
+  contracts [id]                Inspect proposed and effective capability contracts
+  contract-record <id> --from <file>  Record revision with decision and expectedRevision
   create <type> <name>           feature, bugfix (bug/fix), debt, rfc (idea)
   status | list [--json]         Resume active work or list specifications
   focus <id|slug>                Select active work without creating duplicates
@@ -142,7 +167,19 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       throw new Error('--accept-updates is supported only by update and setup-agent.');
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
     const maxPositionals =
-      { create: 2, focus: 1, complete: 1, verify: 1, audit: 1, fit: 1, 'setup-agent': 1, plugin: 1 }[command] || 0;
+      {
+        create: 2,
+        focus: 1,
+        complete: 1,
+        verify: 1,
+        audit: 1,
+        fit: 1,
+        'setup-agent': 1,
+        plugin: 1,
+        contracts: 1,
+        'contract-record': 1,
+        guide: 1,
+      }[command] || 0;
     if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
     const emit = (value, human) =>
       console.log(json ? JSON.stringify(value, null, 2) : human || JSON.stringify(value, null, 2));
@@ -155,6 +192,15 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (command !== 'init' && root) workingDir = root;
     if (mutating.has(command) && !root) throw new Error('No OmniSpec project found. Run omni-spec init first.');
     switch (command) {
+      case 'guide': {
+        if (!['design', 'setup'].includes(positionals[0])) throw new Error('Usage: guide <design|setup>');
+        const content = await readFile(
+          fileURLToPath(new URL(`./resources/${positionals[0]}.md`, import.meta.url)),
+          'utf8',
+        );
+        emit({ topic: positionals[0], content, requiresExternalSkill: false }, content);
+        return 0;
+      }
       case 'init': {
         const options = await runWizard(workingDir, flags);
         if (!options) return 0;
@@ -179,6 +225,50 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         );
         return result.valid ? 0 : 1;
       }
+      case 'context-record': {
+        const result = await recordContext(workingDir);
+        emit(
+          result,
+          '[CONTEXT RECORDED] Current input baseline saved; previous baseline preserved. Source-claim review remains required.',
+        );
+        return 0;
+      }
+      case 'session-record':
+      case 'decision-record':
+      case 'contract-record': {
+        if (!flags.from) throw new Error(`${command} requires --from <project-relative JSON file>.`);
+        const input = JSON.parse(
+          (await readFile(await safePath(workingDir, flags.from), 'utf8')).replace(/^\uFEFF/, ''),
+        );
+        const { expectedRevision, ...contractChange } = input;
+        const result =
+          command === 'session-record'
+            ? await recordSession(workingDir, input)
+            : command === 'decision-record'
+              ? await recordDecision(workingDir, input)
+              : await updateContract(workingDir, positionals[0], contractChange, { expectedRevision });
+        emit(result);
+        return 0;
+      }
+      case 'checks': {
+        if (!root) throw new Error('No OmniSpec project found. Run init first.');
+        if (flags.from) {
+          const input = JSON.parse(
+            (await readFile(await safePath(workingDir, flags.from), 'utf8')).replace(/^\uFEFF/, ''),
+          );
+          await validateChecks(workingDir, input);
+          await withManifestLock(workingDir, async () => {
+            await writeFile(await safePath(workingDir, 'specs/checks.json'), JSON.stringify(input, null, 2) + '\n');
+          });
+        }
+        emit({ checks: await loadChecks(workingDir, await loadManifest(workingDir)), executed: false });
+        return 0;
+      }
+      case 'contracts': {
+        if (!root) throw new Error('No OmniSpec project found. Run init first.');
+        emit(positionals[0] ? await readContract(workingDir, positionals[0]) : await listContracts(workingDir));
+        return 0;
+      }
       case 'create': {
         if (positionals.length !== 2)
           throw new Error('Usage: create <feature|bugfix|debt|rfc> <name> (quote names containing spaces).');
@@ -193,12 +283,13 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'list': {
         const manifest = await loadManifest(workingDir);
         if (!manifest) throw new Error('No OmniSpec manifest found. Run init first.');
-        if (command === 'status')
+        if (command === 'status') {
+          const status = await projectStatus(workingDir);
           emit(
-            manifest,
-            `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`,
+            status,
+            `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n[DELIVERY] ${status.progress.delivery}\n[CONTEXT] ${status.progress.context.status}\n[NEXT] ${status.progress.nextAction}\n${status.progress.blockers.map(item => `[BLOCKED] ${item.code}: ${item.message || item.action}`).join('\n')}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`,
           );
-        else {
+        } else {
           const listing = await listSpecs(workingDir);
           emit(
             listing,
@@ -225,7 +316,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const result = await verifySpec(workingDir, positionals[0], flags);
         emit(
           result,
-          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Gate mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}${r.error ? '\n' + r.error : ''}`).join('\n')}\n${result.sourceChangedDuringVerification ? 'Source changed during verification; run again after reviewing generated changes.' : 'Evidence is bound to the current source/specification snapshot.'}\n${acceptanceSummary(result.acceptance)}`,
+          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Gate mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}${r.outputTruncated ? '\n[OUTPUT TRUNCATED: full bounded log ' + r.outputLog + ']' : ''}${r.error ? '\n' + r.error : ''}`).join('\n')}\n${result.sourceChangedDuringVerification ? 'Source changed during verification; run again after reviewing generated changes.' : 'Evidence is bound to the current source/specification snapshot.'}\n${acceptanceSummary(result.acceptance)}`,
         );
         return result.passed ? 0 : 1;
       }
@@ -247,7 +338,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         if (!spec) throw new Error('Specification not found. Use list and an exact ID.');
         const route = await specRoute(workingDir, spec);
         if (!route) {
-          const questionnaire = fitQuestionnaire();
+          const questionnaire = fitQuestionnaire(2);
           emit(
             { spec: spec.slug, type: spec.type, classified: false, ...questionnaire },
             `[FIT] ${spec.slug} is not classified yet.\nRecord the answers in ${questionnaire.file} and run this command again.\n${questionnaire.questions.map(q => `- ${q.id}: ${q.prompt} (${Array.isArray(q.values) ? q.values.map(v => JSON.stringify(v)).join(' | ') : q.values})`).join('\n')}`,
@@ -347,7 +438,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           const res = await installPlugin(flags);
           emit(
             res,
-            `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nPlugin is immediately ready in Antigravity.`,
+            `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nReload the host if needed and confirm skill discovery; file installation does not establish host behavior.`,
           );
           return 0;
         } else if (sub === 'update' || sub === 'upgrade') {

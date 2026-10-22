@@ -15,7 +15,7 @@ if (!npm)
 function exec(args, cwd, expected = 0) {
   const result = spawnSync(process.execPath, args, { cwd, encoding: 'utf8', timeout: 120000, windowsHide: true });
   assert.equal(result.status, expected, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
-  return result.stdout;
+  return expected === 0 ? result.stdout : result.stdout + result.stderr;
 }
 const packageInfo = JSON.parse(
   exec([npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', temporary], source),
@@ -187,6 +187,86 @@ for (const scenario of ['empty', 'existing', 'broken', 'noncode', 'conflicting',
   if (['existing', 'conflicting'].includes(scenario))
     assert.ok(!(await readdir(join(root, 'api'))).includes('UNAUTHORIZED_EXECUTION'));
 }
+// Exercise new delivery contracts from the installed tarball, not source imports.
+const delivery = join(temporary, 'delivery-candidate');
+await mkdir(join(delivery, 'api'), { recursive: true });
+await writeFile(join(delivery, 'api/app.cjs'), 'exports.greet = name => "Hello " + name;');
+await writeFile(
+  join(delivery, 'api/check.cjs'),
+  'require("node:assert/strict").equal(require("./app.cjs").greet("Ada"),"Hello Ada");',
+);
+exec([installed, 'init', '--yes', '--agent', 'generic'], delivery);
+const candidate = join(delivery, 'specs/.omni/runtime/bin/omni-spec.mjs');
+assert.equal(JSON.parse(exec([candidate, 'guide', 'design', '--json'], delivery)).requiresExternalSkill, false);
+exec([candidate, 'create', 'feature', 'module-greeting'], delivery);
+await fillSpec(delivery, { slug: '001-module-greeting', type: 'feature' });
+await mkdir(join(delivery, 'specs/.omni/requests'), { recursive: true });
+await writeFile(
+  join(delivery, 'specs/.omni/requests/checks.json'),
+  JSON.stringify({
+    schemaVersion: 1,
+    checks: [{ id: 'api-unit', command: 'node check.cjs', cwd: 'api', kind: 'automated' }],
+  }),
+);
+exec([candidate, 'checks', '--from', 'specs/.omni/requests/checks.json'], delivery);
+await writeFile(
+  join(delivery, 'specs/001-module-greeting/acceptance.json'),
+  JSON.stringify({
+    schemaVersion: 2,
+    criteria: [
+      {
+        id: 'AC-01',
+        kind: 'functional',
+        status: 'passed',
+        method: 'automated',
+        checkIds: ['api-unit'],
+        evidence:
+          'The API module assertion compares the actual greet result with the exact requested Hello Ada string.',
+      },
+    ],
+  }),
+);
+exec([candidate, 'context-record'], delivery);
+await writeFile(join(delivery, 'api/new-source.cjs'), 'module.exports = true;');
+assert.match(exec([candidate, 'verify', '001', '--json'], delivery, 1), /Context is stale/);
+exec([candidate, 'context-record'], delivery);
+const deliveryVerified = JSON.parse(exec([candidate, 'verify', '001', '--json'], delivery));
+assert.equal(deliveryVerified.results[0].checkId, 'api-unit');
+assert.equal(deliveryVerified.results[0].cwd, join(delivery, 'api'));
+assert.equal(JSON.parse(exec([candidate, 'status', '--json'], delivery)).progress.delivery, 'READY_TO_COMPLETE');
+exec([candidate, 'complete', '001'], delivery);
+await writeFile(
+  join(delivery, 'specs/.omni/requests/contract.json'),
+  JSON.stringify({
+    expectedRevision: 0,
+    capability: 'Greeting',
+    scope: 'Local deterministic greeting',
+    status: 'active',
+    sourceSpec: '001',
+    decision: 'Preserve the approved greeting after actual module assertions passed.',
+    evidence: ['specs/001-module-greeting/verification.json'],
+  }),
+);
+exec([candidate, 'contract-record', 'greeting', '--from', 'specs/.omni/requests/contract.json'], delivery);
+assert.equal(JSON.parse(exec([candidate, 'contracts', 'greeting', '--json'], delivery)).effectiveRevision, 1);
+exec([candidate, 'create', 'feature', 'visual-inspection-negative'], delivery);
+await fillSpec(delivery, { slug: '002-visual-inspection-negative', type: 'feature' });
+await writeFile(
+  join(delivery, 'specs/002-visual-inspection-negative/acceptance.json'),
+  JSON.stringify({
+    schemaVersion: 2,
+    criteria: [
+      {
+        id: 'AC-01',
+        kind: 'visual',
+        status: 'passed',
+        method: 'inspection',
+        evidence: 'Only source inspection is claimed; the package must reject this as observed visual evidence.',
+      },
+    ],
+  }),
+);
+assert.match(exec([candidate, 'verify', '002', '--json'], delivery, 1), /source inspection is insufficient/);
 console.log(
   JSON.stringify(
     {
@@ -209,6 +289,10 @@ console.log(
         'unknown stack without invented gates',
         'onboarding contract: empty, polyglot, broken, non-code and conflicting declarations',
         'context structural check and nonportable citation rejection',
+        'bundled design guide without external skills',
+        'module check catalogue, typed acceptance and shared ready state',
+        'stale context rejection, reconciliation and contract activation',
+        'visual criterion rejects source-only evidence in installed package',
       ],
       liveAgentChatTested: false,
     },

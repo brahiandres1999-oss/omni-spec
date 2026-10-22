@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OmniSpec project context, session and decision state",
+  "type": "object",
+  "required": ["schemaVersion", "decisions"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "context": {
+      "type": ["object", "null"],
+      "properties": {
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "session": {
+      "type": ["object", "null"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["status", "source"],
+            "properties": {
+              "status": {
+                "enum": ["available", "unavailable", "unknown"]
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "topic": {
+            "type": "string"
+          },
+          "status": {
+            "enum": ["pending", "provisional", "approved", "delegated", "not-applicable"]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "appliesTo": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "basis": {
+            "type": "string"
+          },
+          "value": {},
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["url", "consultedAt", "appliesTo", "authority"],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "consultedAt": {
+                  "type": "string",
+                  "anyOf": [{ "format": "date" }, { "format": "date-time" }]
+                },
+                "appliesTo": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "authority": {
+                  "const": "official"
+                }
+              }
+            }
+          },
+          "reviewAfter": {
+            "type": "string",
+            "anyOf": [{ "format": "date" }, { "format": "date-time" }]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

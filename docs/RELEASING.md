@@ -1,16 +1,16 @@
 # Publicación e instalación de OmniSpec
 
-Versión preparada: **0.6.1**, etiqueta Git `v0.6.1`, canal npm `latest`. Es la versión con soporte nativo de Plugin Manager (`npx omni-spec plugin install/update`), modo Zero-Bloat y comando de limpieza `clean`. Publicar en GitHub no publica automáticamente en npm.
+Versión preparada: **0.7.0-rc.1**, candidata local, con canal de prerelease `next`. No se ha autorizado hacer push, crear una release remota ni publicar npm. El siguiente paso es el piloto del usuario con el tarball exacto. Los procedimientos siguientes solo se aplican cuando el mantenedor autorice una publicación posterior; no son una instrucción para ejecutarla ahora. Publicar en GitHub no publica automáticamente en npm.
 
-Decisión del mantenedor: conservar GitHub privado y publicar npm más adelante, cuando exista una cuenta. Las releases y archivos de GitHub requieren acceso al repositorio; no están disponibles de forma anónima por URL. Se puede descargar el tarball con una sesión autorizada y ejecutarlo o instalarlo localmente. Un futuro paquete público npm distribuirá sus fuentes incluidas, sin cambiar la visibilidad del historial de GitHub.
+La última restricción del mantenedor exige conservar todo local hasta aceptar estabilidad. El estado histórico de cuentas/publicaciones no se supone vigente: comprobarlo antes de una publicación autorizada. Un repositorio privado requiere acceso para descargar sus releases. Un futuro paquete público npm distribuiría sus fuentes incluidas, sin cambiar por sí solo la visibilidad del historial de GitHub.
 
 ## Release en GitHub
 
 1. Ejecutar `npm test`, `npm run test:package`, `npm run release:check` y `git diff --check`.
 2. Revisar y crear el commit con código, pruebas, workflows y documentación. Excluir `artifacts/`.
-3. Crear una etiqueta anotada `v0.6.1` sobre ese commit y enviar commit y etiqueta. No mover una etiqueta ya publicada para cambiar sus bytes.
-4. El workflow `release.yml` valida Ubuntu/Windows con Node 18.19, 20, 22 y 24, comprueba la correspondencia versión/etiqueta/notas y crea una GitHub release normal cuando todo pasa (prerelease solo para etiquetas con sufijo).
-5. La release adjunta `omni-spec-0.6.0.tgz` y `omni-spec-0.6.0.tgz.sha256`. Comprobar el resultado del workflow, no solo que exista la etiqueta.
+3. Crear la etiqueta anotada correspondiente a package.json y enviarla solo después de autorización expresa. Para esta candidata sería `v0.7.0-rc.1`; no se ha creado ni enviado. No mover una etiqueta publicada para cambiar sus bytes.
+4. El workflow `release.yml` tiene configurada validación Ubuntu/Windows con Node 22.19, 22 y 24, comprueba versión/etiqueta/notas y distingue prerelease mediante sufijo. La configuración no demuestra una ejecución remota.
+5. La release adjunta el tarball y su SHA256 con el nombre derivado de la versión. Comprobar el resultado del workflow, no solo que exista la etiqueta.
 
 `npm run release:pack` produce los mismos tipos de artefactos localmente en `artifacts/release/`. El checksum identifica cada archivo concreto; no se promete que dos empaquetados separados tengan bytes idénticos. El workflow npm descarga y verifica el archivo concreto publicado en GitHub.
 
@@ -20,14 +20,14 @@ Decisión del mantenedor: conservar GitHub privado y publicar npm más adelante,
 
 1. Crear una cuenta en [npm](https://www.npmjs.com/signup), verificar el correo y configurar la autenticación que solicite npm para publicar. No compartir contraseña, códigos de un solo uso ni tokens con el agente.
 2. En una terminal propia ejecutar `npm login --auth-type=web --registry=https://registry.npmjs.org/` y completar el navegador. `npm whoami --registry=https://registry.npmjs.org/` confirma la identidad.
-3. Descargar el tarball y checksum de la GitHub release y comprobar SHA-256. En PowerShell: `Get-FileHash ./omni-spec-0.6.0.tgz -Algorithm SHA256`; comparar con el archivo `.sha256`.
+3. Seleccionar el tarball y checksum de la versión autorizada y comprobar SHA-256. En PowerShell: `Get-FileHash ./omni-spec-0.7.0-rc.1.tgz -Algorithm SHA256`; comparar con el archivo `.sha256`.
 4. Publicar ese archivo:
 
 ```sh
-npm publish ./omni-spec-0.6.0.tgz --tag latest --access public --registry=https://registry.npmjs.org/
+npm publish ./omni-spec-0.7.0-rc.1.tgz --tag next --access public --registry=https://registry.npmjs.org/
 ```
 
-5. Completar la autenticación adicional que npm solicite. Comprobar `npm view omni-spec@0.6.0 version dist.integrity` y probar el comando por nombre en un proyecto desechable.
+5. Completar la autenticación adicional que npm solicite. Comprobar versión e integridad exactas con npm view y probar el comando por nombre en un proyecto desechable.
 
 La consulta del nombre devolvió 404 durante la preparación; no reserva su disponibilidad ni garantiza permiso de publicación. Si npm rechaza el nombre, elegir un ámbito propio, por ejemplo `@tu-usuario/omni-spec`, y preparar otra versión coherente con ese nombre y sus comandos. No modificar silenciosamente un tarball o etiqueta ya publicados. npm no permite reutilizar una combinación nombre/versión publicada.
 
@@ -49,7 +49,7 @@ Mantener `publishConfig.tag` en `latest` para versiones normales y `next` para p
 
 ```sh
 # Sin instalación global
-npx --yes omni-spec@0.6.0 init --yes --agent antigravity
+npx --yes omni-spec@0.7.0-rc.1 init --yes --agent antigravity
 
 # CLI global opcional; no inicializa todos los proyectos automáticamente
 npm install --global omni-spec@latest
@@ -63,14 +63,14 @@ Cada `init` copia el runtime al proyecto. La instalación global solo facilita e
 Abrir la raíz del proyecto destino. Una vez disponible la versión en npm:
 
 ```sh
-npx --yes omni-spec@0.6.0 update --dry-run
-npx --yes omni-spec@0.6.0 update
+npx --yes omni-spec@0.7.0-rc.1 update --dry-run
+npx --yes omni-spec@0.7.0-rc.1 update
 ```
 
 Sin npm por nombre, ejecutar el CLI de una copia nueva de OmniSpec o usar el tarball descargado desde la release privada:
 
 ```sh
-npx --yes --package="/ruta/al/omni-spec-0.6.0.tgz" omni-spec update --dry-run
+npx --yes --package="/ruta/al/omni-spec-0.7.0-rc.1.tgz" omni-spec update --dry-run
 ```
 
 Después de revisar, repetir sin `--dry-run`. Se conservan contexto, constitución, especificaciones y selección de agente. Archivos administrados personalizados bloquean la operación; `--accept-updates` acepta su reemplazo con copia de respaldo después de revisar conflictos. Recargar el agente después de actualizar skills/comandos.
@@ -79,7 +79,7 @@ Actualizar el CLI global (`npm install -g omni-spec@latest`) no actualiza las co
 
 ### Copias de desarrollo que ya dicen 0.5.0
 
-Usar el mismo procedimiento: CLI nuevo, `update --dry-run` y `update`. El actualizador compara archivos aunque coincida el número de versión; no requiere `--allow-downgrade` para pasar de una copia 0.5.0 a esta publicación 0.5.0. También permite subir desde 0.5.0-rc.1 sin esa opción. Se preservan los trabajos completados y sus registros de verificación; no se les atribuyen comprobaciones nuevas.
+Usar el mismo procedimiento: CLI nuevo, `update --dry-run` y `update`. El actualizador compara archivos aunque coincida el número de versión; subir desde 0.5.0 o 0.5.0-rc.1 a esta candidata no requiere permitir downgrade. Se preservan los trabajos completados y sus registros de verificación; no se les atribuyen comprobaciones nuevas.
 
 ### Especificaciones anteriores al registro por criterio
 

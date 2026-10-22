@@ -1,6 +1,6 @@
 {
   "name": "omni-spec",
-  "version": "0.6.1",
+  "version": "0.7.0-rc.1",
   "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding.",
   "type": "module",
   "main": "src/cli.mjs",
@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "latest"
+    "tag": "next"
   },
   "bin": {
     "omni-spec": "bin/omni-spec.mjs"
@@ -50,7 +50,8 @@
     "docs/locking.md",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/DELIVERY.md"
   ],
   "keywords": [
     "spec-driven-development",
@@ -66,7 +67,7 @@
   "author": "OmniSpec Authors",
   "license": "MIT",
   "engines": {
-    "node": ">=18.19.0"
+    "node": ">=22.19.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2"

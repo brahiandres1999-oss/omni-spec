@@ -18,7 +18,7 @@ El usuario invoca `/omni-init` sin instrucciones de auditoría adicionales. El a
 
 Leer manifiesto, constitución, contexto, configuración, instrucciones locales y código relevante. Usar `status --json` e `inspect --json` del motor local. Consultar el estado de trabajo de Git de solo lectura si existe; Git no es requisito para reconocer el proyecto.
 
-Actualizar únicamente `specs/project-context.md`. Preservar decisiones confirmadas y reconciliar afirmaciones antiguas con fuentes actuales. No crear una especificación ni modificar la aplicación, políticas o gates para terminar el reconocimiento. No instalar dependencias, ejecutar scripts del proyecto, migraciones ni servicios. La validación ejecutada es otro paso que depende de la autorización y preparación correspondientes; no exige confirmación para cada lectura.
+Actualizar `specs/project-context.md` y los registros de reconocimiento de `specs/project-state.json` mediante `session-record`, `decision-record` y `context-record`, con su historial local administrado. Preservar decisiones confirmadas y reconciliar afirmaciones antiguas con fuentes actuales antes de registrar la huella. No crear una especificación ni modificar la aplicación, políticas o gates para terminar el reconocimiento. No instalar dependencias, ejecutar scripts del proyecto, migraciones ni servicios. La validación ejecutada es otro paso que depende de la autorización y preparación correspondientes; no exige confirmación para cada lectura. Consultar los formatos en [DELIVERY](DELIVERY.md).
 
 ## Rutas
 

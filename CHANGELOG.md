@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0-rc.1] - 2026-10-22
+
+### Added
+- Structured delivery state and blockers, context baselines/history, scoped decisions and observed session capabilities.
+- Typed UI acceptance evidence, module check catalogue with complete bounded logs, and bundled design/setup guides.
+- Versioned capability contracts and risk-aware fit v2, preserving legacy routes and data.
+- Synthetic product lifecycle evaluation and Windows/Linux validation; local pilot candidate only.
+
 ### Fixed
 - Require automated acceptance criteria to reference configured check commands and bind them to current execution results; reject failed, missing or unexecuted checks at completion. Verification records now use version 2 and older records require a fresh run.
 - Bound timeout cleanup even when process-tree termination fails or inherited pipes remain open; record an explicit cleanup error instead of holding the verification lock indefinitely.

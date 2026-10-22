@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OmniSpec approved check catalogue",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "checks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "checks": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "command"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^(?!gate-[0-9]+$)[A-Za-z][A-Za-z0-9_.-]{0,79}$" },
+          "command": { "type": "string", "minLength": 1, "maxLength": 16384 },
+          "cwd": { "type": "string", "minLength": 1, "default": "." },
+          "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 3600000, "default": 120000 },
+          "kind": { "enum": ["automated", "ui"], "default": "automated" },
+          "enabled": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

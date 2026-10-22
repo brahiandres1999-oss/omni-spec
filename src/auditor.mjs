@@ -88,6 +88,10 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     if (!needsPlan) optionalArtifacts.add(spec.type === 'feature' ? 'plan.md' : 'migration-plan.md');
     if (!needsTasks) optionalArtifacts.add('tasks.md');
   }
+  if (spec.type === 'bugfix' && route && route.route !== 'invalid') {
+    if (!needsPlan) optionalArtifacts.add('rca.md');
+    if (!needsPlan) optionalArtifacts.add('fix.md');
+  }
   if (optionalArtifacts.size)
     warnings.push(
       `Spec fit route is ${route.route}: ${[...optionalArtifacts].join(', ')} are not required and are not audited. Keep required decisions in the active contract or select a fuller route.`,
@@ -229,18 +233,18 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         errors.push('bug.md lacks substantive defect reproduction details.');
       }
 
-      const rcaData = await getCleanMandatoryContent('rca.md', 'bugfix');
+      const rcaData = needsPlan ? await getCleanMandatoryContent('rca.md', 'bugfix') : null;
       if (rcaData) {
         if (rcaData.clean.length < 30) {
           errors.push('rca.md lacks substantive root cause analysis.');
         }
       }
 
-      const fixData = await getCleanMandatoryContent('fix.md', 'bugfix');
+      const fixData = needsPlan ? await getCleanMandatoryContent('fix.md', 'bugfix') : null;
       if (fixData && fixData.clean.length < 30) {
         errors.push('fix.md lacks substantive fix strategy and test verification details.');
       }
-      if (fixData) {
+      if (fixData && needsTasks) {
         taskStats = checklistStats(fixData.clean);
         if (!taskStats.total) errors.push('fix.md requires an actionable regression/fix task checklist.');
       }

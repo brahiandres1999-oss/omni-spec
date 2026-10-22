@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 const ignored = new Set([
   '.git',
+  '.research',
+  '.codex',
   'node_modules',
   'specs',
   '.agents',
