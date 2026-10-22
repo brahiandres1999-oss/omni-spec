@@ -1,39 +1,48 @@
-# Piloto local con OmniSpec 0.7.0-rc.1
+# Piloto local con OmniSpec 0.7.0-rc.2
 
-Usar una carpeta nueva y vacía para empezar IPS desde cero, o una copia controlada de otro proyecto si se prefiere evaluar evolución. Conservar el proyecto anterior como referencia; no borrar ni sobrescribirlo para preparar esta prueba. El piloto lo ejecuta el usuario, después de elegir dónde trabajar.
+Usa una carpeta nueva y vacía para empezar IPS desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza.
 
-## Comprobar el candidato
+## Preparar el paquete exacto
 
-En PowerShell, comprobar `node --version`. El mínimo de este candidato es 22.19.0. Este requisito del CLI no selecciona el stack de la aplicación: el agente debe investigarlo con fuentes oficiales, explicar opciones y conservar aprobación o delegación real.
+En PowerShell, comprueba `node --version`; el mínimo es 22.19.0. Ese requisito es del CLI y no elige el stack de la aplicación: el agente debe investigarlo con fuentes oficiales, explicarte las opciones y registrar tu aprobación o delegación.
 
-El paquete preparado está en `.research/pilot/omni-spec-0.7.0-rc.1.tgz` dentro del repositorio de OmniSpec. Su SHA256 es:
-
-```text
-252afeccd89ca59dd4eb5d31c0dea72ac62110b83c4dffc29135a07e0bd6ce6d
-```
-
-Desde la carpeta nueva elegida para el piloto, ejecutar:
+Genera el tarball desde el repositorio de OmniSpec, fuera de él, y anota su SHA256:
 
 ```powershell
-$paqueteOmniSpec = 'C:\Users\brahi\OneDrive\Escritorio\TdeA\4to semestre\Construccion3\omni-spec\.research\pilot\omni-spec-0.7.0-rc.1.tgz'
+$repo = 'C:\Users\brahi\OneDrive\Escritorio\TdeA\4to semestre\Construccion3\omni-spec'
+npm pack $repo --pack-destination $env:TEMP
+$paqueteOmniSpec = Join-Path $env:TEMP 'omni-spec-0.7.0-rc.2.tgz'
 Get-FileHash -LiteralPath $paqueteOmniSpec -Algorithm SHA256
+```
+
+Desde la carpeta nueva del piloto:
+
+```powershell
 npm exec --offline --yes --package "$paqueteOmniSpec" -- omni-spec version
-npm exec --offline --yes --package "$paqueteOmniSpec" -- omni-spec init --agent antigravity
+npm exec --offline --yes --package "$paqueteOmniSpec" -- omni-spec init --agent claude
 node specs/.omni/runtime/bin/omni-spec.mjs version
 ```
 
-Ambas comprobaciones de versión deben indicar `0.7.0-rc.1`. `--yes` en npm acepta instalar el paquete local para ejecutar el CLI; no aprueba decisiones de tecnología ni de producto. `init` pregunta sus opciones de instalación. Si se elige Codex u otro host, cambiar `--agent antigravity` por el adaptador correspondiente antes de instalar. Consultar la ayuda del paquete cuando sea necesario.
+Las dos comprobaciones de versión deben indicar `0.7.0-rc.2`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
 
-Abrir la carpeta en el agente elegido y comprobar que descubre las nueve skills locales. Una copia global anterior del plugin puede prevalecer según el host: identificar la versión/ruta que se está usando y resolver ese conflicto antes de continuar. El piloto no requiere reemplazar la instalación global ni publicar nada. El runtime del proyecto permite ejecutar el motor exacto de forma explícita.
+En el asistente de `init`:
 
-## Recorrido del usuario
+- **Stack:** elige `Undecided / custom stack` (8). El agente lo investigará y te lo propondrá; un preset elegido antes queda escrito en la constitución.
+- **Perfil:** si IPS maneja datos de salud, elige `healthtech`. Son controles a revisar, no una certificación.
+- **Quality gates:** deja `none`. Los checks se configuran cuando existan comandos reales.
 
-1. Invocar `omni-init` según el formato del host, sin agregar un prompt de auditoría. Debe reconocer lo existente, explicar qué falta y preguntar solo por decisiones materiales. No debe implementar la aplicación durante ese reconocimiento.
-2. Explicar el objetivo real de IPS y sus restricciones. Revisar las preguntas, stack y versiones con fuentes oficiales actuales; aceptar una opción o delegar una decisión con alcance. La ausencia de una herramienta se registra y mantiene pendiente su validación dependiente.
-3. Pedir un primer resultado utilizable. El agente debe convertirlo en criterios observables, elegir rigor proporcional y acordar una dirección visual con referencias pertinentes antes de extender pantallas. El recurso `guide design` está incluido; no se exige instalar una skill externa.
-4. Durante la implementación, revisar una superficie representativa y el recorrido real. El agente debe ejecutar los checks autorizados por módulo, observar UI responsive/teclado/estados relevantes y corregir lo que falle. Documentación de API y convención de commits deben respetar las decisiones del proyecto.
-5. Revisar el resultado con datos aislados. Un build aprobado no significa que el producto o la UI satisfagan los criterios. La entrega parcial muestra lo pendiente; el cierre exige la evidencia correspondiente.
+Abre la carpeta en el agente y comprueba que descubre las nueve skills locales. Una copia global anterior (por ejemplo, el plugin 0.6.x en `~/.gemini/config/plugins/omni-spec`) puede tener prioridad según el host. Identifica qué versión se usa y resuelve ese conflicto antes de continuar. El runtime del proyecto (`node specs/.omni/runtime/bin/omni-spec.mjs`) permite ejecutar el motor exacto de forma explícita.
 
-Ante un problema, conservar solicitud/respuesta, versión del host/modelo, `status --json`, spec, aceptación y el registro/log de verificación. No incluir secretos ni datos personales. Corregir y repetir la comprobación afectada; no cambiar un criterio para hacer pasar un defecto.
+## Recorrido
 
-La aceptación de este piloto permitirá decidir el siguiente paso. No ejecutar push, release, publicación npm ni despliegue por haber terminado el piloto: la restricción de trabajo local sigue vigente hasta instrucción expresa del usuario.
+1. Invoca `omni-init` sin añadir un prompt de auditoría. Debe reconocer la carpeta, explicar qué falta, registrar la sesión (`session-record`) y preguntar solo por decisiones materiales, sin implementar la aplicación.
+2. Explica el objetivo real de IPS y sus restricciones. Revisa las preguntas, el stack y las versiones con fuentes oficiales actuales; acepta una opción o delega una decisión con alcance. Si falta una herramienta (navegador, web), debe quedar registrado y la validación que depende de ella, pendiente.
+3. Pide un primer resultado utilizable. El agente debe convertirlo en criterios con tipo (`AC-01 [functional]`, `AC-02 [visual]`), elegir el rigor con `fit` y acordar una dirección visual con referencias antes de extender pantallas. `guide design` y `guide evidence` vienen incluidos.
+4. Durante la implementación revisa una superficie representativa y el recorrido real. El agente configura checks por módulo (`checks --from specs/.omni/inputs/checks.json`), ejecuta `verify` y observa la UI responsive, el teclado y los estados relevantes. Si `verify` informa archivos cambiados durante los checks, deben excluirse en `.gitignore` o `.omnispecignore`; no se repite a ciegas.
+5. Revisa el resultado con datos aislados. Un build aprobado no significa que el producto o la UI cumplan los criterios. Una entrega parcial muestra lo pendiente; el cierre exige la evidencia correspondiente.
+
+## Si algo falla
+
+Conserva la solicitud y la respuesta, la versión del host y del modelo, `status --json`, la spec, `acceptance.json` y `verification.json` con su log. No incluyas secretos ni datos personales. Corrige y repite la comprobación afectada; no cambies un criterio para que un defecto pase.
+
+La aceptación de este piloto decide el siguiente paso. Terminar el piloto no autoriza push, release, publicación en npm ni despliegue: la restricción de trabajo local sigue vigente hasta una instrucción expresa.

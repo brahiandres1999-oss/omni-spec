@@ -20,6 +20,8 @@ Leer manifiesto, constitución, contexto, configuración, instrucciones locales 
 
 Actualizar `specs/project-context.md` y los registros de reconocimiento de `specs/project-state.json` mediante `session-record`, `decision-record` y `context-record`, con su historial local administrado. Preservar decisiones confirmadas y reconciliar afirmaciones antiguas con fuentes actuales antes de registrar la huella. No crear una especificación ni modificar la aplicación, políticas o gates para terminar el reconocimiento. No instalar dependencias, ejecutar scripts del proyecto, migraciones ni servicios. La validación ejecutada es otro paso que depende de la autorización y preparación correspondientes; no exige confirmación para cada lectura. Consultar los formatos en [DELIVERY](DELIVERY.md).
 
+`init --yes` no convierte los scripts detectados en gates: quedan como candidatos `NOT_RUN` en la matriz de comandos del contexto. El agente los revisa y, con autorización, los configura con `checks --from` o `configure --gates`. El contexto registrado cubre `project-context.md`, los archivos que enlaza, manifiestos de build/dependencias/runtime, CI e instrucciones de agentes; los cambios de código fuente no lo dejan obsoleto. `guide evidence` muestra la forma exacta de cada registro JSON.
+
 ## Rutas
 
 | Proyecto | Comportamiento |

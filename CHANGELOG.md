@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0-rc.2] - 2026-10-22
+
+### Fixed
+- Exclude generated outputs from the verification snapshot: root and nested `.gitignore`, `.git/info/exclude`, an optional `.omnispecignore` (gitignore syntax, evaluated last) and default cache/report/editor locations such as `test-results/`, `playwright-report/`, `.gradle/`, `.idea/` and `.vscode/`. A zero-dependency matcher is checked against `git ls-files --exclude-standard`. Previously any check writing a report (for example Playwright's `test-results/.last-run.json`) made every verification fail.
+- Report the exact files that changed while checks ran, with a `VERIFICATION_SOURCE_CHANGED` blocker and remediation, instead of a generic check failure.
+- Limit context staleness to context inputs: `project-context.md`, files it links, build/dependency/runtime manifests, CI and agent instruction files (excluding the OmniSpec-managed section of `AGENTS.md`). Source edits, IDE files and ignored paths no longer stale context. Legacy full-tree baselines are compared only on current inputs and still detect deleted inputs.
+- Run checks under a dedicated verification lock instead of the manifest lock, so state commands no longer time out during long checks; `complete` refuses to race a running verification. Lock timeouts name the busy resource.
+- Keep a history of recorded sessions so earlier agent UI observations remain attributable; match observations to the session whose window contains them, at second precision.
+- `clean` removes only unmodified OmniSpec-managed runtime and `omni-*` skill files; it preserves user skills, unregistered files and backups, rejects crafted registry paths and refuses adapters that need the local runtime. Modified managed files block unless `--accept-updates` backs them up.
+- `init --yes` no longer adopts detected scripts as quality gates; they remain `NOT_RUN` candidates in the context command matrix.
+- Retry atomic renames on transient Windows `EPERM`/`EBUSY`/`EACCES` (OneDrive, antivirus) for the manifest, state, registry, contracts, checks and lock tickets.
+- Treat CRLF checkouts of managed files as unchanged.
+- The interactive wizard keeps answers piped before each prompt and keeps its prompt while editing in a terminal.
+- Follow in-project file symlinks (for example `CLAUDE.md -> AGENTS.md`) by content; directory and external symlinks are still refused unless ignored. Symlinked ignored directories such as `node_modules` are skipped.
+- Make the timeout regression test robust to zombie processes in containers without an init reaper.
+
+### Added
+- `guide evidence`: exact JSON shapes for fit, checks, acceptance, sessions and decisions, and where to keep input files.
+- `--from -` reads JSON from stdin; `--from` accepts files outside the project.
+- Managed `specs/.gitignore` section (`# OMNI-SPEC-START/END`) for local state: verification logs, backups, inputs, locks and temporary files.
+- `update` writes `specs/.omni/reference/CONSTITUTION.md` and reports when a preserved constitution differs from current guidance.
+- `fit` prints the exact `fit.json` path and an example with `schemaVersion: 2`.
+
+### Changed
+- Verification records use version 3: portable relative `checkCwd`, locale-independent ordering, `changedDuringVerification` and `attestedFiles`. Earlier records require a fresh `verify`.
+- Ignore matching is case-sensitive on every platform so a snapshot recorded on one OS verifies on another. Ignore files in parent directories are not read, so an enclosing repository cannot disable attestation.
+- The feature template is fully English and documents `AC-01 [kind]` tags; Spanish template headings remain accepted by the auditor and profile injection.
+- Behavior-evaluation fixtures are prepared in the system temporary directory by default.
+
 ## [0.7.0-rc.1] - 2026-10-22
 
 ### Added

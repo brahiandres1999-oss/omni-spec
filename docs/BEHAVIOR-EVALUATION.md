@@ -4,7 +4,7 @@ Las pruebas del motor no demuestran que un agente haga preguntas pertinentes, re
 
 ## Preparación
 
-Ejecutar `node scripts/prepare-behavior-eval.mjs`. Se crea una carpeta nueva bajo `.research/behavior-evals`, con tres proyectos, prompts y rúbricas externas al proyecto evaluado. No se ejecuta ningún modelo ni se publica contenido. Se conserva la huella de cada workflow y un baseline de archivos previo a cada corrida.
+Ejecutar `node scripts/prepare-behavior-eval.mjs`. Se crea una carpeta nueva en el directorio temporal del sistema (o en la ruta pasada como argumento), con tres proyectos, prompts y rúbricas externas al proyecto evaluado. No se ejecuta ningún modelo ni se publica contenido. Se conserva la huella de cada workflow y un baseline de archivos previo a cada corrida.
 
 | Caso | Qué se observa |
 | --- | --- |

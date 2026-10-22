@@ -1,18 +1,18 @@
 # Entrega con estado y evidencia
 
-El candidato 0.7.0-rc.1 conserva formatos anteriores y añade contratos explícitos. La versión es local hasta decidir su publicación después del piloto. No confundir el paquete instalado con una versión anterior disponible en npm o un plugin global.
+El candidato 0.7.0-rc.2 conserva formatos anteriores y añade contratos explícitos. La versión es local hasta decidir su publicación después del piloto. No confundir el paquete instalado con una versión anterior disponible en npm o un plugin global.
 
 ## Empezar y reanudar
 
-Ejecuta el CLI del paquete elegido con `version`, inicializa y utiliza la skill omni-init según la invocación del host. El inicio inspecciona sin ejecutar scripts de aplicación; registra contexto, preguntas/decisiones y capacidades reales. `guide setup` y `guide design` entregan procedimientos incluidos en el paquete, sin instalar skills adicionales.
+Ejecuta el CLI del paquete elegido con `version`, inicializa y utiliza la skill omni-init según la invocación del host. El inicio inspecciona sin ejecutar scripts de aplicación; registra contexto, preguntas/decisiones y capacidades reales. `guide setup`, `guide design` y `guide evidence` entregan procedimientos y formas exactas de registro incluidos en el paquete, sin instalar skills adicionales.
 
 `status --json` conserva el manifest y añade `progress`: estado de entrega, frescura del contexto, bloqueos y próxima acción. Es una recomendación basada en evidencia disponible, no permiso para ejecutar comandos ni publicar. `READY_TO_COMPLETE` utiliza la misma revisión que `complete`, incluida integridad de logs y aceptación.
 
-Después de reconciliar fuentes y revisar las afirmaciones del contexto, usa `context-record`. Se guarda la huella de entradas y se conserva el baseline anterior. Cuando cambian archivos, el contexto queda `STALE` y bloquea verify/complete hasta revisarlo. No cambies requisitos para hacer coincidir automáticamente un defecto de código. Las instalaciones anteriores sin baseline se muestran `NOT_RECORDED`; el onboarding debe crear uno antes del recorrido del piloto.
+Después de reconciliar fuentes y revisar las afirmaciones del contexto, usa `context-record`. Se guarda la huella de las entradas de contexto y se conserva el baseline anterior. Las entradas son `specs/project-context.md`, los archivos locales que enlaza, manifiestos de build/dependencias/runtime (por ejemplo `package.json`, `pom.xml`, `build.gradle*`, `pyproject.toml`, `Dockerfile`, `tsconfig*.json`), CI (`.github/workflows/*`) e instrucciones de agentes (`AGENTS.md` sin su sección administrada, `CONSTITUTION.md`, `CLAUDE.md`, `README.md`). Cuando cambia una de ellas, el contexto queda `STALE` y bloquea verify/complete hasta revisarlo; editar código fuente no lo deja obsoleto. Las rutas ignoradas no cuentan. No cambies requisitos para hacer coincidir automáticamente un defecto de código. Las instalaciones anteriores sin baseline se muestran `NOT_RECORDED`; el onboarding debe crear uno antes del recorrido del piloto.
 
 ## Sesión y decisiones
 
-Guarda la entrada JSON dentro del proyecto y utiliza `session-record --from specs/.omni/session-input.json`:
+Registra la sesión al empezar a trabajar con `session-record --from <archivo>`. El archivo puede estar en `specs/.omni/inputs/` (ignorado por Git y fuera de las huellas), en un directorio temporal o llegar por stdin con `--from -`. No lo dejes en la raíz: formaría parte del código verificado.
 
 ```json
 {
@@ -25,7 +25,7 @@ Guarda la entrada JSON dentro del proyecto y utiliza `session-record --from spec
 }
 ```
 
-No copies ese ejemplo como observación real. Estado disponible/ausente/desconocido depende de la sesión; registrar un dato no concede una herramienta. El fallback de preguntas es chat/consola. Una observación del agente requiere la capacidad render disponible y una fecha posterior a su observación de sesión.
+No copies ese ejemplo como observación real. Estado disponible/ausente/desconocido depende de la sesión; registrar un dato no concede una herramienta. El fallback de preguntas es chat/consola. Una observación del agente requiere una sesión registrada con render disponible cuya ventana la contenga: desde su inicio hasta el inicio de la sesión siguiente. Las sesiones anteriores se conservan, así que una evidencia válida no caduca por registrar una sesión nueva. La comparación usa precisión de segundos. Registrar una sesión no cambia la huella de verificación.
 
 `decision-record --from <archivo>` conserva id, topic, status, value, basis y required. Los estados aprobados/delegados requieren la respuesta o delegación real en basis. Una selección de tecnología exige fuentes oficiales con url, consultedAt, appliesTo y authority official. La estructura no verifica la autoridad de una página ni compatibilidad ejecutada. Una modificación de respuesta usa expectedRevision actual y conserva la anterior. Las decisiones requeridas pendientes, provisionales o vencidas bloquean cierre; no se asume aprobación por silencio.
 
@@ -43,7 +43,17 @@ Prepara el catálogo y guárdalo con `checks --from <archivo>`. Ese comando vali
 }
 ```
 
-Los comandos y carpetas deben existir en el proyecto real. No instalar un runner para cumplir el ejemplo. Los qualityGates anteriores siguen funcionando con IDs gate-N desde raíz; los comandos ambiguos entre módulos deben referenciarse por ID. `verify` registra cwd, tiempos, exit code, error de entorno/aplicación, timeout y log combinado. La salida guardada se limita a 8 MiB: excederla falla explícitamente. La cola visible indica truncado; complete comprueba hash y tamaño del log completo conservado.
+Los comandos y carpetas deben existir en el proyecto real. No instalar un runner para cumplir el ejemplo.
+
+### Salidas generadas y huella
+
+`verify` liga el resultado a una huella del proyecto y falla si algo cambia mientras corren los checks. Las salidas generadas quedan fuera por:
+
+1. Exclusiones por defecto en cualquier profundidad: `node_modules/`, `dist/`, `build/`, `target/`, `coverage/`, `.gradle/`, `.idea/`, `.vscode/`, `test-results/`, `playwright-report/`, `.next/`, `.angular/`, `.turbo/`, `.cache/`, `*.tsbuildinfo`, `.eslintcache`, entre otras.
+2. `.gitignore` de la raíz y de subcarpetas, y `.git/info/exclude` del propio proyecto.
+3. `.omnispecignore` en la raíz, con sintaxis de `.gitignore`, evaluado al final. Sirve para excluir una salida concreta (`junit.xml`) o volver a incluir una carpeta por defecto que contiene código (`!build/`).
+
+Si un check escribe una ruta no ignorada, el registro la lista en `changedDuringVerification` y `status` muestra `VERIFICATION_SOURCE_CHANGED`. Exclúyela y vuelve a verificar; no repitas a ciegas. Los archivos ignorados no se atestan aunque Git los versione. Las reglas de carpetas superiores no se aplican, para que un repositorio padre no pueda desactivar la atestación. El registro indica cuántos archivos del proyecto se atestaron (`attestedFiles`). Los qualityGates anteriores siguen funcionando con IDs gate-N desde raíz; los comandos ambiguos entre módulos deben referenciarse por ID. `verify` registra cwd, tiempos, exit code, error de entorno/aplicación, timeout y log combinado. La salida guardada se limita a 8 MiB: excederla falla explícitamente. La cola visible indica truncado; complete comprueba hash y tamaño del log completo conservado.
 
 ## Aceptación funcional y visual
 
@@ -51,7 +61,7 @@ Para nuevo trabajo utiliza acceptance.json schemaVersion 2, con criterios id, ki
 
 Automatizado: referencia checkIds o checkCommands exactos. Un criterio UI necesita check de kind ui que realmente lo ejercite; etiquetar un build como ui no crea assertions ni demuestra relevancia. El agente/revisor debe comprobar esa relación semántica.
 
-Manual UI: registra observations con actor agent/human, observer, surface, environment, steps, expected, actual, result passed, observedAt y artifact local dentro de la spec. Para visual añade viewport width/height medido. Si actor es agent, usa la sesión render observada y su sessionId. No inventes timestamps de interacción a partir de una fecha posterior de redacción. Screenshots y trazas complementan pasos/resultados; no certifican verdad ni accesibilidad completa. Sin comprobación real, conserva pending/failed/blocked y no completes.
+Manual UI: registra observations con actor agent/human, observer, surface, environment, steps, expected, actual, result passed, observedAt y artifact local dentro de la spec. Para visual añade viewport width/height medido. Si actor es agent, registra antes la sesión con render disponible y usa su sessionId o una hora posterior a ese registro. No inventes timestamps de interacción a partir de una fecha posterior de redacción. Screenshots y trazas complementan pasos/resultados; no certifican verdad ni accesibilidad completa. Sin comprobación real, conserva pending/failed/blocked y no completes.
 
 ## Rigor, contratos y cierre
 
@@ -61,4 +71,14 @@ Después de verify aprobado, `complete <id>` revisa frescura, tareas, criterios,
 
 `contracts` muestra contratos de capacidad e historial. `contract-record <id> --from <archivo>` exige expectedRevision, una decisión explícita y sourceSpec. Se pueden registrar propuestas; activar/retirar requiere una spec completada y evidencia. Una propuesta posterior conserva el contrato vigente hasta aprobar su reemplazo. No se deriva el contrato copiando el código.
 
-Actualizar/reinicializar preserva estos registros y decisiones propias. Los registros de verificación anteriores sin la identidad completa del catálogo exigen una nueva ejecución. Una rama o un commit conservan trabajo, no prueban estabilidad. El piloto debe usar datos y servicios de prueba y revisar el resultado con el usuario antes de publicar.
+Actualizar/reinicializar preserva estos registros y decisiones propias. Los registros de verificación anteriores a la versión 3 exigen una nueva ejecución de `verify`. La versión 3 guarda el `checkCwd` relativo, de modo que mover la carpeta del proyecto no invalida la verificación. Una rama o un commit conservan trabajo, no prueban estabilidad. El piloto debe usar datos y servicios de prueba y revisar el resultado con el usuario antes de publicar.
+
+## Concurrencia
+
+Los checks corren bajo `specs/.omni/verify.lock`, separado del bloqueo del manifiesto. Durante una verificación, `status`, `session-record` y `decision-record` responden sin esperar. Si una decisión o el contexto cambian mientras corren los checks, la verificación falla y lo indica. `complete` rechaza ejecutarse mientras haya una verificación en curso. Ver [coordinación local](locking.md).
+
+## Git y estado local
+
+`init` y `update` mantienen una sección administrada en `specs/.gitignore` para el estado local: `specs/.omni/verification-logs/`, `backups/`, `inputs/`, bloqueos y temporales. Las especificaciones, `acceptance.json`, `verification.json`, el contexto, las decisiones, los contratos y el runtime portable siguen versionados. Las reglas propias del archivo se conservan.
+
+`clean` (modo plugin de Antigravity) elimina solo copias administradas sin modificar del runtime y de las skills `omni-*`. Conserva skills propias, respaldos y archivos no registrados, y se niega si hay adaptadores que necesitan el runtime local.

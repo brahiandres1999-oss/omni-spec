@@ -18,3 +18,7 @@ The prior unpublished single-file `manifest.lock` format is handled conservative
 Manifest replacement uses a completed temporary file and rename. Atomic visibility is not a promise of persistence after power loss, nor a transaction spanning the generated documents and manifest.
 
 `test/stabilization.test.mjs` covers a live owner exceeding 15 seconds, owner death while choosing and while holding a ticket, eight concurrent recovering processes, invalid/reused releases, and mixed initialization/creation/completion operations.
+
+## Verification lock
+
+`verify` runs checks under a separate `specs/.omni/verify.lock/` with the same claim protocol. It holds the manifest lock only briefly: to prepare (audit, acceptance review and the *before* snapshot) and to record (the *after* snapshot and `verification.json`). Other commands keep working while checks run. A change to decisions, context, checks or source during that time fails the verification with the changed paths listed. Only one verification runs per project; a second waits about ten seconds and then reports that a verification is already running. `complete` takes the verification lock without waiting, so it never races a run. Locks are always acquired in the same order (verification, then manifest), so the two cannot deadlock.

@@ -24,7 +24,7 @@ Consulta: 2026-10-22. Las fuentes de interoperabilidad son documentación oficia
 | [Yang et al. (Orchid), ASE 2026](https://doi.org/10.1145/3832783.3834403) | Motiva tratar ambigüedad material explícitamente. OmniSpec inspecciona hechos disponibles y pregunta por decisiones faltantes; no convierte toda incertidumbre en una pregunta ni atribuye esa regla universal al estudio. | `ambiguity` es una respuesta obligatoria; `material` o `blocked` escalan a ruta completa. |
 | [Konstantinou et al., arXiv:2607.05139](https://arxiv.org/abs/2607.05139) | Referencia sobre pruebas y detección de fallos. Conservar bugfix en ruta completa es una decisión conservadora de OmniSpec; el estudio no demuestra que todo bugfix necesite todos nuestros artefactos. | `classifyFit` fija `full` para `bugfix` y `decision` para `rfc`. |
 | [NIST SSDF 1.1](https://csrc.nist.gov/pubs/sp/800/218/final) | Usado como referencia de prácticas de desarrollo seguro y verificación integrables en el ciclo de vida; no como supuesta certificación SDD. | Evidencia explícita, resultados de pruebas y límites documentados. |
-| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | 0.6.0 por soporte nativo de Plugin en Antigravity, subagente omni-auditor y desbloqueo del diagnóstico en bugfix sobre la base 0.5.x; versión única obtenida de package.json. | Versión única obtenida de package.json. |
+| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | 0.7.0-rc.2 es una prerelease (canal npm `next`) sobre 0.6.1; los sufijos `-rc.N` ordenan candidatas antes de la estable. | Versión única obtenida de package.json. |
 
 ## Qué significa SDD en esta implementación
 

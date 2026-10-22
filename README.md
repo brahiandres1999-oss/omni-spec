@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.7.0-rc.1-blue.svg" alt="Version 0.7.0-rc.1"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.7.0--rc.2-blue.svg" alt="Version 0.7.0-rc.2"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -12,7 +12,7 @@
 
 ---
 
-# OmniSpec 0.7.0-rc.1
+# OmniSpec 0.7.0-rc.2
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
@@ -21,7 +21,7 @@ Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un frame
 
 ---
 
-> **Candidato local para piloto.** Esta versión aún no se ha publicado. Usa el tarball local verificado para probarla; `npx omni-spec` sin una versión/ruta explícita puede ejecutar otra versión. Consulta [entrega y evidencia](docs/DELIVERY.md).
+> **Candidato local para piloto.** Esta versión aún no se ha publicado: `npx omni-spec` sin versión ejecuta la última publicada en npm (0.6.1). Para probar 0.7.0-rc.2 genera el tarball local como explica el [piloto](docs/PILOT.md). Consulta también [entrega y evidencia](docs/DELIVERY.md).
 
 ## ¿Por qué OmniSpec?
 
@@ -32,6 +32,7 @@ OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 - **Criterios de calidad explícitos:** Aporta instrucciones de UI/UX y backend para guiar la implementación y revisión. La calidad visual, accesibilidad y corrección requieren comprobaciones pertinentes; las instrucciones no garantizan un resultado correcto al primer intento.
 - **Zero Dependencies & Zero Lock-in:** Node.js nativo (>=22.19.0). No instala paquetes npm pesados ni altera el runtime de proyectos en Python, Go, Rust, Java o TypeScript.
 - **Universal Multi-Agent:** Un único comando configura Cursor, GitHub Copilot, Claude Code, Google Antigravity, OpenCode, Kilo, Codex o cualquier LLM con soporte Markdown.
+- **Verificación que convive con proyectos reales:** la huella respeta `.gitignore`, `.omnispecignore` y exclusiones por defecto (reportes de Playwright, `.gradle/`, `build/`, IDE). Si un check modifica un archivo no ignorado, `verify` lo nombra en vez de fallar sin explicación.
 - **Verificación con alcance declarado:** Ejecuta los gates configurados y vincula el registro al contenido del proyecto y de la spec. `acceptance.json` registra evidencia declarada por criterio; los criterios automatizados deben referenciar gates configurados mediante `checkCommands`, y el CLI los vincula con sus resultados ejecutados. La suficiencia de esas pruebas y la veracidad de evidencia manual requieren revisión. Un snapshot detecta cambios posteriores, no demuestra ausencia de regresiones.
 
 ---
@@ -51,7 +52,9 @@ npx omni-spec init --agent antigravity  # Google Antigravity
 npx omni-spec init --agent all          # Configura todos los editores soportados
 ```
 
-*(O instálalo globalmente con `npm install -g omni-spec` si prefieres el comando `omni-spec` directo).*
+*(O instálalo globalmente con `npm install -g omni-spec` si prefieres el comando `omni-spec` directo). Mientras 0.7.0 sea candidata, usa el tarball local del [piloto](docs/PILOT.md): el nombre sin versión instala la última publicada.*
+
+`init` no convierte los scripts detectados en gates: quedan como candidatos en `specs/project-context.md` hasta que el agente los revise contigo.
 
 ### 2. Reconoce el proyecto desde el chat
 
@@ -137,7 +140,7 @@ npm run sync:plugin
 
 Esto expone los 9 comandos de slash, la Constitución y el subagente `omni-auditor` en todos tus proyectos dentro de Antigravity sin necesidad de instalar archivos en cada repositorio.
 
-El manifiesto se mantiene dentro del esquema publicado de Antigravity (`$schema`, `name`, `description`). Los campos que el runtime de Antigravity reconoce pero whose nombres no están documentados (icono y prompts sugeridos) viven aparte en `plugin.extra.json` hasta que Google publique el contrato. Tras instalar, `omni-spec plugin install` ejecuta `agy plugin validate --strict --json` cuando la CLI de Antigravity está disponible y falla si el bundle no valida.
+El manifiesto se mantiene dentro del esquema publicado de Antigravity (`$schema`, `name`, `description`). Los campos que el runtime de Antigravity reconoce pero cuyos nombres no están documentados (icono y prompts sugeridos) viven aparte en `plugin.extra.json` hasta que Google publique el contrato. Tras instalar, `omni-spec plugin install` ejecuta `agy plugin validate --strict --json` cuando la CLI de Antigravity está disponible y falla si el bundle no valida.
 
 Para añadir o cambiar adaptadores en cualquier momento:
 
@@ -149,7 +152,7 @@ npx omni-spec setup-agent cursor,copilot,claude
 
 ## Referencia del CLI
 
-Puedes ejecutar comandos directamente con `npx omni-spec <comando>` o mediante el runtime embebido en tu repositorio (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`):
+Puedes ejecutar comandos con el runtime embebido en tu repositorio (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`) o con `npx omni-spec <comando>`. Mientras 0.7.0 no esté publicada, `npx omni-spec` sin versión ejecuta 0.6.1, que no incluye `guide evidence`, `checks`, `session-record` ni `decision-record`: usa el runtime del proyecto o el tarball del [piloto](docs/PILOT.md).
 
 ```sh
 # Inspección y diagnóstico
@@ -165,12 +168,25 @@ npx omni-spec focus 001              # Enfoca el trabajo activo en la spec 001
 # Ceremonia proporcional al cambio
 npx omni-spec fit 001                # Pregunta y deriva la ruta: light, standard o full
 
+# Contexto, sesión y decisiones
+npx omni-spec context-check          # Estructura y enlaces locales del contexto
+npx omni-spec context-record         # Guarda el baseline de entradas de contexto
+npx omni-spec session-record --from specs/.omni/inputs/session.json   # Capacidades reales del host
+npx omni-spec decision-record --from -   # Decisión/delegación leída de stdin
+npx omni-spec guide evidence         # Forma exacta de cada JSON (también: guide setup, guide design)
+
 # Calidad y Verificación
 npx omni-spec audit 001              # Audita consistencia de artefactos y placeholders
-npx omni-spec configure --gates "npm test"  # Configura los gates de calidad obligatorios
-npx omni-spec verify 001             # Ejecuta los gates y genera el snapshot de evidencia
+npx omni-spec checks --from specs/.omni/inputs/checks.json   # Catálogo de checks con ID y cwd por módulo
+npx omni-spec configure --gates "npm test"  # Gates heredados desde la raíz
+npx omni-spec verify 001             # Ejecuta los checks y liga la evidencia a la huella
 npx omni-spec complete 001           # Cierra el trabajo tras comprobar evidencia
+npx omni-spec contracts              # Contratos de capacidad vigentes y propuestos
 ```
+
+### Qué atesta `verify`
+
+`verify` ejecuta los checks aprobados y calcula una huella del proyecto. Quedan fuera las rutas de `.gitignore` (raíz y subcarpetas), `.git/info/exclude`, `.omnispecignore` (misma sintaxis, evaluado al final) y exclusiones por defecto como `node_modules/`, `dist/`, `build/`, `target/`, `coverage/`, `.gradle/`, `.idea/`, `.vscode/`, `test-results/` y `playwright-report/`. Si algo no ignorado cambia mientras corren los checks, la verificación falla y lista las rutas. `complete` solo cierra si nada cambió desde entonces. El contexto queda `STALE` cuando cambian sus entradas (manifiestos, CI, instrucciones de agentes o archivos que cita), no cuando cambia el código.
 
 ### Spec Fit: cuánta ceremonia merece un cambio
 
@@ -201,6 +217,9 @@ OmniSpec mantiene tu proyecto ordenado bajo un único directorio `specs/`:
 └── specs/
     ├── project-context.md      # Arquitectura, decisiones y comandos reales verificados
     ├── manifest.json           # Estado del framework, spec activa e historial
+    ├── project-state.json      # Baseline de contexto, sesiones y decisiones
+    ├── checks.json             # Catálogo de checks aprobados (ID, cwd, timeout, tipo)
+    ├── .gitignore              # Sección administrada para estado local (logs, backups, inputs)
     ├── _templates/             # Plantillas editables por arquetipo
     ├── 001-nombre-del-trabajo/ # Espacio de trabajo de la spec activa
     │   ├── spec.md             # Requerimientos y criterios de aceptación
@@ -210,7 +229,8 @@ OmniSpec mantiene tu proyecto ordenado bajo un único directorio `specs/`:
     │   ├── acceptance.json     # Criterios vinculados a evidencia verificable
     │   └── verification.md     # Snapshot de validación y resultados de gates
     └── .omni/
-        └── runtime/            # Motor CLI portable independiente
+        ├── runtime/            # Motor CLI portable independiente
+        └── inputs/             # JSON de entrada para --from (ignorado por Git)
 ```
 
 ---
@@ -227,7 +247,7 @@ npx omni-spec update --dry-run
 npx omni-spec update
 ```
 
-> **Garantía de Preservación:** `update` nunca sobreescribe tu `CONSTITUTION.md`, tus especificaciones activas ni `specs/project-context.md`. Si hay personalizaciones en plantillas gestionadas, OmniSpec genera un respaldo automático en `specs/.omni/backups/`.
+> **Garantía de Preservación:** `update` nunca sobreescribe tu `CONSTITUTION.md`, tus especificaciones activas ni `specs/project-context.md`. Las personalizaciones en archivos gestionados bloquean la actualización hasta revisarlas; con `--accept-updates` se respaldan en `specs/.omni/backups/`. Si tu constitución difiere de la guía actual, `update` deja `specs/.omni/reference/CONSTITUTION.md` para compararla.
 
 ---
 
@@ -241,8 +261,10 @@ El proyecto se encuentra en **desarrollo activo continuo**. De forma constante s
 
 ## Documentación
 
-- [Notas de la versión 0.6.0 (Plugin Antigravity & Subagentes)](docs/releases/0.6.0.md)
-- [Notas de la versión 0.5.1](docs/releases/0.5.1.md)
+- [Notas de la versión 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [0.6.1](docs/releases/0.6.1.md) · [0.6.0](docs/releases/0.6.0.md)
+- [Piloto local con el paquete exacto](docs/PILOT.md)
+- [Estado del candidato](docs/LOCAL-CANDIDATE-STATUS.md)
+- [Entrega, evidencia y formatos](docs/DELIVERY.md)
 - [Contrato de Onboarding (/omni-init)](docs/ONBOARDING.md)
 - [Estándares de los Adaptadores de Agentes](docs/STANDARDS.md)
 - [Matriz de Compatibilidad y Límites](docs/COMPATIBILITY.md)
