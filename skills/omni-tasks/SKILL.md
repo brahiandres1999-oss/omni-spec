@@ -33,6 +33,7 @@ Do not run the full audit during early clarification: plan/tasks may not exist y
 End with what was found/changed, evidence, unresolved issues and the next appropriate action. Resume existing work rather than creating duplicates.
 
 ## Workflow
+Read the derived route first with the CLI fit command. Only the full route has a task breakdown. On the light or standard route, do not invent tasks: report that the route does not require a breakdown, keep the primary artifact, design and acceptance criteria as the contract, and stop.
 For feature/debt edit tasks.md; for bugfix edit the checklist in fix.md. For RFC explain that decision review replaces implementation tasks.
 Create only tasks needed by the approved scope, in dependency order. Link each to an acceptance criterion and affected files. Include regression/acceptance verification.
 Avoid task inflation: do not fragment a simple change into dozens of micro-tasks. Keep tasks atomic, in dependency order, and mapped to acceptance criteria.

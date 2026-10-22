@@ -82,6 +82,7 @@ When requested to preserve discussion, append decisions and evidence to specs/pr
     'Convierte una solicitud en feature, bugfix, debt o RFC; úsalo al pedir un cambio concreto o formalizar una idea.',
     `Classify the requested outcome using Active work routing. Reuse the matching active spec or run create <type> <name>.
 Read the generated primary artifact for that type. Replace placeholders with the user's intent and repository evidence, scope, non-goals and observable acceptance criteria with stable AC-01-style IDs. Keep acceptance.json synchronized with those IDs, all initially pending; an RFC can use DECISION.
+Classify the change before designing. Record specs/<slug>/fit.json with schemaVersion 1 and one answer per question: reasoning (done|partial|skipped), files, modules, crossesContract, ambiguity (none|material|blocked), existingTests. Then run the CLI fit command to read the derived route. Ask the questions instead of inferring them: models cannot detect ambiguity on their own, and reasoning before writing is what raises correctness on small changes. The route decides what follows: light needs the primary artifact and its acceptance criteria only, standard adds the design, full adds the task breakdown. A missing fit.json keeps the full route.
 For bugs, capture reproduction and expected versus actual behavior before diagnosing. For ideas with unresolved direction, discuss or create an RFC rather than inventing a feature.
 Record unresolved material decisions and continue with clarify. Do not invent implementation tasks in this phase.`,
   ],
@@ -96,6 +97,7 @@ Do not demand a completed plan/tasks or run the full audit at this stage. Procee
     'omni-plan',
     'Diseña una solución proporcional al tipo activo y al proyecto; úsalo después de aclarar requisitos.',
     `Read the primary artifact and project context. Resolve critical unknowns before committing to design.
+Read the derived route first with the CLI fit command. On the light route there is no design artifact: the change is small, local and unambiguous, so keep the primary artifact and its acceptance criteria as the whole contract, author no design and no task breakdown, and say why the route is light. On the standard route author the design and stop before tasks. On the full route author the design as usual.
 feature: author plan.md; when touching user interfaces, explicitly detail typographic hierarchy, spacing scale and the 4 mandatory interface states. bugfix: investigate rca.md with reproducible evidence (running read-only test execution or inspection commands to isolate the failure mechanism is authorized) and plan the minimal fix in fix.md. debt: author migration-plan.md. rfc: compare options and consequences in rfc.md.
 Document affected files, interfaces/data contracts or justified N/A, failure modes, verification and rollback/recovery or justified N/A. Do not impose five whys or a strangler migration when inappropriate.
 Strictly avoid speculative architecture or unrequested abstraction layers (services, repositories, DTOs, factories) when direct functions or modules fit the repository. Keep design proportional to the approved change.
@@ -104,7 +106,8 @@ Use official documentation for new external API assumptions. Keep existing conve
   [
     'omni-tasks',
     'Descompone el plan del trabajo activo en tareas y verificaciones trazables; no aplica como implementación de una RFC.',
-    `For feature/debt edit tasks.md; for bugfix edit the checklist in fix.md. For RFC explain that decision review replaces implementation tasks.
+    `Read the derived route first with the CLI fit command. Only the full route has a task breakdown. On the light or standard route, do not invent tasks: report that the route does not require a breakdown, keep the primary artifact, design and acceptance criteria as the contract, and stop.
+For feature/debt edit tasks.md; for bugfix edit the checklist in fix.md. For RFC explain that decision review replaces implementation tasks.
 Create only tasks needed by the approved scope, in dependency order. Link each to an acceptance criterion and affected files. Include regression/acceptance verification.
 Avoid task inflation: do not fragment a simple change into dozens of micro-tasks. Keep tasks atomic, in dependency order, and mapped to acceptance criteria.
 Remove template examples and all TODO tokens; never mark unperformed work complete. Do not invent layers or a fixed number of files per task.

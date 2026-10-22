@@ -18,7 +18,9 @@ export async function reviewAcceptance(root, spec) {
     throw new Error('Acceptance criteria need stable AC-01-style IDs in the primary artifact before verification.');
   let report;
   try {
-    report = JSON.parse(await readFile(await safePath(root, prefix + 'acceptance.json'), 'utf8'));
+    report = JSON.parse(
+      (await readFile(await safePath(root, prefix + 'acceptance.json'), 'utf8')).replace(/^\uFEFF/, ''),
+    );
   } catch {
     throw new Error(
       'Create a valid acceptance.json with explicit criterion status, method and evidence. Existing specs are preserved; migrate their evidence before verifying again.',

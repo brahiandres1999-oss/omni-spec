@@ -2,6 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadManifest, getActiveSpec } from './manifest.mjs';
 import { safePath } from './managed.mjs';
+import { specRoute } from './fit.mjs';
 
 function stripHtmlComments(content) {
   return content.replace(/<!--[\s\S]*?-->/g, '');
@@ -182,25 +183,35 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       }
 
       // 2. Audit plan.md
-      const planData = await getCleanMandatoryContent('plan.md', 'feature');
-      if (planData) {
-        const cleanPlan = planData.clean;
-        if (!cleanPlan.includes('Contratos') && !cleanPlan.includes('Contracts') && !cleanPlan.includes('API')) {
-          errors.push('plan.md does not clearly define Data Contracts or API contracts (or justified N/A).');
-        }
-        if (!cleanPlan.includes('Rollback') && !cleanPlan.includes('Reversión')) {
-          errors.push('plan.md does not define a Rollback / Migration reversal strategy (or justified N/A).');
+      const route = await specRoute(baseDir, spec);
+      if (route?.route === 'invalid') errors.push(`fit.json is invalid: ${route.errors.join(' ')}`);
+      const needsPlan = !route || route.artifacts.plan;
+      const needsTasks = !route || route.artifacts.tasks;
+      if (needsPlan) {
+        const planData = await getCleanMandatoryContent('plan.md', 'feature');
+        if (planData) {
+          const cleanPlan = planData.clean;
+          if (!cleanPlan.includes('Contratos') && !cleanPlan.includes('Contracts') && !cleanPlan.includes('API')) {
+            errors.push('plan.md does not clearly define Data Contracts or API contracts (or justified N/A).');
+          }
+          if (!cleanPlan.includes('Rollback') && !cleanPlan.includes('Reversión')) {
+            errors.push('plan.md does not define a Rollback / Migration reversal strategy (or justified N/A).');
+          }
         }
       }
 
       // 3. Audit tasks.md & progress
-      const tasksData = await getCleanMandatoryContent('tasks.md', 'feature');
-      if (tasksData) {
-        taskStats = checklistStats(tasksData.clean);
+      if (needsTasks) {
+        const tasksData = await getCleanMandatoryContent('tasks.md', 'feature');
+        if (tasksData) {
+          taskStats = checklistStats(tasksData.clean);
 
-        if (taskStats.total === 0) {
-          errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
+          if (taskStats.total === 0) {
+            errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
+          }
         }
+      } else {
+        warnings.push(`Spec fit route is ${route.route}: plan.md and tasks.md are not required for this change.`);
       }
       break;
     }
@@ -235,18 +246,29 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         errors.push('audit.md lacks substantive debt analysis and blast radius.');
       }
 
-      const migrationData = await getCleanMandatoryContent('migration-plan.md', 'tech-debt');
-      if (migrationData && migrationData.clean.length < 30) {
-        errors.push('migration-plan.md lacks substantive migration steps.');
+      const route = await specRoute(baseDir, spec);
+      if (route?.route === 'invalid') errors.push(`fit.json is invalid: ${route.errors.join(' ')}`);
+      const needsPlan = !route || route.artifacts.plan;
+      const needsTasks = !route || route.artifacts.tasks;
+
+      if (needsPlan) {
+        const migrationData = await getCleanMandatoryContent('migration-plan.md', 'tech-debt');
+        if (migrationData && migrationData.clean.length < 30) {
+          errors.push('migration-plan.md lacks substantive migration steps.');
+        }
       }
 
-      const debtTasksData = await getCleanMandatoryContent('tasks.md', 'tech-debt');
-      if (debtTasksData) {
-        taskStats = checklistStats(debtTasksData.clean);
+      if (needsTasks) {
+        const debtTasksData = await getCleanMandatoryContent('tasks.md', 'tech-debt');
+        if (debtTasksData) {
+          taskStats = checklistStats(debtTasksData.clean);
 
-        if (taskStats.total === 0) {
-          errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
+          if (taskStats.total === 0) {
+            errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
+          }
         }
+      } else {
+        warnings.push(`Spec fit route is ${route.route}: tasks.md is not required for this change.`);
       }
       break;
     }

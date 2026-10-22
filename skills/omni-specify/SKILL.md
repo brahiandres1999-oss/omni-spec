@@ -35,6 +35,7 @@ End with what was found/changed, evidence, unresolved issues and the next approp
 ## Workflow
 Classify the requested outcome using Active work routing. Reuse the matching active spec or run create <type> <name>.
 Read the generated primary artifact for that type. Replace placeholders with the user's intent and repository evidence, scope, non-goals and observable acceptance criteria with stable AC-01-style IDs. Keep acceptance.json synchronized with those IDs, all initially pending; an RFC can use DECISION.
+Classify the change before designing. Record specs/<slug>/fit.json with schemaVersion 1 and one answer per question: reasoning (done|partial|skipped), files, modules, crossesContract, ambiguity (none|material|blocked), existingTests. Then run the CLI fit command to read the derived route. Ask the questions instead of inferring them: models cannot detect ambiguity on their own, and reasoning before writing is what raises correctness on small changes. The route decides what follows: light needs the primary artifact and its acceptance criteria only, standard adds the design, full adds the task breakdown. A missing fit.json keeps the full route.
 For bugs, capture reproduction and expected versus actual behavior before diagnosing. For ideas with unresolved direction, discuss or create an RFC rather than inventing a feature.
 Record unresolved material decisions and continue with clarify. Do not invent implementation tasks in this phase.
 

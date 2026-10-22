@@ -160,12 +160,31 @@ npx omni-spec create feature auth    # Crea manualmente un nuevo trabajo estruct
 npx omni-spec list                   # Lista todas las especificaciones activas y cerradas
 npx omni-spec focus 001              # Enfoca el trabajo activo en la spec 001
 
+# Ceremonia proporcional al cambio
+npx omni-spec fit 001                # Pregunta y deriva la ruta: light, standard o full
+
 # Calidad y Verificación
 npx omni-spec audit 001              # Audita consistencia de artefactos y placeholders
 npx omni-spec configure --gates "npm test"  # Configura los gates de calidad obligatorios
 npx omni-spec verify 001             # Ejecuta los gates y genera el snapshot de evidencia
 npx omni-spec complete 001           # Cierra el trabajo tras comprobar evidencia
 ```
+
+### Spec Fit: cuánta ceremonia merece un cambio
+
+No todo cambio necesita el ciclo completo. `omni-spec fit` deriva la ruta a partir de un
+cuestionario **que se pregunta, no que se infiere** (los modelos no detectan la ambigüedad por
+sí solos, y razonar antes de escribir es lo que sube la corrección en cambios pequeños):
+
+| Ruta | Artefactos | Cuándo |
+| :--- | :--- | :--- |
+| **light** | primario + criterios de aceptación | Cambio pequeño, local, sin ambigüedad y ya cubierto por tests |
+| **standard** | + diseño | Cambio pequeño **sin** cobertura de tests existente |
+| **full** | + desglose de tareas | ≥3 archivos, varios módulos, cambio de contrato, ambigüedad o razonamiento incompleto |
+
+La ruta se **deriva** de `specs/<slug>/fit.json`; nunca se escribe a mano. Sin `fit.json` se
+mantiene la ruta completa. Un bugfix conserva siempre la ruta completa: el análisis de causa
+raíz y la verificación independiente son justo el valor del arquetipo.
 
 ---
 
@@ -181,6 +200,7 @@ OmniSpec mantiene tu proyecto ordenado bajo un único directorio `specs/`:
     ├── _templates/             # Plantillas editables por arquetipo
     ├── 001-nombre-del-trabajo/ # Espacio de trabajo de la spec activa
     │   ├── spec.md             # Requerimientos y criterios de aceptación
+    │   ├── fit.json            # Respuestas del Spec Fit; de ellas se deriva la ruta
     │   ├── plan.md             # Diseño arquitectónico y estrategia de tests
     │   ├── tasks.md            # Tareas atómicas con checkboxes
     │   ├── acceptance.json     # Criterios vinculados a evidencia verificable

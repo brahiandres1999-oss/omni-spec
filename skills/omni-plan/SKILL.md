@@ -34,6 +34,7 @@ End with what was found/changed, evidence, unresolved issues and the next approp
 
 ## Workflow
 Read the primary artifact and project context. Resolve critical unknowns before committing to design.
+Read the derived route first with the CLI fit command. On the light route there is no design artifact: the change is small, local and unambiguous, so keep the primary artifact and its acceptance criteria as the whole contract, author no design and no task breakdown, and say why the route is light. On the standard route author the design and stop before tasks. On the full route author the design as usual.
 feature: author plan.md; when touching user interfaces, explicitly detail typographic hierarchy, spacing scale and the 4 mandatory interface states. bugfix: investigate rca.md with reproducible evidence (running read-only test execution or inspection commands to isolate the failure mechanism is authorized) and plan the minimal fix in fix.md. debt: author migration-plan.md. rfc: compare options and consequences in rfc.md.
 Document affected files, interfaces/data contracts or justified N/A, failure modes, verification and rollback/recovery or justified N/A. Do not impose five whys or a strangler migration when inappropriate.
 Strictly avoid speculative architecture or unrequested abstraction layers (services, repositories, DTOs, factories) when direct functions or modules fit the repository. Keep design proportional to the approved change.

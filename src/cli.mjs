@@ -10,6 +10,7 @@ import { installPlugin, updatePlugin, getPluginStatus, cleanProject } from './pl
 import { installAgentIntegrations, normalizeAgents, agentInstructions, AGENTS } from './integrations.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { auditProjectContext } from './context-auditor.mjs';
+import { fitQuestionnaire, specRoute } from './fit.mjs';
 
 const mutating = new Set(['create', 'focus', 'complete', 'verify', 'update', 'setup-agent', 'configure', 'clean']);
 const aliases = {
@@ -78,6 +79,7 @@ omni-spec <command> [arguments] [options]
   status | list [--json]         Resume active work or list specifications
   focus <id|slug>                Select active work without creating duplicates
   audit [id] [--json]            Structural document checks, not code verification
+  fit [id] [--json]              Read the ceremony route for a change and its questionnaire
   configure --gates <commands>   Set reviewed checks (newline separated; root cwd)
   verify [id]                    Run configured checks and bind evidence to source
     --manual <reason>           Explicit manual evidence when no checks apply
@@ -127,7 +129,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       throw new Error('--accept-updates is supported only by update and setup-agent.');
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
     const maxPositionals =
-      { create: 2, focus: 1, complete: 1, verify: 1, audit: 1, 'setup-agent': 1, plugin: 1 }[command] || 0;
+      { create: 2, focus: 1, complete: 1, verify: 1, audit: 1, fit: 1, 'setup-agent': 1, plugin: 1 }[command] || 0;
     if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
     const emit = (value, human) =>
       console.log(json ? JSON.stringify(value, null, 2) : human || JSON.stringify(value, null, 2));
@@ -218,6 +220,48 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         if (positionals.length !== 1) throw new Error('Usage: complete <id>');
         const updated = await updateSpecStatus(workingDir, positionals[0], 'COMPLETED');
         emit(updated, `[OK] ${updated.slug} COMPLETED; verification mode: ${updated.verification.mode}.`);
+        return 0;
+      }
+      case 'fit': {
+        if (!root) throw new Error('No OmniSpec project found. Run init first.');
+        const manifest = await loadManifest(workingDir);
+        const spec = manifest?.specs.find(s =>
+          positionals[0] ? s.id === positionals[0] || s.slug === positionals[0] : s.slug === manifest.active_spec,
+        );
+        if (!spec) throw new Error('Specification not found. Use list and an exact ID.');
+        const route = await specRoute(workingDir, spec);
+        if (!route) {
+          const questionnaire = fitQuestionnaire();
+          emit(
+            { spec: spec.slug, type: spec.type, classified: false, ...questionnaire },
+            `[FIT] ${spec.slug} is not classified yet.\nRecord the answers in ${questionnaire.file} and run this command again.\n${questionnaire.questions.map(q => `- ${q.id}: ${q.prompt} (${Array.isArray(q.values) ? q.values.map(v => JSON.stringify(v)).join(' | ') : q.values})`).join('\n')}`,
+          );
+          return 0;
+        }
+        if (route.route === 'invalid') {
+          emit(
+            { spec: spec.slug, type: spec.type, classified: true, route: 'invalid', errors: route.errors },
+            `[FIT] ${spec.slug} has an invalid fit.json.\n${route.errors.join('\n')}`,
+          );
+          return 1;
+        }
+        emit(
+          {
+            spec: spec.slug,
+            type: spec.type,
+            classified: true,
+            route: route.route,
+            reasons: route.reasons,
+            artifacts: route.artifacts,
+            summary: route.summary,
+          },
+          `[FIT] ${spec.slug}: ${route.route.toUpperCase()} — ${route.summary}\n${route.reasons.map(r => '- ' + r).join('\n')}\nRequired artifacts: ${
+            Object.entries(route.artifacts)
+              .filter(([, needed]) => needed)
+              .map(([name]) => name)
+              .join(', ') || 'primary artifact only'
+          }.`,
+        );
         return 0;
       }
       case 'configure': {

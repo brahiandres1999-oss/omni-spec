@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OmniSpec spec fit answers",
+  "description": "Declared answers that select the ceremony route. Structural validation does not prove the answers are true; the route is derived from them, never written by hand.",
+  "type": "object",
+  "required": ["schemaVersion", "reasoning", "files", "modules", "crossesContract", "ambiguity", "existingTests"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "reasoning": {
+      "enum": ["done", "partial", "skipped"],
+      "description": "Whether the problem was reasoned about before drafting. Reasoning, not the specification, is what raises correctness on small changes."
+    },
+    "files": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Files the change touches. Planning overhead only pays back from three files upwards."
+    },
+    "modules": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Separate modules or packages the change touches. Cross-module work is the primary failure surface."
+    },
+    "crossesContract": {
+      "type": "boolean",
+      "description": "Whether a public API, data schema, storage format or other dependency contract changes."
+    },
+    "ambiguity": {
+      "enum": ["none", "material", "blocked"],
+      "description": "Remaining ambiguity in the request. Models cannot detect ambiguity on their own."
+    },
+    "existingTests": {
+      "type": "boolean",
+      "description": "Whether automated tests already cover the area being changed."
+    }
+  },
+  "additionalProperties": false
+}
