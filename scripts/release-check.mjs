@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile, access } from 'node:fs/promises';
 import { releaseMetadata } from './release-meta.mjs';
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-const meta = releaseMetadata(pkg, process.env.RELEASE_REF || (process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME : undefined));
+const meta = releaseMetadata(
+  pkg,
+  process.env.RELEASE_REF || (process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME : undefined),
+);
 assert.equal(pkg.publishConfig?.tag, meta.npmTag, 'publishConfig.tag must follow prerelease/stable channel');
 assert.equal(pkg.publishConfig?.access, 'public');
 assert.equal(pkg.repository?.url, 'git+https://github.com/brahiandres1999-oss/omni-spec.git');

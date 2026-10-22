@@ -6,8 +6,7 @@ import { fileURLToPath } from 'node:url';
 const MANIFEST_FILE = 'manifest.json';
 const LOCK_FILE = 'manifest.lock';
 
-export const MANIFEST_SCHEMA_URL =
-  './.omni/runtime/schema/manifest.schema.json';
+export const MANIFEST_SCHEMA_URL = './.omni/runtime/schema/manifest.schema.json';
 
 /**
  * Strips a leading UTF-8 byte order mark so that files saved by Windows
@@ -26,13 +25,18 @@ const leases = new WeakSet();
 const pause = ms => new Promise(done => setTimeout(done, ms));
 
 function isDead(pid) {
-  try { process.kill(pid, 0); return false; }
-  catch (error) { return error.code === 'ESRCH'; }
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
 }
 
 async function prepareLockDirectory(lockPath) {
-  try { await mkdir(lockPath); }
-  catch (error) {
+  try {
+    await mkdir(lockPath);
+  } catch (error) {
     if (error.code !== 'EEXIST') throw error;
     try {
       if ((await stat(lockPath)).isDirectory()) return;
@@ -40,10 +44,13 @@ async function prepareLockDirectory(lockPath) {
       // guess whether an empty legacy file belongs to a living writer.
       const legacy = JSON.parse(stripBom(await readFile(lockPath, 'utf8')));
       if (!Number.isSafeInteger(legacy.pid) || legacy.pid <= 0 || !isDead(legacy.pid)) {
-        throw new Error('Legacy manifest.lock has an active or unknown owner. Stop older OmniSpec processes before removing that file.');
+        throw new Error(
+          'Legacy manifest.lock has an active or unknown owner. Stop older OmniSpec processes before removing that file.',
+        );
       }
-      try { await unlink(lockPath); }
-      catch (removal) {
+      try {
+        await unlink(lockPath);
+      } catch (removal) {
         // A second cleaner may already have replaced the file with our directory.
         if (!['ENOENT', 'EISDIR', 'EPERM'].includes(removal.code)) throw removal;
       }
@@ -51,7 +58,9 @@ async function prepareLockDirectory(lockPath) {
     } catch (legacyError) {
       if (legacyError.code === 'ENOENT') return mkdir(lockPath, { recursive: true });
       if (legacyError instanceof SyntaxError) {
-        throw new Error('Legacy manifest.lock is incomplete. Stop older OmniSpec processes and remove this legacy file before retrying.');
+        throw new Error(
+          'Legacy manifest.lock is incomplete. Stop older OmniSpec processes and remove this legacy file before retrying.',
+        );
       }
       throw legacyError;
     }
@@ -112,15 +121,17 @@ export async function acquireLock(lockPath, maxRetries = 150, delayMs = 50) {
     // then wait for choosing peers and all smaller (ticket, UUID) pairs.
     // Local-host filesystem coordination, not a distributed/network lock.
     const peers = await participants(lockPath);
-    const ticket = peers.reduce((max, peer) => peer.ticket > max ? peer.ticket : max, 0n) + 1n;
+    // biome-ignore lint/complexity/useMathMinMax: tickets are BigInt; Math.max throws on BigInt operands.
+    const ticket = peers.reduce((max, peer) => (peer.ticket > max ? peer.ticket : max), 0n) + 1n;
     await writeFile(join(claimPath, 'ticket.tmp'), String(ticket), { flag: 'wx' });
     await rename(join(claimPath, 'ticket.tmp'), join(claimPath, 'ticket'));
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const others = await participants(lockPath);
-      const blocked = others.some(peer => peer.name !== name && (
-        peer.ticket === null || peer.ticket < ticket ||
-        (peer.ticket === ticket && peer.name < name)
-      ));
+      const blocked = others.some(
+        peer =>
+          peer.name !== name &&
+          (peer.ticket === null || peer.ticket < ticket || (peer.ticket === ticket && peer.name < name)),
+      );
       if (!blocked) {
         const lease = Object.freeze({ lockPath, name });
         leases.add(lease);
@@ -160,14 +171,19 @@ export async function loadManifest(baseDir) {
   try {
     const raw = await readFile(filePath, 'utf-8');
     const manifest = JSON.parse(stripBom(raw));
-    if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.specs)) throw new Error('Expected a manifest object with a specs array.');
-    const ids = new Set(), slugs = new Set();
+    if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.specs))
+      throw new Error('Expected a manifest object with a specs array.');
+    const ids = new Set(),
+      slugs = new Set();
     for (const spec of manifest.specs) {
-      if (!spec || !/^\d+-[a-z0-9_-]+$/.test(spec.slug) || typeof spec.id !== 'string') throw new Error('Invalid specification ID or folder name.');
+      if (!spec || !/^\d+-[a-z0-9_-]+$/.test(spec.slug) || typeof spec.id !== 'string')
+        throw new Error('Invalid specification ID or folder name.');
       if (ids.has(spec.id) || slugs.has(spec.slug)) throw new Error('Duplicate specification ID or folder name.');
-      ids.add(spec.id); slugs.add(spec.slug);
+      ids.add(spec.id);
+      slugs.add(spec.slug);
     }
-    if (manifest.active_spec && !slugs.has(manifest.active_spec)) throw new Error('Active specification does not exist in specs.');
+    if (manifest.active_spec && !slugs.has(manifest.active_spec))
+      throw new Error('Active specification does not exist in specs.');
     return manifest;
   } catch (err) {
     if (err.code === 'ENOENT') {
@@ -181,7 +197,10 @@ export async function saveManifest(baseDir, manifest) {
   const specsDir = join(baseDir, 'specs');
   await mkdir(specsDir, { recursive: true });
   const targetPath = join(specsDir, MANIFEST_FILE);
-  const tempPath = join(specsDir, `${MANIFEST_FILE}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`);
+  const tempPath = join(
+    specsDir,
+    `${MANIFEST_FILE}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`,
+  );
   const content = JSON.stringify(manifest, null, 2) + '\n';
   await writeFile(tempPath, content, 'utf-8');
   await rename(tempPath, targetPath);
@@ -195,7 +214,9 @@ async function getPackageVersion() {
     const pkg = JSON.parse(raw);
     if (!pkg.version) throw new Error('Missing package version');
     return pkg.version;
-  } catch (error) { throw new Error(`Cannot read installed OmniSpec version: ${error.message}`); }
+  } catch (error) {
+    throw new Error(`Cannot read installed OmniSpec version: ${error.message}`);
+  }
 }
 
 export async function _initManifestUnlocked(baseDir, options = {}) {
@@ -207,16 +228,20 @@ export async function _initManifestUnlocked(baseDir, options = {}) {
     ...existing,
     $schema: MANIFEST_SCHEMA_URL,
     schemaVersion: 1,
-    project: options.projectName || (existing && existing.project) || 'MyProject',
+    project: options.projectName || existing?.project || 'MyProject',
     version: options.version || existing?.version || pkgVersion,
-    profile: (options.explicitProfile ? options.profile : null) || (existing && existing.profile) || options.profile || 'general',
-    stack: (options.explicitStack ? resolvedStack : null) || (existing && existing.stack) || resolvedStack || 'Undecided',
-    documentationStandard: (options.explicitDoc ? resolvedDoc : null) || (existing && existing.documentationStandard) || resolvedDoc || 'Project conventions',
+    profile: (options.explicitProfile ? options.profile : null) || existing?.profile || options.profile || 'general',
+    stack: (options.explicitStack ? resolvedStack : null) || existing?.stack || resolvedStack || 'Undecided',
+    documentationStandard:
+      (options.explicitDoc ? resolvedDoc : null) ||
+      existing?.documentationStandard ||
+      resolvedDoc ||
+      'Project conventions',
     qualityGates: options.qualityGates ?? existing?.qualityGates ?? '',
-    agent: options.agent || options.ai || (existing && existing.agent) || 'antigravity',
-    active_spec: (existing && existing.active_spec) || null,
-    active_archetype: (existing && existing.active_archetype) || null,
-    specs: (existing && Array.isArray(existing.specs)) ? existing.specs : []
+    agent: options.agent || options.ai || existing?.agent || 'antigravity',
+    active_spec: existing?.active_spec || null,
+    active_archetype: existing?.active_archetype || null,
+    specs: existing && Array.isArray(existing.specs) ? existing.specs : [],
   };
 
   return saveManifest(baseDir, manifest);
@@ -238,7 +263,7 @@ export async function addSpec(baseDir, specEntry) {
     const entry = {
       status: 'IN_PROGRESS',
       created_at: new Date().toISOString(),
-      ...specEntry
+      ...specEntry,
     };
 
     // Set active spec
@@ -293,7 +318,7 @@ export async function updateSpecStatus(baseDir, id, newStatus) {
 
 export async function getActiveSpec(baseDir) {
   const manifest = await loadManifest(baseDir);
-  if (!manifest || !manifest.active_spec) {
+  if (!manifest?.active_spec) {
     return null;
   }
 
@@ -332,7 +357,6 @@ export async function listSpecs(baseDir) {
     project: manifest.project,
     profile: manifest.profile,
     active_spec: manifest.active_spec,
-    specs: manifest.specs
+    specs: manifest.specs,
   };
 }
-

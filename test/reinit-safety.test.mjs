@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
@@ -31,7 +31,8 @@ describe('Regression R01: Re-initialization & Non-destructive Safety', () => {
     await writeFile(join(tempDir, 'CONSTITUTION.md'), customConstitution, 'utf-8');
 
     // Customize the spec
-    const customSpecContent = '# CUSTOM SPEC PAYMENT GATEWAY\n## 0. Fase de Clarificación y Supuestos\n- Decisión acordada';
+    const customSpecContent =
+      '# CUSTOM SPEC PAYMENT GATEWAY\n## 0. Fase de Clarificación y Supuestos\n- Decisión acordada';
     await writeFile(join(spec1.specDir, 'spec.md'), customSpecContent, 'utf-8');
 
     // Re-run scaffoldProject without force

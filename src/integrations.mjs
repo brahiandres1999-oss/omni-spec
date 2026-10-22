@@ -12,7 +12,11 @@ export const AGENTS = {
   opencode: { directory: '.opencode/commands', format: 'markdown', invocation: '/omni-init' },
   gemini: { directory: '.gemini/commands', format: 'toml', invocation: '/omni-init' },
   codex: { directory: '.agents/skills', format: 'skill', invocation: '$omni-init (skill picker)' },
-  generic: { directory: 'specs/commands', format: 'markdown', invocation: 'Read specs/commands/omni-init.md and follow it' }
+  generic: {
+    directory: 'specs/commands',
+    format: 'markdown',
+    invocation: 'Read specs/commands/omni-init.md and follow it',
+  },
 };
 
 export function normalizeAgents(raw = 'antigravity') {
@@ -20,8 +24,13 @@ export function normalizeAgents(raw = 'antigravity') {
   const aliases = { github: 'copilot', 'claude-code': 'claude', 'antigravity-plugin': 'plugin' };
   const normalized = parts.map(s => aliases[s] || s);
   const invalid = normalized.filter(s => s !== 'all' && !Object.hasOwn(AGENTS, s));
-  if (invalid.length) throw new Error(`Invalid agent "${invalid.join(',')}". Valid agents: ${Object.keys(AGENTS).join(', ')}, all.`);
-  return [...new Set(normalized.includes('all') ? Object.keys(AGENTS).filter(s => s !== 'generic' && s !== 'plugin') : normalized)];
+  if (invalid.length)
+    throw new Error(`Invalid agent "${invalid.join(',')}". Valid agents: ${Object.keys(AGENTS).join(', ')}, all.`);
+  return [
+    ...new Set(
+      normalized.includes('all') ? Object.keys(AGENTS).filter(s => s !== 'generic' && s !== 'plugin') : normalized,
+    ),
+  ];
 }
 
 export function integrationEntries(manifest, options = {}) {
@@ -48,9 +57,14 @@ export function integrationEntries(manifest, options = {}) {
       }
       entries.push({ path, content });
     }
-    if (target === 'cursor') entries.push({ path: '.cursor/rules/omni-spec.mdc', content: `---\ndescription: OmniSpec project workflow\nglobs: "**/*"\nalwaysApply: true\n---\n${rule}\n` });
+    if (target === 'cursor')
+      entries.push({
+        path: '.cursor/rules/omni-spec.mdc',
+        content: `---\ndescription: OmniSpec project workflow\nglobs: "**/*"\nalwaysApply: true\n---\n${rule}\n`,
+      });
     if (target === 'copilot') entries.push({ path: '.github/copilot-instructions.md', content: rule, section: true });
-    if (['kilo', 'opencode', 'codex'].includes(target)) entries.push({ path: 'AGENTS.md', content: rule, section: true });
+    if (['kilo', 'opencode', 'codex'].includes(target))
+      entries.push({ path: 'AGENTS.md', content: rule, section: true });
   }
   return entries;
 }
@@ -60,5 +74,7 @@ export async function installAgentIntegrations(projectDir, manifest, options = {
 }
 
 export function agentInstructions(raw) {
-  return normalizeAgents(raw).map(name => `${name}: ${AGENTS[name].invocation}`).join('\n');
+  return normalizeAgents(raw)
+    .map(name => `${name}: ${AGENTS[name].invocation}`)
+    .join('\n');
 }

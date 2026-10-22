@@ -10,38 +10,59 @@ import { loadManifest } from '../src/manifest.mjs';
 import { integrationEntries } from '../src/integrations.mjs';
 
 let root;
-beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'omni-onboarding-')); });
-afterEach(async () => { await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
-
-for (const scenario of ['empty', 'existing', 'broken', 'noncode']) test(`${scenario}: bootstrap preserves application and seeds an explicitly unvalidated context`, async () => {
-  const original = await seedOnboardingFixture(root, scenario);
-  await scaffoldProject(root, { projectName: 'Fixture', agent: 'antigravity' });
-  for (const [path, content] of Object.entries(original)) assert.equal(await readFile(join(root, path), 'utf8'), content);
-  const context = await readFile(join(root, 'specs/project-context.md'), 'utf8');
-  assert.match(context, /State: CONTEXT_PENDING/);
-  assert.match(context, /APPLICATION_NOT_VALIDATED/);
-  assert.match(context, /No project scripts were executed/);
-  assert.match(context, /Existing-work baseline: UNKNOWN/);
-  assert.deepEqual((await loadManifest(root)).specs, []);
-  const inventory = await detectProjectEnvironment(root);
-  assert.equal(inventory.isGreenfield, scenario === 'empty');
-  assert.equal(inventory.assessment.projectScriptsExecuted, false);
-  assert.equal(inventory.assessment.policyCompliance, 'NOT_ASSESSED');
-  if (scenario === 'existing') {
-    await assert.rejects(access(join(root, 'api/UNAUTHORIZED_EXECUTION')), { code: 'ENOENT' });
-    const api = inventory.modules.find(m => m.directory === 'api');
-    assert.deepEqual(api.declaredRuntime, { tool: 'node', constraint: '>=22', source: 'api/package.json', state: 'DECLARED', compatibilityTested: false });
-    assert.deepEqual(api.commandCandidates[0], { command: 'npm test', cwd: 'api', source: 'api/package.json', basis: 'declared-script', definition: 'node check.cjs', execution: 'NOT_RUN', prerequisites: 'NOT_ASSESSED', gateSelection: 'REVIEW_REQUIRED' });
-    assert.equal(inventory.modules.find(m => m.directory === 'worker').commandCandidates[0].basis, 'tool-convention');
-    assert.match(context, /\| `npm test` \| `api` \| `api\/package.json`/);
-    assert.match(context, /\| `python -m pytest` \| `worker`/);
-    assert.doesNotMatch(context, /WCAG.*compliant|fully adapted|State: CONTEXT_RECORDED/);
-  } else {
-    assert.equal(inventory.qualityGates, '');
-    assert.match(context, /None detected/);
-    if (scenario === 'broken') assert.ok(inventory.warnings.some(w => w.includes('could not be parsed')));
-  }
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'omni-onboarding-'));
 });
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
+
+for (const scenario of ['empty', 'existing', 'broken', 'noncode'])
+  test(`${scenario}: bootstrap preserves application and seeds an explicitly unvalidated context`, async () => {
+    const original = await seedOnboardingFixture(root, scenario);
+    await scaffoldProject(root, { projectName: 'Fixture', agent: 'antigravity' });
+    for (const [path, content] of Object.entries(original))
+      assert.equal(await readFile(join(root, path), 'utf8'), content);
+    const context = await readFile(join(root, 'specs/project-context.md'), 'utf8');
+    assert.match(context, /State: CONTEXT_PENDING/);
+    assert.match(context, /APPLICATION_NOT_VALIDATED/);
+    assert.match(context, /No project scripts were executed/);
+    assert.match(context, /Existing-work baseline: UNKNOWN/);
+    assert.deepEqual((await loadManifest(root)).specs, []);
+    const inventory = await detectProjectEnvironment(root);
+    assert.equal(inventory.isGreenfield, scenario === 'empty');
+    assert.equal(inventory.assessment.projectScriptsExecuted, false);
+    assert.equal(inventory.assessment.policyCompliance, 'NOT_ASSESSED');
+    if (scenario === 'existing') {
+      await assert.rejects(access(join(root, 'api/UNAUTHORIZED_EXECUTION')), { code: 'ENOENT' });
+      const api = inventory.modules.find(m => m.directory === 'api');
+      assert.deepEqual(api.declaredRuntime, {
+        tool: 'node',
+        constraint: '>=22',
+        source: 'api/package.json',
+        state: 'DECLARED',
+        compatibilityTested: false,
+      });
+      assert.deepEqual(api.commandCandidates[0], {
+        command: 'npm test',
+        cwd: 'api',
+        source: 'api/package.json',
+        basis: 'declared-script',
+        definition: 'node check.cjs',
+        execution: 'NOT_RUN',
+        prerequisites: 'NOT_ASSESSED',
+        gateSelection: 'REVIEW_REQUIRED',
+      });
+      assert.equal(inventory.modules.find(m => m.directory === 'worker').commandCandidates[0].basis, 'tool-convention');
+      assert.match(context, /\| `npm test` \| `api` \| `api\/package.json`/);
+      assert.match(context, /\| `python -m pytest` \| `worker`/);
+      assert.doesNotMatch(context, /WCAG.*compliant|fully adapted|State: CONTEXT_RECORDED/);
+    } else {
+      assert.equal(inventory.qualityGates, '');
+      assert.match(context, /None detected/);
+      if (scenario === 'broken') assert.ok(inventory.warnings.some(w => w.includes('could not be parsed')));
+    }
+  });
 
 test('repeated initialization preserves authored context and decisions', async () => {
   await scaffoldProject(root);
@@ -52,22 +73,32 @@ test('repeated initialization preserves authored context and decisions', async (
   assert.equal(await readFile(path, 'utf8'), authored);
 });
 
-for (const scenario of ['conflicting', 'conflicting-python']) test(`${scenario}: bootstrap preserves competing declarations for conversational reconciliation`, async () => {
-  const original = await seedOnboardingFixture(root, scenario);
-  await scaffoldProject(root);
-  for (const [path, content] of Object.entries(original)) assert.equal(await readFile(join(root, path), 'utf8'), content);
-  const context = await readFile(join(root, 'specs/project-context.md'), 'utf8');
-  assert.match(context, /<!-- omni:source-conflicts -->/);
-  assert.match(context, /No conflict has been ruled out by bootstrap/);
-  assert.match(context, /APPLICATION_NOT_VALIDATED/);
-  if (scenario === 'conflicting') await assert.rejects(access(join(root, 'api/UNAUTHORIZED_EXECUTION')), { code: 'ENOENT' });
-});
+for (const scenario of ['conflicting', 'conflicting-python'])
+  test(`${scenario}: bootstrap preserves competing declarations for conversational reconciliation`, async () => {
+    const original = await seedOnboardingFixture(root, scenario);
+    await scaffoldProject(root);
+    for (const [path, content] of Object.entries(original))
+      assert.equal(await readFile(join(root, path), 'utf8'), content);
+    const context = await readFile(join(root, 'specs/project-context.md'), 'utf8');
+    assert.match(context, /<!-- omni:source-conflicts -->/);
+    assert.match(context, /No conflict has been ruled out by bootstrap/);
+    assert.match(context, /APPLICATION_NOT_VALIDATED/);
+    if (scenario === 'conflicting')
+      await assert.rejects(access(join(root, 'api/UNAUTHORIZED_EXECUTION')), { code: 'ENOENT' });
+  });
 
 test('every adapter carries the bare-command evidence and bounded onboarding contract', () => {
   const entries = integrationEntries({ version: '0.5.0' }, { agent: 'all' }).filter(e => e.path.includes('omni-init'));
   assert.equal(entries.length, 8); // Eight concrete adapters, including two sharing the skills path.
   for (const entry of entries) {
-    const content = entry.path.endsWith('.toml') ? JSON.parse(entry.content.split('\n').find(l => l.startsWith('prompt = ')).slice(9)) : entry.content;
+    const content = entry.path.endsWith('.toml')
+      ? JSON.parse(
+          entry.content
+            .split('\n')
+            .find(l => l.startsWith('prompt = '))
+            .slice(9),
+        )
+      : entry.content;
     assert.match(content, /bare command \/omni-init is sufficient/);
     assert.match(content, /Only edit specs\/project-context.md by default/);
     assert.match(content, /CONTEXT_PENDING/);

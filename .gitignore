@@ -24,3 +24,7 @@ test-temp/
 temp-*/
 .coverage/
 artifacts/
+
+# Static analysis artifacts
+coverage/
+*.sarif

@@ -1,11 +1,11 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { installPlugin, updatePlugin, getPluginStatus, cleanProject } from '../src/plugin-manager.mjs';
+import { installPlugin, getPluginStatus, cleanProject } from '../src/plugin-manager.mjs';
 import { checkProjectVersion, getCliVersion } from '../src/updater.mjs';
-import { saveManifest, loadManifest } from '../src/manifest.mjs';
+import { loadManifest } from '../src/manifest.mjs';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
 
 describe('OmniSpec Plugin Manager & Project Cleaner', () => {
@@ -74,7 +74,7 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
     await scaffoldProject(projectDir, {
       name: 'SampleApp',
       agent: 'antigravity',
-      profile: 'general'
+      profile: 'general',
     });
 
     await createSpec(projectDir, 'feature', 'demo-feature');

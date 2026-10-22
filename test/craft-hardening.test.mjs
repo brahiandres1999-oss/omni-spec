@@ -45,7 +45,7 @@ describe('OmniSpec 0.5.1: First-Pass Anti-Slop & Craft Invariants', () => {
   test('scaffoldProject outputs constitution with both backend and frontend craft invariants on disk', async () => {
     const res = await scaffoldProject(tempDir, {
       projectName: 'TestCraftDisk',
-      profile: 'general'
+      profile: 'general',
     });
     const constitution = await readFile(res.constitutionPath, 'utf-8');
     assert.match(constitution, /Backend Pragmatic Craft & Zero Code Slop/);

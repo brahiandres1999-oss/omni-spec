@@ -4,16 +4,32 @@ import { safePath } from './managed.mjs';
 
 // A deliberately structural check: existence of a citation is not proof of its meaning.
 export async function auditProjectContext(root) {
-  const errors = [], warnings = [];
+  const errors = [],
+    warnings = [];
   let text;
-  try { text = await readFile(await safePath(root, 'specs/project-context.md'), 'utf8'); }
-  catch (error) {
-    return { valid: false, scope: 'STRUCTURE_AND_LOCAL_LINKS_ONLY', errors: [`Cannot read project context: ${error.message}`], warnings, linksChecked: 0, semanticReview: 'REQUIRED' };
+  try {
+    text = await readFile(await safePath(root, 'specs/project-context.md'), 'utf8');
+  } catch (error) {
+    return {
+      valid: false,
+      scope: 'STRUCTURE_AND_LOCAL_LINKS_ONLY',
+      errors: [`Cannot read project context: ${error.message}`],
+      warnings,
+      linksChecked: 0,
+      semanticReview: 'REQUIRED',
+    };
   }
   const states = [...new Set(text.match(/\bCONTEXT_(?:PENDING|RECORDED)\b/g) || [])];
   if (states.length !== 1) errors.push('Record one current onboarding state: CONTEXT_PENDING or CONTEXT_RECORDED.');
-  if (!/\bAPPLICATION_(?:NOT_VALIDATED|VALIDATED)\b/.test(text)) errors.push('Record application validation separately from onboarding state.');
-  if (!text.includes('<!-- omni:source-conflicts -->') && !/^#{1,6}\s+.*(?:source.conflict|discrepancia|conflicto)/im.test(text)) errors.push('Include a source-conflict section (<!-- omni:source-conflicts -->): conflicting declarations, or compared sources and coverage limits.');
+  if (!/\bAPPLICATION_(?:NOT_VALIDATED|VALIDATED)\b/.test(text))
+    errors.push('Record application validation separately from onboarding state.');
+  if (
+    !text.includes('<!-- omni:source-conflicts -->') &&
+    !/^#{1,6}\s+.*(?:source.conflict|discrepancia|conflicto)/im.test(text)
+  )
+    errors.push(
+      'Include a source-conflict section (<!-- omni:source-conflicts -->): conflicting declarations, or compared sources and coverage limits.',
+    );
   let linksChecked = 0;
   const links = [
     ...[...text.matchAll(/\[[^\]\n]*\]\((<[^>\n]+>|[^)\n]+)\)/g)].map(m => m[1]),
@@ -21,11 +37,17 @@ export async function auditProjectContext(root) {
     ...[...text.matchAll(/<(file:\/\/[^>\n]+)>/gi)].map(m => m[1]),
   ];
   for (let destination of new Set(links)) {
-    destination = destination.trim().replace(/^<|>$/g, '').replace(/\s+["'][^"']*["']$/, '');
+    destination = destination
+      .trim()
+      .replace(/^<|>$/g, '')
+      .replace(/\s+["'][^"']*["']$/, '');
     if (/^https?:\/\//i.test(destination) || destination.startsWith('#')) continue;
     linksChecked++;
     if (/^(?:[a-z][a-z0-9+.-]*:|\/|\\)/i.test(destination) || destination.includes('\\')) {
-      errors.push(`Nonportable or unsupported citation: ${destination}. Use a document-relative path inside the project.`); continue;
+      errors.push(
+        `Nonportable or unsupported citation: ${destination}. Use a document-relative path inside the project.`,
+      );
+      continue;
     }
     try {
       const decoded = decodeURIComponent(destination);
@@ -37,11 +59,24 @@ export async function auditProjectContext(root) {
       if (line !== null) {
         const count = (await readFile(path, 'utf8')).split(/\r?\n/).length;
         if (!Number.isSafeInteger(line) || line < 1 || line > count) throw new Error(`Line ${line} does not exist`);
-        if (fragment?.[2] && (Number(fragment[2]) < line || Number(fragment[2]) > count)) throw new Error(`Invalid line range ending at ${fragment[2]}`);
+        if (fragment?.[2] && (Number(fragment[2]) < line || Number(fragment[2]) > count))
+          throw new Error(`Invalid line range ending at ${fragment[2]}`);
       }
-    } catch (error) { errors.push(`Invalid local citation ${destination}: ${error.message}`); }
+    } catch (error) {
+      errors.push(`Invalid local citation ${destination}: ${error.message}`);
+    }
   }
-  if (!linksChecked) warnings.push('No local Markdown citations checked. Backtick paths and prose citations require manual review.');
-  warnings.push('A pass does not prove claim attribution, conflict reconciliation, security, compatibility or application behavior. Review source passages and the final response manually.');
-  return { valid: !errors.length, scope: 'STRUCTURE_AND_LOCAL_LINKS_ONLY', errors, warnings, linksChecked, semanticReview: 'REQUIRED' };
+  if (!linksChecked)
+    warnings.push('No local Markdown citations checked. Backtick paths and prose citations require manual review.');
+  warnings.push(
+    'A pass does not prove claim attribution, conflict reconciliation, security, compatibility or application behavior. Review source passages and the final response manually.',
+  );
+  return {
+    valid: !errors.length,
+    scope: 'STRUCTURE_AND_LOCAL_LINKS_ONLY',
+    errors,
+    warnings,
+    linksChecked,
+    semanticReview: 'REQUIRED',
+  };
 }

@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile, readFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { auditSpec } from '../src/auditor.mjs';
@@ -34,7 +34,7 @@ describe('Specification Health Auditor (SDD Gate)', () => {
       projectName: 'TestApp',
       profile: 'general',
       stack: 'Node.js',
-      docStandard: 'JSDoc'
+      docStandard: 'JSDoc',
     });
 
     const report = await auditSpec(tempDir);
@@ -47,7 +47,7 @@ describe('Specification Health Auditor (SDD Gate)', () => {
       projectName: 'TestApp',
       profile: 'general',
       stack: 'Node.js',
-      docStandard: 'JSDoc'
+      docStandard: 'JSDoc',
     });
 
     await createSpec(tempDir, 'feature', 'user-login');
@@ -63,7 +63,7 @@ describe('Specification Health Auditor (SDD Gate)', () => {
       projectName: 'TestApp',
       profile: 'general',
       stack: 'Node.js',
-      docStandard: 'JSDoc'
+      docStandard: 'JSDoc',
     });
 
     const spec = await createSpec(tempDir, 'feature', 'user-login');
@@ -114,7 +114,7 @@ Revert migrations if needed.
       projectName: 'TestApp',
       profile: 'general',
       stack: 'Node.js',
-      docStandard: 'JSDoc'
+      docStandard: 'JSDoc',
     });
 
     const spec = await createSpec(tempDir, 'feature', 'payment-gateway');
@@ -140,7 +140,7 @@ Add Stripe payments.
       projectName: 'TestApp',
       profile: 'general',
       stack: 'Node.js',
-      docStandard: 'JSDoc'
+      docStandard: 'JSDoc',
     });
 
     const spec = await createSpec(tempDir, 'bugfix', 'crash-on-null');
@@ -149,7 +149,11 @@ Add Stripe payments.
     // Replace bug.md, rca.md, fix.md without BUG-XXX
     await writeFile(join(specDir, 'bug.md'), '# BUG-001: Crash on null user\nError log here', 'utf-8');
     await writeFile(join(specDir, 'rca.md'), '# RCA-001\n5 Whys root cause analysis...', 'utf-8');
-    await writeFile(join(specDir, 'fix.md'), '# FIX-001\nRegression test and patch\n- [ ] Reproduce the null input and verify the regression.', 'utf-8');
+    await writeFile(
+      join(specDir, 'fix.md'),
+      '# FIX-001\nRegression test and patch\n- [ ] Reproduce the null input and verify the regression.',
+      'utf-8',
+    );
 
     const report = await auditSpec(tempDir);
     assert.strictEqual(report.valid, true);

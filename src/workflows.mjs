@@ -28,7 +28,10 @@ End with what was found/changed, evidence, unresolved issues and the next approp
 `;
 
 const definitions = [
-  ['omni-init', 'Adapta OmniSpec a proyectos nuevos, existentes, incompletos o desconocidos. Ejecuta el onboarding con /omni-init sin instrucciones adicionales.', `## Default scope
+  [
+    'omni-init',
+    'Adapta OmniSpec a proyectos nuevos, existentes, incompletos o desconocidos. Ejecuta el onboarding con /omni-init sin instrucciones adicionales.',
+    `## Default scope
 The bare command /omni-init is sufficient. Perform repository reconnaissance and prepare context; do not ask the user to supply an audit prompt. It does not authorize implementing a feature, fixing the application, installing dependencies, running migrations, starting services, executing project scripts or changing Git state.
 Only edit specs/project-context.md by default. Preserve user decisions and unrelated content, revise unsupported claims with evidence, and reconcile stale entries instead of appending contradictory inventories. Read CONSTITUTION.md and configured gates; propose policy/gate changes with a concrete reason. Only use configure --gates when the user has requested or confirmed that configuration change. Never use init --force to finish onboarding.
 
@@ -62,49 +65,84 @@ Review each positive claim against its evidence category. Replace unsupported ce
 Check the final response against the saved context sentence by sentence: preserve unresolved source conflicts, use exact supporting citations, and do not promote declared requirements to confirmed implementation. Record tool observations used as evidence (including runtime version or Git state) with command, cwd, actual timestamp, exit code and result summary. If output or exit status was not captured, record that gap instead of reconstructing it. Keep inspection-command results separate from application-script execution.
 Run context-check --json after saving the context and fix structural/link errors before finishing. This command checks report structure and local links only; it cannot prove a cited passage supports a claim. Manually perform the source and conflict review above even when it passes. If it fails and cannot be repaired within scope, report onboarding incomplete and the precise blocker.
 Return a short report: onboarding state; principal observations with file references; application validation state; unresolved decisions/prerequisites; context files changed; next action. Even with no open questions, use CONTEXT_RECORDED + APPLICATION_NOT_VALIDATED if scripts were not executed. Do not announce '100% ready', 'all verified' or 'fully adapted'.
-Example: CI config selects runtime version X -> DECLARED configured CI target X; minimum compatible version UNKNOWN. A manifest defines a test command -> OBSERVED candidate command, NOT_RUN. A design guide requires accessible contrast -> DECLARED requirement, compliance NOT_ASSESSED. These distinctions apply to any technology and domain.`],
-  ['omni-discuss', 'Explora, encuentra, explica o propone mejoras e ideas con evidencia sin modificar código; puede convertirse en una especificación.', `Understand whether the user wants explanation, comparison or a decision before proposing scope. If a product/tool name is ambiguous, ask which one or request its link; do not invent its identity. Inspect relevant code/docs and cite locations. Verify current external technical claims in official documentation before declaring requirements, compatibility or impossibility. If browsing is unavailable, explicitly mark those claims unverified and do not use them to rule out an option.
+Example: CI config selects runtime version X -> DECLARED configured CI target X; minimum compatible version UNKNOWN. A manifest defines a test command -> OBSERVED candidate command, NOT_RUN. A design guide requires accessible contrast -> DECLARED requirement, compliance NOT_ASSESSED. These distinctions apply to any technology and domain.`,
+  ],
+  [
+    'omni-discuss',
+    'Explora, encuentra, explica o propone mejoras e ideas con evidencia sin modificar código; puede convertirse en una especificación.',
+    `Understand whether the user wants explanation, comparison or a decision before proposing scope. If a product/tool name is ambiguous, ask which one or request its link; do not invent its identity. Inspect relevant code/docs and cite locations. Verify current external technical claims in official documentation before declaring requirements, compatibility or impossibility. If browsing is unavailable, explicitly mark those claims unverified and do not use them to rule out an option.
 Compare viable options, constraints and trade-offs. Distinguish existing behavior from proposals. Do not change application code or create a spec automatically for a question.
 Read the exact project policy before labeling an option forbidden: 'preserve unless explicitly decided' and 'avoid during unrelated work' are conditional restrictions, not permanent bans. Present any required architectural decision and its costs accurately. Do not promise bundle size, implementation line counts, instant loading, equivalent visual quality or maximum maintainability without evidence.
 Source inspection supports a hypothesis about UX, not a rendered visual assessment or proof of functional robustness. For visual questions identify whether you inspected a running interface or only source. Separate styling proposals from new behavior, data, presence/delivery semantics, privacy guarantees and domain rules. Never invent medical roles, retention promises or anonymity guarantees. Avoid finalizing new features from an exploratory question.
 If the user requests implementation, carry the confirmed decisions into specify with the right type. If a durable decision is requested, create an RFC. A discussion may end with an answer; no paperwork is required.
-When requested to preserve discussion, append decisions and evidence to specs/project-context.md.`],
-  ['omni-specify', 'Convierte una solicitud en feature, bugfix, debt o RFC; úsalo al pedir un cambio concreto o formalizar una idea.', `Classify the requested outcome using Active work routing. Reuse the matching active spec or run create <type> <name>.
+When requested to preserve discussion, append decisions and evidence to specs/project-context.md.`,
+  ],
+  [
+    'omni-specify',
+    'Convierte una solicitud en feature, bugfix, debt o RFC; úsalo al pedir un cambio concreto o formalizar una idea.',
+    `Classify the requested outcome using Active work routing. Reuse the matching active spec or run create <type> <name>.
 Read the generated primary artifact for that type. Replace placeholders with the user's intent and repository evidence, scope, non-goals and observable acceptance criteria with stable AC-01-style IDs. Keep acceptance.json synchronized with those IDs, all initially pending; an RFC can use DECISION.
 For bugs, capture reproduction and expected versus actual behavior before diagnosing. For ideas with unresolved direction, discuss or create an RFC rather than inventing a feature.
-Record unresolved material decisions and continue with clarify. Do not invent implementation tasks in this phase.`],
-  ['omni-clarify', 'Resuelve ambigüedades del trabajo activo antes de diseñar; úsalo cuando faltan decisiones relevantes.', `Read the primary artifact for the active type and inspect evidence. Identify conflicting requirements, missing constraints, edge cases and assumptions.
+Record unresolved material decisions and continue with clarify. Do not invent implementation tasks in this phase.`,
+  ],
+  [
+    'omni-clarify',
+    'Resuelve ambigüedades del trabajo activo antes de diseñar; úsalo cuando faltan decisiones relevantes.',
+    `Read the primary artifact for the active type and inspect evidence. Identify conflicting requirements, missing constraints, edge cases and assumptions.
 Ask a small batch of material questions only when the repository/user context cannot answer them. Record confirmed answers, sources and remaining unknowns in that artifact.
-Do not demand a completed plan/tasks or run the full audit at this stage. Proceed to plan when critical decisions are resolved; otherwise explain what remains blocked.`],
-  ['omni-plan', 'Diseña una solución proporcional al tipo activo y al proyecto; úsalo después de aclarar requisitos.', `Read the primary artifact and project context. Resolve critical unknowns before committing to design.
+Do not demand a completed plan/tasks or run the full audit at this stage. Proceed to plan when critical decisions are resolved; otherwise explain what remains blocked.`,
+  ],
+  [
+    'omni-plan',
+    'Diseña una solución proporcional al tipo activo y al proyecto; úsalo después de aclarar requisitos.',
+    `Read the primary artifact and project context. Resolve critical unknowns before committing to design.
 feature: author plan.md; when touching user interfaces, explicitly detail typographic hierarchy, spacing scale and the 4 mandatory interface states. bugfix: investigate rca.md with reproducible evidence (running read-only test execution or inspection commands to isolate the failure mechanism is authorized) and plan the minimal fix in fix.md. debt: author migration-plan.md. rfc: compare options and consequences in rfc.md.
 Document affected files, interfaces/data contracts or justified N/A, failure modes, verification and rollback/recovery or justified N/A. Do not impose five whys or a strangler migration when inappropriate.
 Strictly avoid speculative architecture or unrequested abstraction layers (services, repositories, DTOs, factories) when direct functions or modules fit the repository. Keep design proportional to the approved change.
-Use official documentation for new external API assumptions. Keep existing conventions unless a change is explicitly justified. Continue with tasks for implementation work; an RFC can proceed to decision review.`],
-  ['omni-tasks', 'Descompone el plan del trabajo activo en tareas y verificaciones trazables; no aplica como implementación de una RFC.', `For feature/debt edit tasks.md; for bugfix edit the checklist in fix.md. For RFC explain that decision review replaces implementation tasks.
+Use official documentation for new external API assumptions. Keep existing conventions unless a change is explicitly justified. Continue with tasks for implementation work; an RFC can proceed to decision review.`,
+  ],
+  [
+    'omni-tasks',
+    'Descompone el plan del trabajo activo en tareas y verificaciones trazables; no aplica como implementación de una RFC.',
+    `For feature/debt edit tasks.md; for bugfix edit the checklist in fix.md. For RFC explain that decision review replaces implementation tasks.
 Create only tasks needed by the approved scope, in dependency order. Link each to an acceptance criterion and affected files. Include regression/acceptance verification.
 Avoid task inflation: do not fragment a simple change into dozens of micro-tasks. Keep tasks atomic, in dependency order, and mapped to acceptance criteria.
 Remove template examples and all TODO tokens; never mark unperformed work complete. Do not invent layers or a fixed number of files per task.
-Run audit and resolve document blockers before implementation. Audit checks documents, not whether the implementation is correct.`],
-  ['omni-audit', 'Revisa estructura y coherencia entre necesidad, plan, tareas y evidencia del trabajo activo.', `Run audit for the active spec, then review semantic consistency yourself: requirement -> plan -> task -> intended verification. In subagent environments (e.g. Antigravity), invoke omni-auditor for independent criteria verification.
+Run audit and resolve document blockers before implementation. Audit checks documents, not whether the implementation is correct.`,
+  ],
+  [
+    'omni-audit',
+    'Revisa estructura y coherencia entre necesidad, plan, tareas y evidencia del trabajo activo.',
+    `Run audit for the active spec, then review semantic consistency yourself: requirement -> plan -> task -> intended verification. In subagent environments (e.g. Antigravity), invoke omni-auditor for independent criteria verification.
 Report mechanical errors separately from reasoning findings. Check that scope and non-goals agree and that assumptions have evidence. An audit pass is not a code-test result.
-For unresolved blockers, identify the owning artifact and remediation. Do not silently approve contradictory requirements or claim semantic certainty from a text-length check.`],
-  ['omni-implement', 'Implementa tareas de feature, bugfix o deuda con comprobaciones del proyecto; úsalo cuando el plan está listo.', `Run audit; stop implementation if it fails. Read the active type's checklist and implement the next pending task within scope.
+For unresolved blockers, identify the owning artifact and remediation. Do not silently approve contradictory requirements or claim semantic certainty from a text-length check.`,
+  ],
+  [
+    'omni-implement',
+    'Implementa tareas de feature, bugfix o deuda con comprobaciones del proyecto; úsalo cuando el plan está listo.',
+    `Run audit; stop implementation if it fails. Read the active type's checklist and implement the next pending task within scope.
 Perform minimal touch surgery. Deliver clean, self-documenting code without parrot comments or speculative fallbacks. Do not add files or layers outside the approved plan.
 For bugfix, reproduce the failure and add an appropriate regression check before fixing it when feasible. Execute only reviewed project commands in their correct working directory; do not assume npm.
 Record actual results and pre-existing failures. Mark tasks only when their work is complete. If requirements change, update artifacts before expanding code.
 For RFC do not implement code: review and record a decision, or create a separate feature only when requested.
-Proceed to converge when the work is ready for delivery.`],
-  ['omni-converge', 'Contrasta el resultado con criterios y registra evidencia antes de cerrar el trabajo.', `Review the actual changed files against every acceptance criterion, scope, plan and task. Do not equate checked boxes with successful behavior.
+Proceed to converge when the work is ready for delivery.`,
+  ],
+  [
+    'omni-converge',
+    'Contrasta el resultado con criterios y registra evidencia antes de cerrar el trabajo.',
+    `Review the actual changed files against every acceptance criterion, scope, plan and task. Do not equate checked boxes with successful behavior.
 Fill verification.md with criterion-to-file/test/result evidence, limitations and unresolved findings. Keep any missing work pending.
 Review every criterion separately in acceptance.json: schemaVersion 1, criteria [{id, status, method, evidence}]. Use status passed only when its expected outcome is supported; otherwise pending, failed or blocked. Methods are automated, manual, inspection or decision. Include the actual command/result or specific observed interaction, environment, scope and limitations in evidence. Synchronize rows with all criterion IDs in the primary artifact; never remove an unmet criterion without an approved scope change.
 General gates passing do not prove every acceptance criterion. Reading CSS/JSX supports inspection only; it does not demonstrate rendered layout, keyboard interaction or accessibility compliance. For contrast record measured color pairs and ratios; for interaction record actual steps and outcomes or leave it pending. User acceptance can be manual evidence when the reviewed role/state and result are stated. Screenshots are useful when needed, not universally mandatory.
 Reconcile verification.md with the latest actual outputs: preserve warnings, real environment/version, durations and remaining coverage gaps. Do not invent browser execution or a runtime matrix. Do not claim zero regressions from a finite suite. A valid acceptance.json checks declared coverage, not truth of evidence; still review its source meaning.
 For RFC record a reasoned Decision: ACCEPTED, REJECTED or DEFERRED in rfc.md and review evidence in verification.md.
 For code changes, run verify <id> to execute the configured, reviewed quality gates. If no automated gate can apply, use verify <id> --manual "<specific reason>" only with documented manual evidence; label it manual, never automated success.
-Only after every criterion is supported and verification succeeds, run complete <id>. Changes to source, acceptance.json or specification after verification require a new verify. Report automated gates and acceptance review separately with evidence and limitations; never claim all environments or agents were tested.`]
+Only after every criterion is supported and verification succeeds, run complete <id>. Changes to source, acceptance.json or specification after verification require a new verify. Report automated gates and acceptance review separately with evidence and limitations; never claim all environments or agents were tested.`,
+  ],
 ];
 
 export const OMNI_SKILLS = definitions.map(([name, description, instructions]) => ({
-  name, description, instructions: `# /${name}\n\n${common}\n## Workflow\n${instructions}\n`
+  name,
+  description,
+  instructions: `# /${name}\n\n${common}\n## Workflow\n${instructions}\n`,
 }));

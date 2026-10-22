@@ -5,8 +5,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installAgentIntegrations, OMNI_SKILLS } from '../src/integrations.mjs';
 let root;
-beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'omnispec-adapter-')); });
-afterEach(async () => { await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'omnispec-adapter-'));
+});
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 
 // Explicit paths are the externally documented contract, independent of the implementation registry.
 const adapters = {
@@ -18,22 +22,27 @@ const adapters = {
   kilo: '.kilo/commands/omni-init.md',
   opencode: '.opencode/commands/omni-init.md',
   gemini: '.gemini/commands/omni-init.toml',
-  generic: 'specs/commands/omni-init.md'
+  generic: 'specs/commands/omni-init.md',
 };
-for (const [agent, path] of Object.entries(adapters)) test(`${agent} creates invocable onboarding and exploration using its documented format`, async () => {
-  const result = await installAgentIntegrations(root, { version: '0.5.0' }, { agent });
-  const content = await readFile(join(root, path), 'utf8');
-  assert.match(content, /inspect --json/);
-  assert.match(content, /project-context/);
-  assert.ok(result.created.some(p => p.includes('omni-discuss')));
-  if (agent === 'gemini') {
-    const prompt = content.split('\n').find(l => l.startsWith('prompt = ')).slice('prompt = '.length);
-    assert.match(JSON.parse(prompt), /User request: \{\{args\}\}/);
-  } else assert.match(content, /^---\nname: omni-init\ndescription: /);
-  if (agent === 'antigravity') {
-    for (const name of ['.cursor', '.claude', '.github', '.kilo', 'AGENTS.md']) await assert.rejects(access(join(root, name)), { code: 'ENOENT' });
-  }
-});
+for (const [agent, path] of Object.entries(adapters))
+  test(`${agent} creates invocable onboarding and exploration using its documented format`, async () => {
+    const result = await installAgentIntegrations(root, { version: '0.5.0' }, { agent });
+    const content = await readFile(join(root, path), 'utf8');
+    assert.match(content, /inspect --json/);
+    assert.match(content, /project-context/);
+    assert.ok(result.created.some(p => p.includes('omni-discuss')));
+    if (agent === 'gemini') {
+      const prompt = content
+        .split('\n')
+        .find(l => l.startsWith('prompt = '))
+        .slice('prompt = '.length);
+      assert.match(JSON.parse(prompt), /User request: \{\{args\}\}/);
+    } else assert.match(content, /^---\nname: omni-init\ndescription: /);
+    if (agent === 'antigravity') {
+      for (const name of ['.cursor', '.claude', '.github', '.kilo', 'AGENTS.md'])
+        await assert.rejects(access(join(root, name)), { code: 'ENOENT' });
+    }
+  });
 
 test('all adapters share the nine workflows without hard-coded npm test or tool permissions', async () => {
   assert.equal(OMNI_SKILLS.length, 9);
@@ -52,7 +61,10 @@ test('preserves user instructions outside the managed section across repeated up
   await mkdir(join(root, '.github'));
   await writeFile(join(root, '.github', 'copilot-instructions.md'), '# Copilot rules\nCustom policy.\n');
   await installAgentIntegrations(root, { version: '0.5.0' }, { agent: 'all' });
-  await writeFile(join(root, 'AGENTS.md'), (await readFile(join(root, 'AGENTS.md'), 'utf8')) + '\nAdditional user policy.\n');
+  await writeFile(
+    join(root, 'AGENTS.md'),
+    (await readFile(join(root, 'AGENTS.md'), 'utf8')) + '\nAdditional user policy.\n',
+  );
   await installAgentIntegrations(root, { version: '0.5.1' }, { agent: 'all' });
   const content = await readFile(join(root, 'AGENTS.md'), 'utf8');
   assert.match(content, /Additional user policy/);

@@ -1,15 +1,9 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import {
-  buildConstitutionContent,
-  buildSpecsReadmeContent,
-  scaffoldProject,
-  createSpec,
-  ARCHETYPES
-} from '../src/generator.mjs';
+import { buildConstitutionContent, scaffoldProject, createSpec } from '../src/generator.mjs';
 import { loadManifest } from '../src/manifest.mjs';
 
 describe('Project & Spec Generator', () => {
@@ -35,7 +29,7 @@ describe('Project & Spec Generator', () => {
         projectName: 'NeoBank',
         profile: 'fintech',
         stack: 'PostgreSQL / Node.js',
-        docStandard: 'TSDoc'
+        docStandard: 'TSDoc',
       });
 
       assert.match(content, /# CONSTITUTION — NeoBank/);
@@ -49,7 +43,7 @@ describe('Project & Spec Generator', () => {
         projectName: 'Pulso360',
         profile: 'bpo',
         stack: 'React / Node.js',
-        docStandard: 'JSDoc'
+        docStandard: 'JSDoc',
       });
 
       assert.match(content, /# CONSTITUTION — Pulso360/);
@@ -65,7 +59,7 @@ describe('Project & Spec Generator', () => {
         projectName: 'AcmeApp',
         profile: 'general',
         stack: 'Node / Express',
-        docStandard: 'JSDoc'
+        docStandard: 'JSDoc',
       });
 
       assert.ok(res.constitutionPath);
@@ -89,7 +83,7 @@ describe('Project & Spec Generator', () => {
     beforeEach(async () => {
       await scaffoldProject(tempDir, {
         projectName: 'TestApp',
-        profile: 'general'
+        profile: 'general',
       });
     });
 
@@ -127,7 +121,10 @@ describe('Project & Spec Generator', () => {
       assert.equal(s3.id, '003');
       assert.equal(s3.branch, 'debt/003-upgrade-node-22');
       const s3Files = await readdir(s3.specDir);
-      assert.deepEqual(s3Files.sort(), ['acceptance.json', 'audit.md', 'migration-plan.md', 'tasks.md', 'verification.md'].sort());
+      assert.deepEqual(
+        s3Files.sort(),
+        ['acceptance.json', 'audit.md', 'migration-plan.md', 'tasks.md', 'verification.md'].sort(),
+      );
 
       const s4 = await createSpec(tempDir, 'rfc', 'graphql-vs-trpc');
       assert.equal(s4.id, '004');
@@ -141,12 +138,9 @@ describe('Project & Spec Generator', () => {
     });
 
     test('throws an error if archetype is invalid', async () => {
-      await assert.rejects(
-        async () => {
-          await createSpec(tempDir, 'invalid-type', 'some-name');
-        },
-        /Invalid archetype "invalid-type"/
-      );
+      await assert.rejects(async () => {
+        await createSpec(tempDir, 'invalid-type', 'some-name');
+      }, /Invalid archetype "invalid-type"/);
     });
   });
 });

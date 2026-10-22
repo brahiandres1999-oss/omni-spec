@@ -35,16 +35,16 @@ describe('Project Environment & Stack Detector', () => {
       name: 'my-react-app',
       dependencies: {
         react: '^18.0.0',
-        'react-dom': '^18.0.0'
+        'react-dom': '^18.0.0',
       },
       devDependencies: {
-        typescript: '^5.0.0'
+        typescript: '^5.0.0',
       },
       scripts: {
         test: 'vitest run',
         lint: 'eslint .',
-        build: 'vite build'
-      }
+        build: 'vite build',
+      },
     };
 
     await writeFile(join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
@@ -61,10 +61,7 @@ describe('Project Environment & Stack Detector', () => {
   });
 
   test('identifies brownfield Python FastAPI project', async () => {
-    await writeFile(
-      join(tempDir, 'requirements.txt'),
-      'fastapi==0.110.0\nuvicorn==0.28.0\npydantic==2.6.0\n'
-    );
+    await writeFile(join(tempDir, 'requirements.txt'), 'fastapi==0.110.0\nuvicorn==0.28.0\npydantic==2.6.0\n');
 
     const result = await detectProjectEnvironment(tempDir);
     assert.equal(result.isGreenfield, false);
@@ -77,7 +74,7 @@ describe('Project Environment & Stack Detector', () => {
   test('identifies brownfield Java Maven project', async () => {
     await writeFile(
       join(tempDir, 'pom.xml'),
-      '<project><modelVersion>4.0.0</modelVersion><artifactId>demo</artifactId></project>'
+      '<project><modelVersion>4.0.0</modelVersion><artifactId>demo</artifactId></project>',
     );
 
     const result = await detectProjectEnvironment(tempDir);
@@ -100,10 +97,7 @@ describe('Project Environment & Stack Detector', () => {
   });
 
   test('identifies brownfield Rust Cargo project', async () => {
-    await writeFile(
-      join(tempDir, 'Cargo.toml'),
-      '[package]\nname = "my_crate"\nversion = "0.1.0"\n'
-    );
+    await writeFile(join(tempDir, 'Cargo.toml'), '[package]\nname = "my_crate"\nversion = "0.1.0"\n');
 
     const result = await detectProjectEnvironment(tempDir);
     assert.equal(result.isGreenfield, false);
@@ -129,7 +123,7 @@ describe('Project Environment & Stack Detector', () => {
     const backendPkg = {
       name: 'backend',
       type: 'module',
-      dependencies: { express: '^5.0.0' }
+      dependencies: { express: '^5.0.0' },
     };
     await writeFile(join(tempDir, 'backend', 'package.json'), JSON.stringify(backendPkg, null, 2));
 
@@ -143,7 +137,7 @@ describe('Project Environment & Stack Detector', () => {
     const frontendPkg = {
       name: 'frontend',
       dependencies: { react: '^18.0.0' },
-      devDependencies: { typescript: '^5.0.0' }
+      devDependencies: { typescript: '^5.0.0' },
     };
     await writeFile(join(tempDir, 'frontend', 'package.json'), JSON.stringify(frontendPkg, null, 2));
 

@@ -2,9 +2,5 @@
   "name": "omni-spec",
   "description": "Universal Spec-Driven Development (SDD) framework for agentic AI coding. First-pass precision, zero slop, and evidence-based verification.",
   "logo": "assets/omni-spec-icon.svg",
-  "suggestedPrompts": [
-    "/omni-init",
-    "/omni-discuss",
-    "/omni-specify"
-  ]
+  "suggestedPrompts": ["/omni-init", "/omni-discuss", "/omni-specify"]
 }

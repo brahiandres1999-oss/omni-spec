@@ -8,7 +8,9 @@ function stripHtmlComments(content) {
 }
 
 function checklistStats(content) {
-  let fence = null, checked = 0, unchecked = 0;
+  let fence = null,
+    checked = 0,
+    unchecked = 0;
   for (const line of stripHtmlComments(content).split(/\r?\n/)) {
     const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
     if (marker) {
@@ -21,7 +23,7 @@ function checklistStats(content) {
     if (task) task[1] === ' ' ? unchecked++ : checked++;
   }
   const total = checked + unchecked;
-  return { total, completed: checked, pending: unchecked, percentage: total ? Math.round(100 * checked / total) : 0 };
+  return { total, completed: checked, pending: unchecked, percentage: total ? Math.round((100 * checked) / total) : 0 };
 }
 
 async function readRegularFile(filePath) {
@@ -52,13 +54,13 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       valid: false,
       errors: ['No OmniSpec manifest found. Run `omni-spec init` first.'],
       warnings: [],
-      spec: null
+      spec: null,
     };
   }
 
   let spec = null;
   if (specIdentifier) {
-    spec = manifest.specs.find((s) => s.id === specIdentifier || s.slug === specIdentifier);
+    spec = manifest.specs.find(s => s.id === specIdentifier || s.slug === specIdentifier);
   } else {
     spec = await getActiveSpec(baseDir);
   }
@@ -68,7 +70,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       valid: false,
       errors: ['No active specification found. Create one with `omni-spec create <type> <name>`.'],
       warnings: [],
-      spec: null
+      spec: null,
     };
   }
 
@@ -85,7 +87,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       valid: false,
       errors: [`Specification directory not found at specs/${spec.slug}: ${err.message}`],
       warnings: [],
-      spec
+      spec,
     };
   }
 
@@ -107,7 +109,8 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       content.includes('Nombre / Rol') ||
       content.includes('ej. ¿Esta operación') ||
       content.includes('[Rol Autorizado]') ||
-      content.includes('[TODO]') || content.includes('[NEEDS CLARIFICATION]')
+      content.includes('[TODO]') ||
+      content.includes('[NEEDS CLARIFICATION]')
     ) {
       errors.push(`File ${file} still contains unreplaced placeholder tokens or sample template text.`);
     }
@@ -144,8 +147,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         const cleanSpec = specData.clean;
         // Phase 0 Clarification check
         const hasSection0 =
-          cleanSpec.includes('## 0. Fase de Clarificación') ||
-          cleanSpec.includes('## 0. Clarification');
+          cleanSpec.includes('## 0. Fase de Clarificación') || cleanSpec.includes('## 0. Clarification');
 
         if (!hasSection0) {
           errors.push('spec.md is missing Section 0: Clarification & Assumptions (Anti-Hallucination Gate).');
@@ -157,7 +159,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
             .replace(/<!--[\s\S]*?-->/g, '')
             .replace(/^\s*#{1,6}\s+.*$/gm, '')
             .replace(/^\s*(?:[-*_]\s*){3,}$/gm, '')
-            .replace(/^\s*\|[\s:|\-]+$/gm, '')
+            .replace(/^\s*\|[\s:|-]+$/gm, '')
             .replace(/Phase 0|Clarification|Fase de Clarificación|Supuestos|Assumptions/gi, '')
             .trim();
           if (substantiveText.length < 30) {
@@ -269,6 +271,6 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     specDir,
     errors,
     warnings,
-    tasks: taskStats
+    tasks: taskStats,
   };
 }

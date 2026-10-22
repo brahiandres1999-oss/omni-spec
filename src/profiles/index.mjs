@@ -9,12 +9,13 @@ export const profiles = {
   fintech: fintechProfile,
   healthtech: healthtechProfile,
   bpo: bpoProfile,
-  ecommerce: ecommerceProfile
+  ecommerce: ecommerceProfile,
 };
 
 export function getProfile(id) {
   if (id == null) return profiles.general;
-  if (!Object.hasOwn(profiles, id)) throw new Error(`Invalid profile "${id}". Valid profiles: ${Object.keys(profiles).join(', ')}`);
+  if (!Object.hasOwn(profiles, id))
+    throw new Error(`Invalid profile "${id}". Valid profiles: ${Object.keys(profiles).join(', ')}`);
   return profiles[id];
 }
 

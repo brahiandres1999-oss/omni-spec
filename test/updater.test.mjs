@@ -39,7 +39,7 @@ describe('OmniSpec Project Updater & Migration Engine', () => {
       project: 'LegacyApp',
       version: '0.3.1',
       schemaVersion: 1,
-      specs: []
+      specs: [],
     };
     await saveManifest(tempDir, manifest);
 
@@ -55,7 +55,7 @@ describe('OmniSpec Project Updater & Migration Engine', () => {
       project: 'LegacyApp',
       version: '0.3.1',
       schemaVersion: 1,
-      specs: [{ id: '001', slug: '001-existing-feature', status: 'IN_PROGRESS' }]
+      specs: [{ id: '001', slug: '001-existing-feature', status: 'IN_PROGRESS' }],
     };
     await saveManifest(tempDir, manifest);
 
@@ -95,9 +95,9 @@ describe('OmniSpec Project Updater & Migration Engine', () => {
           slug: '001-user-auth',
           type: 'feature',
           status: 'IN_PROGRESS',
-          title: 'User Auth'
-        }
-      ]
+          title: 'User Auth',
+        },
+      ],
     };
     await saveManifest(tempDir, manifest);
 
@@ -132,7 +132,9 @@ describe('OmniSpec Project Updater & Migration Engine', () => {
     await scaffoldProject(tempDir, { agent: 'antigravity', qualityGates: '' });
     const spec = await createSpec(tempDir, 'feature', 'existing-work');
     await fillSpec(tempDir, spec);
-    await verifySpec(tempDir, spec.id, { manual: 'Reviewed the existing deterministic feature in this migration fixture.' });
+    await verifySpec(tempDir, spec.id, {
+      manual: 'Reviewed the existing deterministic feature in this migration fixture.',
+    });
     await completeSpec(tempDir, spec.id);
     const contextPath = join(tempDir, 'specs', 'project-context.md');
     await writeFile(contextPath, '# Existing context\nKeep these project decisions.\n');
@@ -158,7 +160,8 @@ describe('OmniSpec Project Updater & Migration Engine', () => {
     await updateProject(tempDir);
     const after = JSON.parse(await readFile(join(tempDir, 'specs', 'manifest.json'), 'utf8'));
     assert.deepEqual(after, before);
-    for (const [name, content] of Object.entries(authored)) assert.equal(await readFile(join(spec.specDir, name), 'utf8'), content);
+    for (const [name, content] of Object.entries(authored))
+      assert.equal(await readFile(join(spec.specDir, name), 'utf8'), content);
     assert.equal(await readFile(contextPath, 'utf8'), '# Existing context\nKeep these project decisions.\n');
     assert.equal(await readFile(join(tempDir, 'CONSTITUTION.md'), 'utf8'), constitution);
     assert.notEqual(await readFile(join(tempDir, skillName), 'utf8'), oldSkill);

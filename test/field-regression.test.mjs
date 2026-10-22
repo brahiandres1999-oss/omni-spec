@@ -74,7 +74,11 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
     const code = await runCli(['create', 'feature', 'ghost-spec'], tempDir);
     assert.equal(code, 1);
     assert.equal(await pathExists(join(tempDir, 'CONSTITUTION.md')), false);
-    assert.equal(await pathExists(join(tempDir, 'specs')), false, 'no manifest.lock or specs scaffold may silently appear');
+    assert.equal(
+      await pathExists(join(tempDir, 'specs')),
+      false,
+      'no manifest.lock or specs scaffold may silently appear',
+    );
   });
 
   test('R16: init inside an existing OmniSpec project is blocked to prevent nested universes', async () => {
@@ -92,15 +96,19 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
     assert.equal(manifest.project, 'ParentProject');
   });
 
-  test('R17: interactive wizard with closed stdin fails loudly instead of exiting 0 silently', { timeout: 30000 }, async () => {
+  test('R17: interactive wizard with closed stdin fails loudly instead of exiting 0 silently', {
+    timeout: 30000,
+  }, async () => {
     const emptyDir = await mkdtemp(join(tmpdir(), 'omnispec-eof-test-'));
     try {
       const child = spawn(process.execPath, [BIN_PATH, 'init'], {
         cwd: emptyDir,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stderr = '';
-      child.stderr.on('data', data => { stderr += data; });
+      child.stderr.on('data', data => {
+        stderr += data;
+      });
       const timer = setTimeout(() => child.kill(), 20000);
       const [code] = await once(child, 'close');
       clearTimeout(timer);
@@ -118,7 +126,7 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
     const pkg = JSON.stringify({
       name: 'bom-app',
       scripts: { test: 'vitest run', lint: 'eslint .' },
-      devDependencies: { typescript: '^5.4.0' }
+      devDependencies: { typescript: '^5.4.0' },
     });
     await writeFile(join(tempDir, 'package.json'), Buffer.concat([BOM, Buffer.from(pkg, 'utf-8')]));
 
@@ -173,7 +181,7 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
   test('R21: omni-spec update genuinely refreshes project templates from the CLI source', async () => {
     await scaffoldProject(tempDir, { projectName: 'TemplateProject' });
     const templateSpecPath = join(tempDir, 'specs', '_templates', '01-feature', 'spec.md');
-    await writeFile(templateSpecPath, '<!-- STALE MARKER R21 -->\n' + await readFile(templateSpecPath, 'utf-8'));
+    await writeFile(templateSpecPath, '<!-- STALE MARKER R21 -->\n' + (await readFile(templateSpecPath, 'utf-8')));
 
     await assert.rejects(updateProject(tempDir), /Local changes preserved/);
     await updateProject(tempDir, { acceptUpdates: true });

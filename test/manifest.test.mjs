@@ -1,18 +1,11 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fillSpec } from '../test-support/fixtures.mjs';
 import { verifySpec } from '../src/verification.mjs';
-import {
-  initManifest,
-  loadManifest,
-  saveManifest,
-  addSpec,
-  updateSpecStatus,
-  getActiveSpec
-} from '../src/manifest.mjs';
+import { initManifest, loadManifest, addSpec, updateSpecStatus, getActiveSpec } from '../src/manifest.mjs';
 
 describe('Manifest State Machine', () => {
   let tempDir;
@@ -36,7 +29,7 @@ describe('Manifest State Machine', () => {
       projectName: 'TestApp',
       profile: 'fintech',
       techStack: 'Node / Express',
-      documentationStandard: 'JSDoc'
+      documentationStandard: 'JSDoc',
     });
 
     assert.equal(manifest.project, 'TestApp');
@@ -64,7 +57,7 @@ describe('Manifest State Machine', () => {
       title: 'User Authentication',
       type: 'feature',
       branch: 'spec/001-user-auth',
-      files: ['spec.md', 'plan.md', 'tasks.md']
+      files: ['spec.md', 'plan.md', 'tasks.md'],
     });
 
     assert.equal(spec.id, '001');
@@ -88,7 +81,7 @@ describe('Manifest State Machine', () => {
       title: 'Fix Login',
       type: 'bugfix',
       branch: 'spec/001-fix-login',
-      files: ['bug.md', 'rca.md', 'fix.md']
+      files: ['bug.md', 'rca.md', 'fix.md'],
     });
 
     await assert.rejects(updateSpecStatus(tempDir, '001', 'COMPLETED'), /Cannot verify\/complete/);
@@ -108,11 +101,8 @@ describe('Manifest State Machine', () => {
 
   test('updateSpecStatus throws if spec is not found', async () => {
     await initManifest(tempDir, { projectName: 'TestApp' });
-    await assert.rejects(
-      async () => {
-        await updateSpecStatus(tempDir, '999', 'COMPLETED');
-      },
-      /not found/i
-    );
+    await assert.rejects(async () => {
+      await updateSpecStatus(tempDir, '999', 'COMPLETED');
+    }, /not found/i);
   });
 });

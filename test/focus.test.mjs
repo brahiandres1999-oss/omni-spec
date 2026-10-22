@@ -53,7 +53,7 @@ describe('Specification Focus & List Engine', () => {
   test('focusSpec throws an error if identifier does not exist', async () => {
     await assert.rejects(
       focusSpec(tempDir, 'non-existent-999'),
-      /Specification with identifier "non-existent-999" not found in manifest/
+      /Specification with identifier "non-existent-999" not found in manifest/,
     );
   });
 
@@ -72,8 +72,8 @@ describe('Specification Focus & List Engine', () => {
     await createSpec(tempDir, 'bugfix', 'cli-bugfix');
 
     const originalLog = console.log;
-    let output = [];
-    console.log = (msg) => output.push(msg);
+    const output = [];
+    console.log = msg => output.push(msg);
 
     try {
       // Test CLI list

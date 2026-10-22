@@ -12,8 +12,12 @@ import { runWizard } from '../src/wizard.mjs';
 import { auditSpec } from '../src/auditor.mjs';
 
 let dir;
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'omnispec-stabilization-')); });
-afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'omnispec-stabilization-'));
+});
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 const pause = ms => new Promise(done => setTimeout(done, ms));
 const manifestUrl = new URL('../src/manifest.mjs', import.meta.url).href;
 const generatorUrl = new URL('../src/generator.mjs', import.meta.url).href;
@@ -51,15 +55,22 @@ process.once('message', async () => {
 `;
 
 function worker(t, mode) {
-  const child = spawn(process.execPath, ['--input-type=module', '-e', workerCode, manifestUrl, generatorUrl, dir, mode],
-    { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+  const child = spawn(
+    process.execPath,
+    ['--input-type=module', '-e', workerCode, manifestUrl, generatorUrl, dir, mode],
+    { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] },
+  );
   const events = new Map();
   child.on('message', message => events.set(message.event, message));
   child.on('error', error => events.set('failure', { error: error.message }));
   const closed = once(child, 'close');
-  t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill(); await closed; });
+  t.after(async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    await closed;
+  });
   return {
-    child, closed,
+    child,
+    closed,
     async wait(event) {
       const deadline = Date.now() + 35000;
       while (!events.has(event)) {
@@ -67,7 +78,7 @@ function worker(t, mode) {
         if (Date.now() > deadline) throw new Error('Worker timeout: ' + event);
         await pause(10);
       }
-    }
+    },
   };
 }
 
@@ -75,10 +86,21 @@ async function interactive(t, flags = [], answers = []) {
   const cli = fileURLToPath(new URL('../bin/omni-spec.mjs', import.meta.url));
   const child = spawn(process.execPath, [cli, 'init', ...flags], { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] });
   const closed = once(child, 'close');
-  t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill(); await closed; });
-  const prompts = ['Project Name [', 'Select an option (1-8)', 'Preferred Documentation Standard [',
-    'Select an option (1-5)', 'Quality Gates command(s) [', 'Proceed with scaffolding?'];
-  let output = '', stderr = '', index = 0;
+  t.after(async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    await closed;
+  });
+  const prompts = [
+    'Project Name [',
+    'Select an option (1-8)',
+    'Preferred Documentation Standard [',
+    'Select an option (1-5)',
+    'Quality Gates command(s) [',
+    'Proceed with scaffolding?',
+  ];
+  let output = '',
+    stderr = '',
+    index = 0;
   const timer = setTimeout(() => child.kill(), 25000);
   child.stdout.on('data', data => {
     output += data;
@@ -86,18 +108,25 @@ async function interactive(t, flags = [], answers = []) {
       child.stdin.write((answers[index++] || '') + '\n');
     }
   });
-  child.stderr.on('data', data => { stderr += data; });
-  const [code] = await closed; clearTimeout(timer);
+  child.stderr.on('data', data => {
+    stderr += data;
+  });
+  const [code] = await closed;
+  clearTimeout(timer);
   return { code, output, stderr, answered: index };
 }
 
 test('a living owner retains exclusion beyond the former 15-second expiration', { timeout: 35000 }, async t => {
   await scaffoldProject(dir, { projectName: 'LiveOwner' });
   const owner = worker(t, 'hold');
-  await owner.wait('ready'); owner.child.send('start'); await owner.wait('held');
+  await owner.wait('ready');
+  owner.child.send('start');
+  await owner.wait('held');
   await pause(15300);
   await assert.rejects(acquireLock(join(dir, 'specs', 'manifest.lock'), 2, 5), /Lock timeout/);
-  owner.child.send('release'); await owner.wait('done'); await owner.closed;
+  owner.child.send('release');
+  await owner.wait('done');
+  await owner.closed;
   const spec = await createSpec(dir, 'feature', 'after-owner');
   assert.equal(spec.id, '001');
 });
@@ -106,8 +135,11 @@ for (const mode of ['hold', 'choosing']) {
   test(`eight processes recover a dead ${mode} owner without lost entries`, { timeout: 45000 }, async t => {
     await scaffoldProject(dir, { projectName: 'Recovery' });
     const owner = worker(t, mode);
-    await owner.wait('ready'); owner.child.send('start'); await owner.wait('held');
-    owner.child.kill(); await owner.closed;
+    await owner.wait('ready');
+    owner.child.send('start');
+    await owner.wait('held');
+    owner.child.kill();
+    await owner.closed;
     const peers = Array.from({ length: 8 }, () => worker(t, 'create'));
     await Promise.all(peers.map(peer => peer.wait('ready')));
     for (const peer of peers) peer.child.send('start');
@@ -140,7 +172,7 @@ test('init, create and closure serialize without dropping records or statuses', 
   await Promise.all([
     ...Array.from({ length: 4 }, () => initManifest(dir)),
     ...Array.from({ length: 4 }, (_, i) => createSpec(dir, 'feature', 'task-' + i)),
-    updateSpecStatus(dir, '001', 'CLOSED')
+    updateSpecStatus(dir, '001', 'CLOSED'),
   ]);
   const manifest = await loadManifest(dir);
   assert.equal(manifest.specs.length, 5);
@@ -156,7 +188,10 @@ test('automatic initialization preserves the package scripts that exist', async 
   assert.ok(!(await readFile(join(dir, 'CONSTITUTION.md'), 'utf8')).includes('npm run lint'));
 });
 
-for (const [marker, command] of [['pom.xml', 'mvn test'], ['build.gradle', 'gradle test']]) {
+for (const [marker, command] of [
+  ['pom.xml', 'mvn test'],
+  ['build.gradle', 'gradle test'],
+]) {
   test(`interactive and automatic ${marker} use Java and retain build-tool gates`, async t => {
     await writeFile(join(dir, marker), '');
     const automatic = await runWizard(dir, { yes: true });
@@ -173,7 +208,12 @@ for (const [marker, command] of [['pom.xml', 'mvn test'], ['build.gradle', 'grad
 }
 
 test('force interactive choices update constitution and manifest consistently', async t => {
-  await scaffoldProject(dir, { projectName: 'Switch', stack: 'Node.js / TypeScript', docStandard: 'TSDoc', profile: 'general' });
+  await scaffoldProject(dir, {
+    projectName: 'Switch',
+    stack: 'Node.js / TypeScript',
+    docStandard: 'TSDoc',
+    profile: 'general',
+  });
   const result = await interactive(t, ['--force'], ['', '3', '', '2']);
   assert.equal(result.code, 0, result.stderr);
   const manifest = await loadManifest(dir);
@@ -186,7 +226,13 @@ test('force interactive choices update constitution and manifest consistently', 
 });
 
 test('reinitialization preserves custom configuration and rejects inconsistent changes without force', async () => {
-  await scaffoldProject(dir, { projectName: 'Keep', profile: 'fintech', stack: 'Python', docStandard: 'PEP257', qualityGates: 'python -m unittest' });
+  await scaffoldProject(dir, {
+    projectName: 'Keep',
+    profile: 'fintech',
+    stack: 'Python',
+    docStandard: 'PEP257',
+    qualityGates: 'python -m unittest',
+  });
   const before = await readFile(join(dir, 'CONSTITUTION.md'), 'utf8');
   await scaffoldProject(dir, await runWizard(dir, { yes: true }));
   const manifest = await loadManifest(dir);
@@ -202,13 +248,24 @@ test('profile injection retains edited original rows, added rows and table notes
   await scaffoldProject(dir, { projectName: 'Security', profile: 'fintech' });
   const template = join(dir, 'specs', '_templates', '01-feature', 'spec.md');
   let content = await readFile(template, 'utf8');
-  content = content.replace('Si es SÍ: Especificar cifrado en reposo/tránsito y permisos mínimos.', 'MANDATORY_HSM_POLICY');
-  content = content.replace('| **¿Accede o procesa', '| CUSTOM_CONTROL Control de Seguridad | YES | Owner signoff. |\n| **¿Accede o procesa');
+  content = content.replace(
+    'Si es SÍ: Especificar cifrado en reposo/tránsito y permisos mínimos.',
+    'MANDATORY_HSM_POLICY',
+  );
+  content = content.replace(
+    '| **¿Accede o procesa',
+    '| CUSTOM_CONTROL Control de Seguridad | YES | Owner signoff. |\n| **¿Accede o procesa',
+  );
   content = content.replace('## 4. Experiencia', 'CUSTOM_TABLE_NOTE\n\n## 4. Experiencia').replace(/\r?\n/g, '\r\n');
   await writeFile(template, content);
   const spec = await createSpec(dir, 'feature', 'custom');
   const generated = await readFile(join(spec.specDir, 'spec.md'), 'utf8');
-  for (const text of ['MANDATORY_HSM_POLICY', 'CUSTOM_CONTROL', 'CUSTOM_TABLE_NOTE', 'Does it touch balances, money, or ledger?']) {
+  for (const text of [
+    'MANDATORY_HSM_POLICY',
+    'CUSTOM_CONTROL',
+    'CUSTOM_TABLE_NOTE',
+    'Does it touch balances, money, or ledger?',
+  ]) {
     assert.ok(generated.includes(text), text);
   }
 });
@@ -223,6 +280,9 @@ test('clarification headings alone fail, but answered clarification passes', asy
   await writeFile(join(spec.specDir, 'tasks.md'), '- [ ] Implement payment.');
   await writeFile(join(spec.specDir, 'spec.md'), head + headings + tail);
   assert.equal((await auditSpec(dir)).valid, false);
-  await writeFile(join(spec.specDir, 'spec.md'), head + headings + '\nDecision: accept card payments only; cash payments are excluded.\n' + tail);
+  await writeFile(
+    join(spec.specDir, 'spec.md'),
+    head + headings + '\nDecision: accept card payments only; cash payments are excluded.\n' + tail,
+  );
   assert.equal((await auditSpec(dir)).valid, true);
 });

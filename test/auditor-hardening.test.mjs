@@ -29,7 +29,7 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
     await writeFile(
       join(spec.specDir, 'spec.md'),
       '<!-- ## 0. Clarification Non-Goals Acceptance Criteria Gherkin -->\n',
-      'utf-8'
+      'utf-8',
     );
     await writeFile(join(spec.specDir, 'plan.md'), '<!-- API Contracts Rollback -->\n', 'utf-8');
     await writeFile(join(spec.specDir, 'tasks.md'), '- [x] fake task\n', 'utf-8');
@@ -42,7 +42,7 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
     await writeFile(
       join(spec.specDir, 'spec.md'),
       '# SPEC-001 Title\n<!-- ## 0. Clarification -->\n## 1. Description\nSome description text',
-      'utf-8'
+      'utf-8',
     );
     await writeFile(join(spec.specDir, 'plan.md'), '# PLAN\nContracts and Rollback defined.', 'utf-8');
 
@@ -58,9 +58,13 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
     await writeFile(
       join(spec.specDir, 'spec.md'),
       '# SPEC-001\n## 0. Fase de Clarificación y Supuestos\n- Q: Valid? A: Yes verified.\n## 1. Alcance\nReal content here.\n## 2. Non-Goals\nNone.\n## 3. Criterios de Aceptación Gherkin\nGiven valid When test Then pass',
-      'utf-8'
+      'utf-8',
     );
-    await writeFile(join(spec.specDir, 'plan.md'), '# PLAN\nContratos API definidos.\nReversión y Rollback definidos.', 'utf-8');
+    await writeFile(
+      join(spec.specDir, 'plan.md'),
+      '# PLAN\nContratos API definidos.\nReversión y Rollback definidos.',
+      'utf-8',
+    );
     await writeFile(join(spec.specDir, 'tasks.md'), '# TASKS\nNo checkbox tasks here!', 'utf-8');
 
     const report = await auditSpec(tempDir, spec.id);
@@ -88,7 +92,11 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
 
     const debtReport = await auditSpec(tempDir, debtSpec.id);
     assert.strictEqual(debtReport.valid, false);
-    assert.ok(debtReport.errors.some(e => e.includes('could not be read as a regular file') || e.includes('not a regular file')));
+    assert.ok(
+      debtReport.errors.some(
+        e => e.includes('could not be read as a regular file') || e.includes('not a regular file'),
+      ),
+    );
 
     // 3. RFC with empty rfc.md
     const rfcSpec = await createSpec(tempDir, 'rfc', 'database-choice');

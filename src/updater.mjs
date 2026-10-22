@@ -15,13 +15,35 @@ export async function getCliVersion() {
 export async function checkProjectVersion(baseDir) {
   const manifest = await loadManifest(baseDir);
   const cliVersion = await getCliVersion();
-  if (!manifest) return { isInstalled: false, cliVersion, projectVersion: null, isOutdated: false, healthy: false, message: 'OmniSpec is not initialized. Run init first.' };
+  if (!manifest)
+    return {
+      isInstalled: false,
+      cliVersion,
+      projectVersion: null,
+      isOutdated: false,
+      healthy: false,
+      message: 'OmniSpec is not initialized. Run init first.',
+    };
   const integrity = await checkManagedFiles(baseDir);
   const isOutdated = manifest.version !== cliVersion;
   const isPlugin = manifest.agent === 'plugin';
   const healthy = !isOutdated && (isPlugin || (integrity.tracked > 0 && !integrity.changed.length));
-  return { isInstalled: true, project: manifest.project, projectVersion: manifest.version, cliVersion, isOutdated, healthy, integrity,
-    message: isOutdated ? 'Version differs. Review update --dry-run.' : healthy ? (isPlugin ? 'Plugin mode active. Workspace is clean and specs are preserved.' : 'Managed files match their installed fingerprints. Agent discovery and project tests still require verification.') : 'Installation needs review: missing/modified managed files or legacy installation. Run update --dry-run.' };
+  return {
+    isInstalled: true,
+    project: manifest.project,
+    projectVersion: manifest.version,
+    cliVersion,
+    isOutdated,
+    healthy,
+    integrity,
+    message: isOutdated
+      ? 'Version differs. Review update --dry-run.'
+      : healthy
+        ? isPlugin
+          ? 'Plugin mode active. Workspace is clean and specs are preserved.'
+          : 'Managed files match their installed fingerprints. Agent discovery and project tests still require verification.'
+        : 'Installation needs review: missing/modified managed files or legacy installation. Run update --dry-run.',
+  };
 }
 
 export async function updateProject(baseDir, options = {}) {
@@ -30,11 +52,24 @@ export async function updateProject(baseDir, options = {}) {
     if (!manifest) throw new Error('Cannot update: OmniSpec is not initialized. Run init first.');
     const cliVersion = await getCliVersion();
     const downgrade = compareVersions(manifest.version || '0.0.0', cliVersion) > 0;
-    if (downgrade && !options.allowDowngrade) throw new Error(`Refusing downgrade from ${manifest.version} to ${cliVersion}. Use the matching or newer CLI, or explicitly review update --allow-downgrade --dry-run.`);
+    if (downgrade && !options.allowDowngrade)
+      throw new Error(
+        `Refusing downgrade from ${manifest.version} to ${cliVersion}. Use the matching or newer CLI, or explicitly review update --allow-downgrade --dry-run.`,
+      );
     const agent = normalizeAgents(options.agent || manifest.agent).join(',');
-    const entries = [...await packageEntries(), ...integrationEntries({ ...manifest, version: cliVersion, agent })];
+    const entries = [...(await packageEntries()), ...integrationEntries({ ...manifest, version: cliVersion, agent })];
     const assets = await syncManagedFiles(baseDir, entries, options);
-    const result = { dryRun: Boolean(options.dryRun), downgrade, project: manifest.project, fromVersion: manifest.version, toVersion: cliVersion, specsCount: manifest.specs.length, specsPreserved: manifest.specs.length, assets, agentIntegrations: assets };
+    const result = {
+      dryRun: Boolean(options.dryRun),
+      downgrade,
+      project: manifest.project,
+      fromVersion: manifest.version,
+      toVersion: cliVersion,
+      specsCount: manifest.specs.length,
+      specsPreserved: manifest.specs.length,
+      assets,
+      agentIntegrations: assets,
+    };
     if (options.dryRun) return result;
     await ensureProjectContext(baseDir);
     manifest.version = cliVersion;

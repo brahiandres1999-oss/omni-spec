@@ -28,17 +28,7 @@ export async function installPlugin(options = {}) {
   await mkdir(targetDir, { recursive: true });
 
   // Clean items required for full Antigravity Plugin and lightweight CLI execution
-  const itemsToCopy = [
-    'plugin.json',
-    'README.md',
-    'package.json',
-    'rules',
-    'skills',
-    'agents',
-    'assets',
-    'bin',
-    'src'
-  ];
+  const itemsToCopy = ['plugin.json', 'README.md', 'package.json', 'rules', 'skills', 'agents', 'assets', 'bin', 'src'];
 
   const copied = [];
   for (const item of itemsToCopy) {
@@ -47,7 +37,7 @@ export async function installPlugin(options = {}) {
     try {
       await cp(srcPath, destPath, { recursive: true });
       copied.push(item);
-    } catch (e) {
+    } catch (_e) {
       // Ignore optional missing asset
     }
   }
@@ -56,7 +46,7 @@ export async function installPlugin(options = {}) {
     success: true,
     targetDir,
     version: cliVersion,
-    copied
+    copied,
   };
 }
 
@@ -82,7 +72,7 @@ export async function getPluginStatus(options = {}) {
       targetDir,
       version: pluginVersion,
       currentCliVersion: cliVersion,
-      isOutdated
+      isOutdated,
     };
   } catch {
     return {
@@ -90,7 +80,7 @@ export async function getPluginStatus(options = {}) {
       targetDir,
       version: null,
       currentCliVersion: cliVersion,
-      isOutdated: false
+      isOutdated: false,
     };
   }
 }
@@ -106,7 +96,7 @@ export async function cleanProject(baseDir, options = {}) {
     join(baseDir, '.agents', 'skills'),
     join(baseDir, 'specs', '.omni', 'runtime'),
     join(baseDir, 'specs', '.omni', 'managed.json'),
-    join(baseDir, 'specs', '.omni', 'backups')
+    join(baseDir, 'specs', '.omni', 'backups'),
   ];
 
   const toRemove = [];
@@ -126,7 +116,7 @@ export async function cleanProject(baseDir, options = {}) {
       fromVersion: manifest.version,
       toVersion: cliVersion,
       toRemove: toRemove.map(p => resolve(p)),
-      specsCount: manifest.specs?.length || 0
+      specsCount: manifest.specs?.length || 0,
     };
   }
 
@@ -170,10 +160,7 @@ export async function cleanProject(baseDir, options = {}) {
       const constitutionPath = join(baseDir, 'CONSTITUTION.md');
       let constitution = await readFile(constitutionPath, 'utf8');
       if (constitution.includes('specs/.omni/runtime/bin/omni-spec.mjs')) {
-        constitution = constitution.replaceAll(
-          'node specs/.omni/runtime/bin/omni-spec.mjs',
-          'omni-spec'
-        );
+        constitution = constitution.replaceAll('node specs/.omni/runtime/bin/omni-spec.mjs', 'omni-spec');
         await writeFile(constitutionPath, constitution, 'utf8');
       }
     } catch {}
@@ -184,7 +171,7 @@ export async function cleanProject(baseDir, options = {}) {
       agent: 'plugin',
       version: cliVersion,
       removed: removed.map(p => resolve(p)),
-      specsCount: manifest.specs?.length || 0
+      specsCount: manifest.specs?.length || 0,
     };
   });
 }

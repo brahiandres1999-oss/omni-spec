@@ -12,23 +12,32 @@ import { detectProjectEnvironment } from '../src/detector.mjs';
 import { fillSpec } from '../test-support/fixtures.mjs';
 import { auditSpec } from '../src/auditor.mjs';
 let root;
-beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'omnispec-contract-')); });
-afterEach(async () => { await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'omnispec-contract-'));
+});
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 const manual = { manual: 'Reviewed the deterministic greeting contract locally.' };
 
 test('new and unknown projects do not invent stacks or commands', async () => {
   const fresh = await detectProjectEnvironment(root);
-  assert.equal(fresh.detectedStack, null); assert.equal(fresh.qualityGates, '');
+  assert.equal(fresh.detectedStack, null);
+  assert.equal(fresh.qualityGates, '');
   await writeFile(join(root, 'legacy.xyz'), 'opaque');
   const old = await detectProjectEnvironment(root);
-  assert.equal(old.type, 'brownfield'); assert.equal(old.qualityGates, '');
+  assert.equal(old.type, 'brownfield');
+  assert.equal(old.qualityGates, '');
   assert.match(old.detectedStack, /Unknown/);
 });
 
 test('monorepo inventory includes root and nested commands with their working directory', async () => {
   await writeFile(join(root, 'package.json'), '{"scripts":{"lint":"lint-command"}}');
   await mkdir(join(root, 'packages', 'app'), { recursive: true });
-  await writeFile(join(root, 'packages', 'app', 'package.json'), '{"scripts":{"test":"test-command"},"packageManager":"pnpm@10.0.0"}');
+  await writeFile(
+    join(root, 'packages', 'app', 'package.json'),
+    '{"scripts":{"test":"test-command"},"packageManager":"pnpm@10.0.0"}',
+  );
   const result = await detectProjectEnvironment(root);
   assert.match(result.qualityGates, /^npm run lint/m);
   assert.match(result.qualityGates, /cd "packages\/app" && pnpm test/);
@@ -76,7 +85,16 @@ test('update previews conflicts, preserves edits, then backs up explicit replace
   assert.equal(await readFile(join(root, name), 'utf8'), '# My custom template');
   assert.equal(await readFile(join(root, 'specs', 'manifest.json'), 'utf8'), before);
   const updated = await updateProject(root, { acceptUpdates: true });
-  assert.equal(await readFile(join(root, updated.assets.backups.find(p => p.endsWith(name))), 'utf8'), '# My custom template');
+  assert.equal(
+    await readFile(
+      join(
+        root,
+        updated.assets.backups.find(p => p.endsWith(name)),
+      ),
+      'utf8',
+    ),
+    '# My custom template',
+  );
   assert.equal((await checkProjectVersion(root)).healthy, true);
 });
 
@@ -86,28 +104,30 @@ test('integration write failures do not report successful initialization', async
   assert.equal(await loadManifest(root), null);
 });
 
-for (const type of ['feature', 'bugfix', 'debt', 'rfc']) test(`${type}: block draft, verify evidence, complete and preserve history`, async () => {
-  await scaffoldProject(root);
-  const created = await createSpec(root, type, `work-${type}`);
-  await assert.rejects(updateSpecStatus(root, created.id, 'COMPLETED'), /Cannot verify\/complete/);
-  await fillSpec(root, { ...created, type });
-  if (type !== 'rfc') {
-    await fillSpec(root, { ...created, type }, { pending: true });
-    await assert.rejects(verifySpec(root, created.id, manual), /tasks remain pending/);
+for (const type of ['feature', 'bugfix', 'debt', 'rfc'])
+  test(`${type}: block draft, verify evidence, complete and preserve history`, async () => {
+    await scaffoldProject(root);
+    const created = await createSpec(root, type, `work-${type}`);
+    await assert.rejects(updateSpecStatus(root, created.id, 'COMPLETED'), /Cannot verify\/complete/);
     await fillSpec(root, { ...created, type });
-  }
-  const record = await verifySpec(root, created.id, manual);
-  assert.equal(record.passed, true);
-  assert.equal(record.mode, type === 'rfc' ? 'decision' : 'manual');
-  const closed = await updateSpecStatus(root, created.id, 'COMPLETED');
-  assert.equal(closed.status, 'COMPLETED');
-  assert.equal((await loadManifest(root)).active_spec, null);
-});
+    if (type !== 'rfc') {
+      await fillSpec(root, { ...created, type }, { pending: true });
+      await assert.rejects(verifySpec(root, created.id, manual), /tasks remain pending/);
+      await fillSpec(root, { ...created, type });
+    }
+    const record = await verifySpec(root, created.id, manual);
+    assert.equal(record.passed, true);
+    assert.equal(record.mode, type === 'rfc' ? 'decision' : 'manual');
+    const closed = await updateSpecStatus(root, created.id, 'COMPLETED');
+    assert.equal(closed.status, 'COMPLETED');
+    assert.equal((await loadManifest(root)).active_spec, null);
+  });
 
 test('automated checks run in project root; failing checks cannot close', async () => {
   await scaffoldProject(root, { qualityGates: 'node check.cjs' });
   await writeFile(join(root, 'check.cjs'), 'process.exit(1)');
-  const spec = await createSpec(root, 'feature', 'greeting'); await fillSpec(root, spec);
+  const spec = await createSpec(root, 'feature', 'greeting');
+  await fillSpec(root, spec);
   assert.equal((await verifySpec(root, spec.id)).passed, false);
   await assert.rejects(updateSpecStatus(root, spec.id, 'COMPLETED'), /did not pass/);
   await assert.rejects(verifySpec(root, spec.id, manual), /cannot bypass/);
@@ -117,7 +137,9 @@ test('automated checks run in project root; failing checks cannot close', async 
 });
 
 test('changed source invalidates verification until rerun', async () => {
-  await scaffoldProject(root); const spec = await createSpec(root, 'feature', 'greeting'); await fillSpec(root, spec);
+  await scaffoldProject(root);
+  const spec = await createSpec(root, 'feature', 'greeting');
+  await fillSpec(root, spec);
   await verifySpec(root, spec.id, manual);
   await writeFile(join(root, 'greeting.txt'), 'changed');
   await assert.rejects(updateSpecStatus(root, spec.id, 'COMPLETED'), /changed after verification/);
@@ -126,7 +148,9 @@ test('changed source invalidates verification until rerun', async () => {
 });
 
 test('changed gates invalidate evidence and configure keeps constitution in sync', async () => {
-  await scaffoldProject(root); const spec = await createSpec(root, 'feature', 'greeting'); await fillSpec(root, spec);
+  await scaffoldProject(root);
+  const spec = await createSpec(root, 'feature', 'greeting');
+  await fillSpec(root, spec);
   await verifySpec(root, spec.id, manual);
   assert.equal(await runCli(['configure', '--gates', 'node check.cjs'], root), 0);
   assert.match(await readFile(join(root, 'CONSTITUTION.md'), 'utf8'), /node check.cjs/);
@@ -134,7 +158,9 @@ test('changed gates invalidate evidence and configure keeps constitution in sync
 });
 
 test('manual evidence requires a specific reason and authored verification document', async () => {
-  await scaffoldProject(root); const spec = await createSpec(root, 'feature', 'greeting'); await fillSpec(root, spec);
+  await scaffoldProject(root);
+  const spec = await createSpec(root, 'feature', 'greeting');
+  await fillSpec(root, spec);
   await assert.rejects(verifySpec(root, spec.id), /No quality gates/);
   await writeFile(join(spec.specDir, 'verification.md'), '# Empty\n[TODO]');
   await assert.rejects(verifySpec(root, spec.id, manual), /verification.md/);
@@ -142,7 +168,8 @@ test('manual evidence requires a specific reason and authored verification docum
 
 test('focus rejects ambiguous partial names and aliases route correctly', async () => {
   await scaffoldProject(root);
-  await createSpec(root, 'fix', 'login-one'); await createSpec(root, 'bug', 'login-two');
+  await createSpec(root, 'fix', 'login-one');
+  await createSpec(root, 'bug', 'login-two');
   await assert.rejects(focusSpec(root, 'login'), /Ambiguous/);
   assert.equal((await focusSpec(root, '001')).type, 'bugfix');
 });
@@ -166,7 +193,9 @@ test('legacy upgrade supplies local runtime and missing project context without 
 
 test('newer project versions cannot be downgraded by update', async () => {
   await scaffoldProject(root);
-  const manifest = await loadManifest(root); manifest.version = '0.7.0'; await saveManifest(root, manifest);
+  const manifest = await loadManifest(root);
+  manifest.version = '0.7.0';
+  await saveManifest(root, manifest);
   await assert.rejects(updateProject(root), /Refusing downgrade/);
   assert.equal((await loadManifest(root)).version, '0.7.0');
 });
@@ -174,7 +203,9 @@ test('newer project versions cannot be downgraded by update', async () => {
 test('downgrade requires explicit consent and preserves authored state', async () => {
   const cliVersion = await getCliVersion();
   await scaffoldProject(root);
-  const manifest = await loadManifest(root); manifest.version = '999.0.0'; await saveManifest(root, manifest);
+  const manifest = await loadManifest(root);
+  manifest.version = '999.0.0';
+  await saveManifest(root, manifest);
   const contextPath = join(root, 'specs/project-context.md');
   await writeFile(contextPath, '# Confirmed decisions\nPreserve all existing user choices.\n');
   await assert.rejects(updateProject(root), /Refusing downgrade/);
@@ -200,9 +231,11 @@ test('manifest path traversal is rejected before artifacts can be accessed', asy
 test('verification timeout fails and cannot close the specification', async () => {
   await scaffoldProject(root, { qualityGates: 'node hang.cjs' });
   await writeFile(join(root, 'hang.cjs'), 'setInterval(() => {}, 1000)');
-  const spec = await createSpec(root, 'feature', 'timeout'); await fillSpec(root, spec);
+  const spec = await createSpec(root, 'feature', 'timeout');
+  await fillSpec(root, spec);
   const result = await verifySpec(root, spec.id, { timeout: 500 });
-  assert.equal(result.passed, false); assert.equal(result.results[0].timedOut, true);
+  assert.equal(result.passed, false);
+  assert.equal(result.results[0].timedOut, true);
   await assert.rejects(updateSpecStatus(root, spec.id, 'COMPLETED'), /did not pass/);
 });
 
@@ -213,8 +246,13 @@ test('concurrent initializations preserve a usable managed installation', async 
 });
 
 test('example checkboxes in code fences cannot satisfy required tasks', async () => {
-  await scaffoldProject(root); const spec = await createSpec(root, 'feature', 'examples'); await fillSpec(root, spec);
-  await writeFile(join(spec.specDir, 'tasks.md'), '# Example only\n```markdown\n- [x] This was never performed.\n```\n');
+  await scaffoldProject(root);
+  const spec = await createSpec(root, 'feature', 'examples');
+  await fillSpec(root, spec);
+  await writeFile(
+    join(spec.specDir, 'tasks.md'),
+    '# Example only\n```markdown\n- [x] This was never performed.\n```\n',
+  );
   assert.equal((await auditSpec(root, spec.id)).valid, false);
 });
 

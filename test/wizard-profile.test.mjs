@@ -22,19 +22,16 @@ describe('Regression R07, R09 & R10: Wizard Configuration & Profile Security Que
   });
 
   test('runWizard rejects unknown profile with descriptive error', async () => {
-    await assert.rejects(
-      async () => {
-        await runWizard(tempDir, { profile: 'invalid-profile', yes: true });
-      },
-      /Invalid profile "invalid-profile"/
-    );
+    await assert.rejects(async () => {
+      await runWizard(tempDir, { profile: 'invalid-profile', yes: true });
+    }, /Invalid profile "invalid-profile"/);
   });
 
   test('runWizard records explicit Python stack without inventing installed test tools', async () => {
     const config = await runWizard(tempDir, {
       yes: true,
       stack: 'Python',
-      profile: 'fintech'
+      profile: 'fintech',
     });
 
     assert.strictEqual(config.profile, 'fintech');
@@ -46,7 +43,7 @@ describe('Regression R07, R09 & R10: Wizard Configuration & Profile Security Que
     await scaffoldProject(tempDir, {
       projectName: 'FintechApp',
       profile: 'fintech',
-      stack: 'Python'
+      stack: 'Python',
     });
 
     const spec = await createSpec(tempDir, 'feature', 'fund-transfer');
@@ -55,11 +52,11 @@ describe('Regression R07, R09 & R10: Wizard Configuration & Profile Security Que
     // Verify specialized fintech questions are injected in Section 3
     assert.ok(
       specContent.includes('Does it touch balances, money, or ledger?'),
-      'Fintech spec must include balance/ledger question in Section 3'
+      'Fintech spec must include balance/ledger question in Section 3',
     );
     assert.ok(
       specContent.includes('Double-entry ledger transaction with `Idempotency-Key`'),
-      'Fintech spec must include double-entry ledger enforcement'
+      'Fintech spec must include double-entry ledger enforcement',
     );
   });
 });

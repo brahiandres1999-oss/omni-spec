@@ -37,26 +37,26 @@ export const ARCHETYPES = {
     folder: '01-feature',
     prefix: 'SPEC',
     branchPrefix: 'feat',
-    name: 'Feature Specification'
+    name: 'Feature Specification',
   },
   bugfix: {
     folder: '02-bugfix',
     prefix: 'BUG',
     branchPrefix: 'fix',
-    name: 'Bugfix & Incident RCA'
+    name: 'Bugfix & Incident RCA',
   },
   debt: {
     folder: '03-tech-debt',
     prefix: 'DEBT',
     branchPrefix: 'debt',
-    name: 'Technical Debt Refactor'
+    name: 'Technical Debt Refactor',
   },
   rfc: {
     folder: '04-rfc-idea',
     prefix: 'RFC',
     branchPrefix: 'rfc',
-    name: 'Architectural Decision Record'
-  }
+    name: 'Architectural Decision Record',
+  },
 };
 
 export function buildConstitutionContent(options) {
@@ -149,7 +149,10 @@ This workspace organizes changes into four archetypes with explicit scope and ev
 }
 
 export async function scaffoldProject(baseDir, options = {}) {
-  options = { ...options, agent: normalizeAgents(options.agent || options.ai || (await loadManifest(baseDir))?.agent).join(',') };
+  options = {
+    ...options,
+    agent: normalizeAgents(options.agent || options.ai || (await loadManifest(baseDir))?.agent).join(','),
+  };
   getProfile(options.profile || 'general');
   return withManifestLock(baseDir, () => scaffoldUnlocked(baseDir, options));
 }
@@ -171,10 +174,12 @@ async function scaffoldUnlocked(baseDir, options) {
       ['profile', options.profile, options.explicitProfile],
       ['stack', options.stack, options.explicitStack],
       ['documentationStandard', options.docStandard, options.explicitDoc],
-      ['qualityGates', options.qualityGates, options.explicitGates]
+      ['qualityGates', options.qualityGates, options.explicitGates],
     ].filter(([key, value, explicit]) => explicit && value !== undefined && value !== existingManifest[key]);
     if (changes.length) {
-      throw new Error('Configuration changes require init --force to update CONSTITUTION.md and manifest.json together.');
+      throw new Error(
+        'Configuration changes require init --force to update CONSTITUTION.md and manifest.json together.',
+      );
     }
   }
 
@@ -184,14 +189,22 @@ async function scaffoldUnlocked(baseDir, options) {
     const preserved = [];
     for (const entry of entries) {
       if (entry.path.startsWith('specs/_templates/')) {
-        try { await access(join(baseDir, entry.path)); continue; }
-        catch (error) { if (error.code !== 'ENOENT') throw error; }
+        try {
+          await access(join(baseDir, entry.path));
+          continue;
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
       }
       preserved.push(entry);
     }
     entries = preserved;
   }
-  const assets = await syncManagedFiles(baseDir, [...entries, ...integrationEntries({ ...existingManifest, ...options, version })], { acceptUpdates: force });
+  const assets = await syncManagedFiles(
+    baseDir,
+    [...entries, ...integrationEntries({ ...existingManifest, ...options, version })],
+    { acceptUpdates: force },
+  );
 
   if (!constitutionExists || force) {
     const constitutionContent = buildConstitutionContent(options);
@@ -223,13 +236,13 @@ async function scaffoldUnlocked(baseDir, options) {
     constitutionPath,
     specsDir,
     manifestPath: join(specsDir, 'manifest.json'),
-    assets
+    assets,
   };
 }
 
 export async function createSpec(baseDir, rawArchetype, name, options = {}) {
   const requestedType = rawArchetype.toLowerCase();
-  const archetypeKey = ({ bug: 'bugfix', fix: 'bugfix', feat: 'feature', idea: 'rfc' })[requestedType] || requestedType;
+  const archetypeKey = { bug: 'bugfix', fix: 'bugfix', feat: 'feature', idea: 'rfc' }[requestedType] || requestedType;
   const archetype = Object.hasOwn(ARCHETYPES, archetypeKey) ? ARCHETYPES[archetypeKey] : null;
   if (!archetype) {
     throw new Error(`Invalid archetype "${rawArchetype}". Valid types are: ${Object.keys(ARCHETYPES).join(', ')}`);
@@ -244,25 +257,22 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
       existingDirs = await readdir(join(baseDir, 'specs'));
     } catch {}
 
-    const dirNumbers = existingDirs
-      .map(d => parseInt(d.split('-')[0], 10))
-      .filter(n => !isNaN(n));
+    const dirNumbers = existingDirs.map(d => parseInt(d.split('-')[0], 10)).filter(n => !Number.isNaN(n));
 
-    const manifestNumbers = (manifest.specs || [])
-      .map(s => parseInt(s.id, 10))
-      .filter(n => !isNaN(n));
+    const manifestNumbers = (manifest.specs || []).map(s => parseInt(s.id, 10)).filter(n => !Number.isNaN(n));
 
     const allNumbers = [...dirNumbers, ...manifestNumbers];
     let nextNum = allNumbers.length > 0 ? Math.max(...allNumbers) + 1 : 1;
 
     // Sanitize name slug: transliterate diacritics (gestión -> gestion, ñ -> n)
     // instead of deleting them, so Spanish names produce readable slugs.
-    const sanitizedName = (name
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'spec');
+    const sanitizedName =
+      name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'spec';
 
     let idStr = String(nextNum).padStart(3, '0');
     let slug = `${idStr}-${sanitizedName}`;
@@ -316,10 +326,9 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
         if (tableMatch) {
           const tableText = tableMatch[1];
           const lines = tableText.split('\n');
-          const projectRows = lines.slice(1).filter(line =>
-            line.trim().startsWith('|') &&
-            !/^\s*\|[\s:|\-]+$/.test(line)
-          );
+          const projectRows = lines
+            .slice(1)
+            .filter(line => line.trim().startsWith('|') && !/^\s*\|[\s:|-]+$/.test(line));
 
           let replacement = profile.specSecurityQuestions;
           const existingRows = new Set(replacement.split('\n').map(line => line.trim()));
@@ -334,7 +343,10 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
       await writeFile(destFile, content, 'utf-8');
     }
 
-    await writeFile(join(specDir, 'verification.md'), '# Verification evidence\n\n[TODO] Map each acceptance criterion to a file, test or manual observation and actual result. Record limitations and unresolved findings. For an RFC, explain the decision and alternatives reviewed.\n');
+    await writeFile(
+      join(specDir, 'verification.md'),
+      '# Verification evidence\n\n[TODO] Map each acceptance criterion to a file, test or manual observation and actual result. Record limitations and unresolved findings. For an RFC, explain the decision and alternatives reviewed.\n',
+    );
     await writeFile(join(specDir, 'acceptance.json'), JSON.stringify(acceptanceSeed(archetypeKey), null, 2) + '\n');
 
     // Register in manifest
@@ -345,10 +357,10 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
       title,
       status: 'IN_PROGRESS',
       created_at: today,
-      branch: `${archetype.branchPrefix}/${slug}`
+      branch: `${archetype.branchPrefix}/${slug}`,
     };
 
-    let updatedManifest = (await loadManifest(baseDir)) || manifest;
+    const updatedManifest = (await loadManifest(baseDir)) || manifest;
     updatedManifest.active_spec = specEntry.slug;
     updatedManifest.active_archetype = specEntry.type;
 
@@ -366,25 +378,47 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
       slug,
       specDir,
       branch: specEntry.branch,
-      archetype: archetype.name
+      archetype: archetype.name,
     };
   });
 }
 
 export async function ensureProjectContext(baseDir, environment) {
   const path = join(baseDir, 'specs', 'project-context.md');
-  try { await access(path); return; }
-  catch (error) { if (error.code !== 'ENOENT') throw error; }
-  try { await writeFile(path, buildContext(environment || await detectProjectEnvironment(baseDir)), { flag: 'wx' }); }
-  catch (error) { if (error.code !== 'EEXIST') throw error; }
+  try {
+    await access(path);
+    return;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  try {
+    await writeFile(path, buildContext(environment || (await detectProjectEnvironment(baseDir))), { flag: 'wx' });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
 }
 
 function buildContext(environment) {
-  const code = value => '`' + String(value).replaceAll('`', '\\`').replace(/[\r\n|]/g, ' ') + '`';
+  const code = value =>
+    '`' +
+    String(value)
+      .replaceAll('`', '\\`')
+      .replace(/[\r\n|]/g, ' ') +
+    '`';
   const commands = (environment.modules || []).flatMap(m => m.commandCandidates || []);
-  const rows = commands.map(c => `| ${code(c.command)} | ${code(c.cwd)} | ${code(c.source)} (${c.basis}) | NOT_ASSESSED | REVIEW_REQUIRED | NOT_RUN |`).join('\n');
-  const runtimes = (environment.modules || []).filter(m => m.declaredRuntime)
-    .map(m => `- DECLARED runtime constraint: ${code(m.declaredRuntime.constraint)} for ${code(m.declaredRuntime.tool)} in ${code(m.source)}; installed version and compatibility NOT_ASSESSED.`).join('\n');
+  const rows = commands
+    .map(
+      c =>
+        `| ${code(c.command)} | ${code(c.cwd)} | ${code(c.source)} (${c.basis}) | NOT_ASSESSED | REVIEW_REQUIRED | NOT_RUN |`,
+    )
+    .join('\n');
+  const runtimes = (environment.modules || [])
+    .filter(m => m.declaredRuntime)
+    .map(
+      m =>
+        `- DECLARED runtime constraint: ${code(m.declaredRuntime.constraint)} for ${code(m.declaredRuntime.tool)} in ${code(m.source)}; installed version and compatibility NOT_ASSESSED.`,
+    )
+    .join('\n');
   return `# Project context
 
 User-owned context. Run /omni-init without extra instructions to review this seed; bootstrap is not completed conversational onboarding.
