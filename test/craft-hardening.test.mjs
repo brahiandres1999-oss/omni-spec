@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import { buildConstitutionContent, scaffoldProject } from '../src/generator.mjs';
 import { OMNI_SKILLS } from '../src/workflows.mjs';
 import { integrationEntries } from '../src/integrations.mjs';
+import { DESIGN, DOCUMENTATION, QUESTIONS, TECHNOLOGY, SETUP, HOST_RULE } from '../src/protocols.mjs';
 
-describe('OmniSpec 0.5.1: First-Pass Anti-Slop & Craft Invariants', () => {
+describe('Delivery protocol distribution (not a generated-product quality evaluation)', () => {
   let tempDir;
 
   beforeEach(async () => {
@@ -31,15 +32,11 @@ describe('OmniSpec 0.5.1: First-Pass Anti-Slop & Craft Invariants', () => {
     assert.match(content, /Zero Spec & Plan Slop/);
   });
 
-  test('buildConstitutionContent includes Frontend Craft and Impeccable-grade UI clauses', () => {
+  test('constitution distributes contextual design and accurate documentation instead of universal recipes', () => {
     const content = buildConstitutionContent({ projectName: 'CraftApp', profile: 'general' });
     assert.match(content, /UI Ergonomics & Frontend Craft/);
-    assert.match(content, /Zero Visual Slop/);
-    assert.match(content, /card-itis/);
-    assert.match(content, /Intentional Typography & Whitespace/);
-    assert.match(content, /Interactive Polish & Micro-Interactions/);
-    assert.match(content, /4 Mandatory Interface States/);
-    assert.match(content, /Accessibility \(WCAG AA\)/);
+    for (const policy of [DESIGN, DOCUMENTATION, QUESTIONS, TECHNOLOGY, SETUP]) assert.ok(content.includes(policy));
+    assert.doesNotMatch(content, /4 Mandatory Interface States|CLS=0|scale-\[0\.98\]/);
   });
 
   test('scaffoldProject outputs constitution with both backend and frontend craft invariants on disk', async () => {
@@ -52,7 +49,7 @@ describe('OmniSpec 0.5.1: First-Pass Anti-Slop & Craft Invariants', () => {
     assert.match(constitution, /UI Ergonomics & Frontend Craft/);
   });
 
-  test('OMNI_SKILLS common protocol and specific workflows enforce first-pass precision', () => {
+  test('workflows distribute relevant policies without making every change repeat full discovery', () => {
     const planSkill = OMNI_SKILLS.find(s => s.name === 'omni-plan');
     const tasksSkill = OMNI_SKILLS.find(s => s.name === 'omni-tasks');
     const implementSkill = OMNI_SKILLS.find(s => s.name === 'omni-implement');
@@ -62,7 +59,11 @@ describe('OmniSpec 0.5.1: First-Pass Anti-Slop & Craft Invariants', () => {
     assert.ok(implementSkill);
 
     // Common protocol check
-    assert.match(planSkill.instructions, /first-pass precision/i);
+    assert.ok(planSkill.instructions.includes(TECHNOLOGY));
+    assert.ok(planSkill.instructions.includes(DESIGN));
+    assert.ok(implementSkill.instructions.includes(DOCUMENTATION));
+    assert.ok(tasksSkill.instructions.includes(QUESTIONS));
+    assert.ok(!tasksSkill.instructions.includes(DESIGN));
     assert.match(planSkill.instructions, /Code craft:/i);
     assert.match(planSkill.instructions, /Spec and plan craft:/i);
     assert.match(planSkill.instructions, /UI craft/i);
@@ -73,11 +74,11 @@ describe('OmniSpec 0.5.1: First-Pass Anti-Slop & Craft Invariants', () => {
     assert.match(implementSkill.instructions, /without parrot comments or speculative fallbacks/i);
   });
 
-  test('integrationEntries injects first-pass precision mandate into agent configurations', () => {
+  test('integrationEntries distributes the same project contract into agent configurations', () => {
     const entries = integrationEntries({ version: '0.5.1' }, { agent: 'cursor' });
     const cursorRule = entries.find(e => e.path.endsWith('.cursor/rules/omni-spec.mdc'));
     assert.ok(cursorRule);
-    assert.match(cursorRule.content, /Deliver first-pass precision: zero code slop/i);
-    assert.match(cursorRule.content, /high-craft UI/i);
+    assert.ok(cursorRule.content.includes(HOST_RULE));
+    assert.doesNotMatch(cursorRule.content, /Deliver first-pass precision|4 mandatory states/i);
   });
 });

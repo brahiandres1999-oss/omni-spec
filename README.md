@@ -27,10 +27,10 @@ Los agentes de IA son rápidos, pero sin un marco estructurado sufren de amnesia
 
 OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
-- **Cero AI Slop (Calidad Senior al Primer Pase):** Inyecta reglas innegociables de UI/UX (jerarquía tipográfica, micro-interacciones, WCAG AA, 4 estados obligatorios: carga, error, vacío y éxito) y de backend pragmático (YAGNI, fail-fast, sin comentarios obvios).
+- **Criterios de calidad explícitos:** Aporta instrucciones de UI/UX y backend para guiar la implementación y revisión. La calidad visual, accesibilidad y corrección requieren comprobaciones pertinentes; las instrucciones no garantizan un resultado correcto al primer intento.
 - **Zero Dependencies & Zero Lock-in:** 100% Node.js nativo (>=18.19.0). No instala paquetes npm pesados ni altera el runtime de proyectos en Python, Go, Rust, Java o TypeScript.
 - **Universal Multi-Agent:** Un único comando configura Cursor, GitHub Copilot, Claude Code, Google Antigravity, OpenCode, Kilo, Codex o cualquier LLM con soporte Markdown.
-- **Verificación Basada en Evidencia:** Nada se marca como terminado sin validación real: gates ejecutados, snapshots contra regresiones y criterios de aceptación vinculados (`acceptance.json`).
+- **Verificación con alcance declarado:** Ejecuta los gates configurados y vincula el registro al contenido del proyecto y de la spec. `acceptance.json` registra evidencia declarada por criterio; los criterios automatizados deben referenciar gates configurados mediante `checkCommands`, y el CLI los vincula con sus resultados ejecutados. La suficiencia de esas pruebas y la veracidad de evidencia manual requieren revisión. Un snapshot detecta cambios posteriores, no demuestra ausencia de regresiones.
 
 ---
 

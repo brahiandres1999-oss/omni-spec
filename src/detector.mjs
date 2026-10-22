@@ -38,6 +38,11 @@ const markers = new Set([
 ]);
 const stripBom = s => s.replace(/^\uFEFF/, '');
 
+/**
+ * Inspect bounded project metadata without running application commands or selecting versions.
+ * @param {string} baseDir Project directory to inspect.
+ * @returns {Promise<object>} Heuristic module inventory with declared commands and unresolved compatibility.
+ */
 export async function detectProjectEnvironment(baseDir) {
   const warnings = [],
     evidence = [],
@@ -89,7 +94,7 @@ export async function detectProjectEnvironment(baseDir) {
           continue;
         }
         const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        const ts = Boolean(deps.typescript || deps['@types/node'] || names.includes('tsconfig.json'));
+        const ts = Boolean(deps.typescript || names.some(name => /^tsconfig(?:\.[^.]+)*\.json$/.test(name)));
         framework = deps.next
           ? 'Next.js'
           : deps.react

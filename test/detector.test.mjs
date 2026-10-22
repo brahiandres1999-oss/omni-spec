@@ -71,6 +71,29 @@ describe('Project Environment & Stack Detector', () => {
     assert.equal(result.qualityGates, '', 'FastAPI does not imply pytest is installed');
   });
 
+  test('type declaration packages alone do not turn a JavaScript project into TypeScript', async () => {
+    await writeFile(
+      join(tempDir, 'package.json'),
+      JSON.stringify({
+        type: 'module',
+        dependencies: { react: '*' },
+        devDependencies: { '@types/node': '*', '@types/react': '*' },
+      }),
+    );
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.detectedStack, 'React / JavaScript');
+    assert.equal(result.docStandard, 'JSDoc');
+    assert.equal(result.assessment.projectScriptsExecuted, false);
+  });
+
+  test('a named TypeScript config is language evidence even without a typescript dependency', async () => {
+    await writeFile(join(tempDir, 'package.json'), JSON.stringify({ type: 'module' }));
+    await writeFile(join(tempDir, 'tsconfig.app.json'), '{}');
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.detectedStack, 'Node.js / TypeScript');
+    assert.equal(result.docStandard, 'TSDoc');
+  });
+
   test('identifies brownfield Java Maven project', async () => {
     await writeFile(
       join(tempDir, 'pom.xml'),

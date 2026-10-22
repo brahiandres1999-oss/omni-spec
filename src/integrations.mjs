@@ -1,5 +1,6 @@
 import { syncManagedFiles } from './managed.mjs';
 import { OMNI_SKILLS } from './workflows.mjs';
+import { HOST_RULE } from './protocols.mjs';
 export { OMNI_SKILLS } from './workflows.mjs';
 
 // One canonical skill body, one renderer, one table.
@@ -67,7 +68,7 @@ export function integrationEntries(manifest, options = {}) {
   const targets = normalizeAgents(options.agent || options.ai || manifest?.agent || 'antigravity');
   const entries = [];
   const version = manifest?.version || 'unknown';
-  const rule = `<!-- OMNI-SPEC-START -->\n## OmniSpec ${version}\nUse the project's OmniSpec workflows for requested engineering work. Start with omni-init to understand this repository or omni-discuss for exploration. Read CONSTITUTION.md and specs/project-context.md. Deliver first-pass precision: zero code slop (no trivial comments, no premature layers, fail-fast), zero spec fluff, and high-craft UI (anti-cliché, 4 mandatory states). Run the OmniSpec CLI with \`node specs/.omni/runtime/bin/omni-spec.mjs\` (or global plugin CLI \`omni-spec\` / \`npx omni-spec\`). Inspect status before resuming work. Documentary audit is not code verification.\n<!-- OMNI-SPEC-END -->`;
+  const rule = `<!-- OMNI-SPEC-START -->\n## OmniSpec ${version}\n${HOST_RULE}\nRun the OmniSpec CLI with \`node specs/.omni/runtime/bin/omni-spec.mjs\` (or global plugin CLI \`omni-spec\` / \`npx omni-spec\`).\n<!-- OMNI-SPEC-END -->`;
   for (const target of targets) {
     const adapter = AGENTS[target];
     if (!adapter.skills && !adapter.commands) continue;

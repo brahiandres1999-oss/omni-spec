@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Require automated acceptance criteria to reference configured check commands and bind them to current execution results; reject failed, missing or unexecuted checks at completion. Verification records now use version 2 and older records require a fresh run.
+- Bound timeout cleanup even when process-tree termination fails or inherited pipes remain open; record an explicit cleanup error instead of holding the verification lock indefinitely.
+- Do not classify JavaScript as TypeScript merely because Node type declarations are installed; recognize named tsconfig files.
+- Respect light/standard artifact requirements during audit for feature and debt specs. Optional templates remain on disk without blocking the selected route; promoting to full audits them again.
+- Follow the selected route in the implementation workflow instead of always requiring a task checklist.
+- Include nested specification evidence in verification fingerprints, with the same file/byte limits and symlink rejection as source files. Only the active spec's root verification.json is excluded from its evidence tree.
+
+### Changed
+- Bound onboarding discovery to application evidence and the authorized context edit; avoid reading validator internals or repeatedly hashing generated runtime copies merely to produce a report.
+- Add local preparation of synthetic behavioral-evaluation fixtures, external rubrics, workflow fingerprints and pre-run file baselines. Preparing fixtures does not execute models or certify their behavior.
+- Share setup, question, technology-selection, API-documentation and contextual UI protocols across generated constitutions and workflows. Generate the plugin rule from the same policy as host adapters.
+- Replace mandatory visual recipes and first-attempt guarantees with proportional design, relevant references and actual rendered/interaction evidence. Seed unresolved setup decisions explicitly; bootstrap does not initialize Git or authorize publication.
+- Show criterion coverage separately from gate execution in verify/complete output, preserve bindings for automated criteria in completed manifest entries, and distinguish those results from declared manual evidence and assertion adequacy.
+- Clarify README guarantees and snapshot limitations. The fingerprint coverage change requires a fresh verify before completing work verified by an earlier version.
+
 ## [0.6.1] - 2026-10-21
 
 ### Added

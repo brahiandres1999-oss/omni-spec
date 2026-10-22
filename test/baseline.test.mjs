@@ -11,6 +11,7 @@ import { runCli } from '../src/cli.mjs';
 import { detectProjectEnvironment } from '../src/detector.mjs';
 import { fillSpec } from '../test-support/fixtures.mjs';
 import { auditSpec } from '../src/auditor.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
 let root;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omnispec-contract-'));
@@ -230,13 +231,28 @@ test('manifest path traversal is rejected before artifacts can be accessed', asy
 
 test('verification timeout fails and cannot close the specification', async () => {
   await scaffoldProject(root, { qualityGates: 'node hang.cjs' });
-  await writeFile(join(root, 'hang.cjs'), 'setInterval(() => {}, 1000)');
+  // Self-expire even if this host denies process-tree termination.
+  await writeFile(
+    join(root, 'hang.cjs'),
+    'console.log("CHILD_PID=" + process.pid); setInterval(() => {}, 1000); setTimeout(() => process.exit(0), 10000)',
+  );
   const spec = await createSpec(root, 'feature', 'timeout');
   await fillSpec(root, spec);
+  const started = Date.now();
   const result = await verifySpec(root, spec.id, { timeout: 500 });
+  assert.ok(Date.now() - started < 8000, 'timeout must return before the fixture exits on its own');
   assert.equal(result.passed, false);
   assert.equal(result.results[0].timedOut, true);
   await assert.rejects(updateSpecStatus(root, spec.id, 'COMPLETED'), /did not pass/);
+  if (result.results[0].error) {
+    assert.match(result.results[0].error, /could not confirm process-tree termination/);
+    // Restricted hosts may deny taskkill: let our disposable child self-expire before removing its cwd.
+    await delay(10000);
+  } else {
+    const childPid = /CHILD_PID=(\d+)/.exec(result.results[0].output)?.[1];
+    assert.ok(childPid, 'the spawned child must have started for tree termination to be assessed');
+    assert.throws(() => process.kill(Number(childPid), 0), { code: 'ESRCH' }, 'the actual gate child must be gone');
+  }
 });
 
 test('concurrent initializations preserve a usable managed installation', async () => {

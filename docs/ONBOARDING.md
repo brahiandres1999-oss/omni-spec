@@ -1,4 +1,16 @@
-# Contrato de onboarding — 0.6.0 local
+# Contrato de onboarding — candidato local
+
+## Preparación y decisiones pendientes
+
+El reconocimiento conserva las decisiones confirmadas y pregunta solo por las brechas materiales. Usa el formulario nativo del agente si está disponible y permitido; en otro caso, el mismo chat o consola. Explica las opciones para una persona no técnica y registra una selección o delegación explícita. Una sugerencia preseleccionada y el silencio no son aprobación.
+
+Antes de preparar una aplicación, el agente registra prerrequisitos disponibles, faltantes y desconocidos, versiones propuestas y evidencia oficial vigente de soporte y compatibilidad. También acuerda documentación por lenguaje y convención de commits. El inventario automático no realiza esa investigación ni aprueba el stack: esas decisiones empiezan pendientes en el contexto. La ausencia de web mantiene provisional una recomendación que depende de soporte actual.
+
+La preparación autorizada puede incluir Git local después de comprobar los límites del repositorio y sus reglas de exclusión. El reconocimiento inicial no ejecuta `git init`. Crear un repositorio local, hacer un commit y publicar son acciones distintas; una restricción de trabajo local sigue vigente.
+
+Para interfaces nuevas o rediseños importantes, se define una dirección con referencias pertinentes, una superficie representativa y pruebas sobre el resultado renderizado y su recorrido. Los estados se eligen según el producto; no hay cuatro estados universales ni una estética obligatoria. Sin herramientas adecuadas se registra `NOT_VERIFIED` y el procedimiento manual pendiente.
+
+Estos son contratos de comportamiento distribuidos al agente. Las pruebas de generación comprueban su presencia y la preservación del proyecto; no certifican su ejecución por todos los hosts ni la calidad del producto generado.
 
 El usuario invoca `/omni-init` sin instrucciones de auditoría adicionales. El agente adapta su recorrido a la evidencia del proyecto y documenta su contexto. Las mismas instrucciones se distribuyen mediante todos los adaptadores; cambia su formato e invocación según el host.
 

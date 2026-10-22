@@ -24,6 +24,19 @@ const aliases = {
 const valueFlags = new Set(['profile', 'name', 'stack', 'doc', 'gates', 'agent', 'ai', 'manual', 'timeout']);
 const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade']);
 
+function acceptanceSummary(acceptance) {
+  const methods = {};
+  for (const criterion of acceptance.criteria) methods[criterion.method] = (methods[criterion.method] || 0) + 1;
+  return `Acceptance: ${acceptance.criteria.length} criteria declared passed (${Object.entries(methods)
+    .map(([method, count]) => `${method}: ${count}`)
+    .join(
+      ', ',
+    )}).\nAutomated criteria are bound to configured check results; this does not prove the adequacy of assertions or the truth of manual evidence.\n${acceptance.criteria
+    .filter(item => item.method === 'automated')
+    .map(item => `${item.id}: ${item.execution}`)
+    .join('\n')}`;
+}
+
 function parse(args) {
   const flags = {},
     positionals = [];
@@ -212,14 +225,17 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const result = await verifySpec(workingDir, positionals[0], flags);
         emit(
           result,
-          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}`).join('\n')}\n${result.sourceChangedDuringVerification ? 'Source changed during verification; run again after reviewing generated changes.' : 'Evidence is bound to the current source/specification snapshot.'}`,
+          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Gate mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}${r.error ? '\n' + r.error : ''}`).join('\n')}\n${result.sourceChangedDuringVerification ? 'Source changed during verification; run again after reviewing generated changes.' : 'Evidence is bound to the current source/specification snapshot.'}\n${acceptanceSummary(result.acceptance)}`,
         );
         return result.passed ? 0 : 1;
       }
       case 'complete': {
         if (positionals.length !== 1) throw new Error('Usage: complete <id>');
         const updated = await updateSpecStatus(workingDir, positionals[0], 'COMPLETED');
-        emit(updated, `[OK] ${updated.slug} COMPLETED; verification mode: ${updated.verification.mode}.`);
+        emit(
+          updated,
+          `[OK] ${updated.slug} COMPLETED; gate mode: ${updated.verification.mode}.\n${acceptanceSummary(updated.verification.acceptance)}`,
+        );
         return 0;
       }
       case 'fit': {

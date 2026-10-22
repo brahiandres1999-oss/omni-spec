@@ -8,6 +8,7 @@ import { packageEntries } from './assets.mjs';
 import { syncManagedFiles } from './managed.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
+import { QUESTIONS, TECHNOLOGY, DOCUMENTATION, SETUP, DESIGN } from './protocols.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -68,7 +69,7 @@ export function buildConstitutionContent(options) {
 
   return `# CONSTITUTION — ${projectName}
 
-> This file acts as the supreme engineering law for developers and AI coding agents. Every specification, architecture plan, and line of code must strictly adhere to these guidelines before merging.
+> Project engineering agreement. Apply it within the user's instructions and authorized scope; resolve material conflicts explicitly rather than silently overriding decisions.
 
 ---
 
@@ -81,7 +82,7 @@ export function buildConstitutionContent(options) {
 5. **Demonstrable Quality Gates:** Record actual results and pre-existing failures. Automated gates must pass for automated verification; when none apply, document explicitly labeled manual evidence. A checklist is not proof of behavior.
 6. **Backend Pragmatic Craft & Zero Code Slop:**
    - *Strict YAGNI & Direct Implementation:* Never add speculative abstraction layers, premature interfaces, DTOs, factories, or wrapper classes when a direct, idiomatic function or standard module satisfies the acceptance criteria.
-   - *Zero Comment Slop:* Strictly forbid obvious, narrative, or parrot comments that paraphrase code syntax (\`// return user\`, \`// initialize variable\`). Self-documenting code with clean naming is mandatory; preserve comments only for non-obvious business invariants or non-trivial domain edge-cases.
+   - *Zero Comment Slop:* Avoid comments that only narrate syntax. Preserve accurate API documentation and explanations of purpose, contracts and non-obvious domain constraints.
    - *Fail-Fast & Transparent Failures:* Strictly forbid defensive \`try/catch\` wrappers that swallow exceptions, return dummy nulls, or silently mask errors without a documented business requirement.
    - *Zero Spec & Plan Slop:* Specifications and plans must maintain high technical density: tabular evidence, explicit non-goals, and atomic, falsable criteria (\`AC-01\`). No marketing fluff, corporate filler, or conversational apologies.
 
@@ -100,6 +101,15 @@ These profile controls are review prompts; applicability must be established for
 * **Primary Tech Stack:** \`${stack}\`
 * **Documentation Standard:** \`${docStandard}\` (All public APIs, exported interfaces, and complex functions must follow this convention).
 
+${DOCUMENTATION}
+
+### Supported technology decisions
+${TECHNOLOGY}
+
+### Clarification and setup
+${QUESTIONS}
+${SETUP}
+
 ---
 
 ## 4. Delivery Quality Gates
@@ -114,12 +124,7 @@ ${qualityGates}
 
 ## 5. UI Ergonomics & Frontend Craft (Anti-Slop)
 
-When modifying or generating user interfaces, apply deliberate design craftsmanship:
-* **Zero Visual Slop:** Strictly avoid generic AI clichés: default purple-to-blue gradients, centered pill badges with ungrounded outer glow, and repetitive nested bordered cards with diffuse drop shadows ("card-itis").
-* **Intentional Typography & Whitespace:** Establish a clear typographic scale and deliberate whitespace hierarchy rather than partitioning every element with artificial boxes and borders.
-* **Interactive Polish & Micro-Interactions:** Provide responsive visual feedback on interactive elements with hover, active, and accessible \`focus-visible\` styling.
-* **4 Mandatory Interface States:** Loading (skeletons/indicators), Empty (contextual explanation with actionable next step), Error (human-readable message with clear retry trigger), and Protected/Restricted.
-* **Accessibility (WCAG AA):** Full keyboard navigation (\`Tab\`, \`Enter\`, \`Escape\`), semantic HTML, and verified color contrast ratios on measured foreground/background color pairs.
+${DESIGN}
 `;
 }
 
@@ -440,6 +445,13 @@ ${runtimes || '- Runtime targets, installed versions and compatibility: UNKNOWN;
 ## 3. Goals and decisions
 - Purpose, intended users, constraints and smallest outcome: UNKNOWN until confirmed from repository/user evidence.
 - Preserve existing confirmed decisions; ask only material questions unanswered by available evidence.
+- Stack/version selection: UNDECIDED until approved or explicitly delegated; record current official support/compatibility sources and consultation date before a material selection.
+- Documentation convention per module: REVIEW_REQUIRED; preserve established API documentation and inspect language evidence before proposing JSDoc, TSDoc, Javadoc or another convention.
+- Git boundary and local setup: UNKNOWN; initialization, commits and remote publication are separate operations requiring appropriate authorization.
+- Commit convention and language: REVIEW_REQUIRED; preserve an existing convention or propose Conventional Commits 1.0.0 before the first authorized commit.
+- Publication/deployment authorization: NOT_GRANTED by bootstrap; preserve any explicit local-only restriction.
+- Session capabilities (native questions, web research, terminal, rendered UI inspection, delegation): UNKNOWN; inspect actual availability and record fallbacks and dependent blockers.
+- UI direction and references: NOT_ASSESSED; record task, approved identity and sources when applicable, otherwise justified N/A.
 
 ## 4. Command matrix (not executed)
 | Command | Working directory | Source / basis | Prerequisites | Gate selection / reason | Execution |

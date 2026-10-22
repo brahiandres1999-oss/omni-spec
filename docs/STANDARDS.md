@@ -1,6 +1,6 @@
 # Fuentes y decisiones de interoperabilidad
 
-Consulta: 2026-10-22. Las siguientes fuentes son documentación oficial o especificaciones primarias. No son una certificación de OmniSpec ni garantizan el comportamiento de un modelo.
+Consulta: 2026-10-22. Las fuentes de interoperabilidad son documentación oficial o especificaciones primarias. Las referencias de investigación y artículos se identifican por separado en las filas correspondientes. No son una certificación de OmniSpec ni garantizan el comportamiento de un modelo.
 
 | Fuente | Decisión aplicada | Comprobación local |
 | --- | --- | --- |
@@ -18,11 +18,11 @@ Consulta: 2026-10-22. Las siguientes fuentes son documentación oficial o especi
 | [OpenAI: skills in repositories](https://developers.openai.com/blog/skills-agents-sdk) y [build skills](https://learn.chatgpt.com/docs/build-skills) | Skills de proyecto en `.agents/skills`, con invocación propia del host. No anunciar `/` universal donde corresponde un selector o `$`. | Generación del adaptador; sesión real pendiente. |
 | [AGENTS.md en Codex](https://learn.chatgpt.com/docs/agent-configuration/agents-md) | `AGENTS.md` es el único archivo que los siete hosts documentan, así que se entrega en todos los adaptadores como sección gestionada. | Bloque presente en cada adaptador; contenido de usuario preservado. |
 | [GitHub Spec Kit: SDD](https://github.github.com/spec-kit/reference/agentic-sdd.html) y [existing projects](https://github.github.io/spec-kit/guides/existing-projects.html) | Separar necesidad, aclaración, plan, tareas y revisión; adoptar reglas realistas del repositorio. | Protocolos por arquetipo y recorridos de paquete nuevo/existente. |
-| [Uvik SDD Benchmark 2026](https://uvik.net/blog/spec-driven-development-benchmark/) (datos CC BY 4.0) | El overhead de planificación solo se paga desde **3 archivos**; se usa ese umbral para la ruta ligera. La ruta completa se conserva sin `fit.json`. | `src/fit.mjs` y `test/fit.test.mjs` cubren el umbral, la escalada y el valor por defecto. |
+| [Uvik SDD Benchmark 2026](https://uvik.net/blog/spec-driven-development-benchmark/) (datos CC BY 4.0) | El umbral de tres archivos es una heurística local inspirada en ese benchmark, no una ley general ni un resultado universal. La ruta completa se conserva sin `fit.json`. | `src/fit.mjs` y `test/fit.test.mjs` cubren el umbral, la escalada y el valor por defecto. |
 | [Spec Fit Test de Uvik](https://uvik.net/blog/spec-driven-development-benchmark/) (CC BY 4.0) | Cuestionario de seis preguntas como base del Spec Fit; se reescribe en forma declarativa y verificable por máquina. | `schema/fit.schema.json` valida cada respuesta y rechaza valores no permitidos. |
-| [Garg, *When Spec-Driven Development Pays off*](https://www.infoq.com/articles/when-spec-driven-development-pays-off) (GAISS 2026) | El razonamiento previo, no la especificación, es lo que sube la corrección en cambios pequeños; por eso `reasoning` es una respuesta obligatoria y bloquea la ruta ligera. | Un `reasoning` distinto de `done` escala a ruta completa. |
-| [Yang et al. (Orchid), ASE 2026](https://doi.org/10.1145/3832783.3834403) | La ambigüedad se **pregunta**, no se infiere: los modelos no la detectan solos y cuesta corrección. | `ambiguity` es una respuesta obligatoria; `material` o `blocked` escalan a ruta completa. |
-| [Konstantinou et al., arXiv:2607.05139](https://arxiv.org/abs/2607.05139) | Un bugfix mantiene siempre la ruta completa: la detección de fallos cae del 25% al 14% si los tests se escriben después del código. | `classifyFit` fija `full` para `bugfix` y `decision` para `rfc`. |
+| [Garg, *When Spec-Driven Development Pays off*](https://www.infoq.com/articles/when-spec-driven-development-pays-off) (GAISS 2026) | Artículo usado como motivación para revisar razonamiento previo. No establece causalidad universal ni valida nuestros umbrales; exigir `reasoning` es una decisión local pendiente de evaluación conductual. | Un `reasoning` distinto de `done` escala a ruta completa. |
+| [Yang et al. (Orchid), ASE 2026](https://doi.org/10.1145/3832783.3834403) | Motiva tratar ambigüedad material explícitamente. OmniSpec inspecciona hechos disponibles y pregunta por decisiones faltantes; no convierte toda incertidumbre en una pregunta ni atribuye esa regla universal al estudio. | `ambiguity` es una respuesta obligatoria; `material` o `blocked` escalan a ruta completa. |
+| [Konstantinou et al., arXiv:2607.05139](https://arxiv.org/abs/2607.05139) | Referencia sobre pruebas y detección de fallos. Conservar bugfix en ruta completa es una decisión conservadora de OmniSpec; el estudio no demuestra que todo bugfix necesite todos nuestros artefactos. | `classifyFit` fija `full` para `bugfix` y `decision` para `rfc`. |
 | [NIST SSDF 1.1](https://csrc.nist.gov/pubs/sp/800/218/final) | Usado como referencia de prácticas de desarrollo seguro y verificación integrables en el ciclo de vida; no como supuesta certificación SDD. | Evidencia explícita, resultados de pruebas y límites documentados. |
 | [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | 0.6.0 por soporte nativo de Plugin en Antigravity, subagente omni-auditor y desbloqueo del diagnóstico en bugfix sobre la base 0.5.x; versión única obtenida de package.json. | Versión única obtenida de package.json. |
 
@@ -37,3 +37,17 @@ El motor controla generación, estado, integridad y ejecución explícita de ver
 Los perfiles también se convirtieron en revisiones de aplicabilidad. Las referencias de [HIPAA Security Rule](https://www.hhs.gov/hipaa/for-professionals/security/index.html) y [PCI DSS](https://www.pcisecuritystandards.org/standards/pci-dss/) respaldan consultar el alcance y las obligaciones correspondientes; no justifican afirmar que una plantilla, un cifrado fijo o un umbral de agregación certifica cumplimiento. No se impone una base de datos, tenancy o arquitectura financiera a todos los proyectos.
 
 Para declarar un adaptador: consultar la documentación oficial de su versión, implementar la ubicación/formato de invocación, comprobar generación y preservación de archivos, y completar un recorrido en su chat. Si el host no tiene comandos custom, usar `generic` y anunciar la limitación. No confundir formato compatible con integración probada en producción.
+
+## Preparación, versiones, documentación y diseño — candidato local
+
+Los protocolos compartidos están en `src/protocols.mjs`. Su presencia en los adaptadores y skills se comprueba localmente; su eficacia requiere evaluación con agentes y productos reales.
+
+| Fuente primaria consultada el 2026-10-22 | Uso y límite |
+| --- | --- |
+| [Node.js: releases](https://nodejs.org/en/about/previous-releases) y [Spring Boot: system requirements](https://docs.spring.io/spring-boot/system-requirements.html) | Verificar soporte y compatibilidad por ecosistema. No fijar el número de versión actual en una instrucción permanente ni trasladar LTS a todos los lenguajes. |
+| [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) y [git init](https://git-scm.com/docs/git-init) | Proponer una convención y distinguir inicialización local de publicación. Elegir convención no autoriza commits ni push. |
+| [JSDoc](https://jsdoc.app/about-getting-started) y [Javadoc: documentation comment specification](https://docs.oracle.com/en/java/javase/25/docs/specs/javadoc/doc-comment-spec.html) | Documentar contratos según lenguaje y revisar significado. La referencia de sintaxis no impone Java 25 ni acredita documentación correcta por contar etiquetas. |
+| [OpenAI: designing frontends](https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4) | Referencias visuales, dirección explícita y revisión del resultado. No exige un modelo concreto ni prueba calidad universal. |
+| [Playwright: accessibility testing](https://playwright.dev/docs/accessibility-testing) | Las comprobaciones automáticas son parciales y deben complementarse con evaluación adecuada. Playwright no es obligatorio para todas las interfaces. |
+
+La selección de la herramienta de preguntas se basa en capacidades expuestas y permisos de la sesión, no en asumir una API común entre hosts. La inspección renderizada y la investigación web también se registran como disponibles, ausentes o desconocidas.

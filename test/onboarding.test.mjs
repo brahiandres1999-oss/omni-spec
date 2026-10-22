@@ -8,6 +8,7 @@ import { scaffoldProject } from '../src/generator.mjs';
 import { seedOnboardingFixture } from '../test-support/onboarding-fixtures.mjs';
 import { loadManifest } from '../src/manifest.mjs';
 import { integrationEntries } from '../src/integrations.mjs';
+import { QUESTIONS, TECHNOLOGY, SETUP } from '../src/protocols.mjs';
 
 let root;
 beforeEach(async () => {
@@ -29,6 +30,8 @@ for (const scenario of ['empty', 'existing', 'broken', 'noncode'])
     assert.match(context, /No project scripts were executed/);
     assert.match(context, /Existing-work baseline: UNKNOWN/);
     assert.deepEqual((await loadManifest(root)).specs, []);
+    assert.match(context, /Publication.*NOT_GRANTED/);
+    await assert.rejects(access(join(root, '.git')), { code: 'ENOENT' });
     const inventory = await detectProjectEnvironment(root);
     assert.equal(inventory.isGreenfield, scenario === 'empty');
     assert.equal(inventory.assessment.projectScriptsExecuted, false);
@@ -113,5 +116,6 @@ test('every adapter carries the bare-command evidence and bounded onboarding con
     assert.match(content, /Carry that reconciliation into EACH command/);
     assert.match(content, /final response against the saved context sentence by sentence/);
     assert.match(content, /document-relative Markdown links/);
+    for (const policy of [QUESTIONS, TECHNOLOGY, SETUP]) assert.ok(content.includes(policy));
   }
 });

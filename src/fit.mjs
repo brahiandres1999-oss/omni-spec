@@ -1,17 +1,6 @@
-// Spec Fit: chooses how much ceremony a change actually deserves.
-//
-// The questions are asked, not inferred. Models cannot detect ambiguity on their own
-// (Orchid, ASE 2026) and reasoning before writing is what moves correctness on small
-// tasks, not the specification itself (Garg, GAISS 2026). So the agent answers a short
-// questionnaire and this module scores it deterministically: no model sits in the gate.
-//
-// Thresholds come from measured evidence, not taste:
-// - Planning overhead only pays back from three files upwards (Uvik SDD Benchmark 2026).
-// - Cross-module work is the primary failure surface for coding agents (RepoRescue,
-//   Doc2Feat-Bench, ASE 2026).
-// - A bugfix keeps the full route because root-cause analysis and an independent
-//   verification step are what the archetype is for (error propagation halves fault
-//   detection when tests are written after the code).
+// Deterministic effort heuristics, not experimentally universal thresholds.
+// Inspect technical facts and record estimates; ask the user about unresolved intent.
+// Keep existing routing behavior until comparative evaluations justify changing it.
 import { readFile } from 'node:fs/promises';
 import { safePath } from './managed.mjs';
 
@@ -22,19 +11,19 @@ export const FIT_QUESTIONS = [
     id: 'reasoning',
     prompt: 'Did you reason about the problem, its edge cases and its failure modes before drafting anything?',
     values: ['done', 'partial', 'skipped'],
-    why: 'Reasoning first is what raises correctness on small changes. The specification adds little on top of it.',
+    why: 'Record the reasoning performed; a completed template does not establish that the problem was understood.',
   },
   {
     id: 'files',
     prompt: 'How many files does this change touch?',
     values: 'integer >= 1',
-    why: 'Planning overhead only pays back from three files upwards.',
+    why: 'The current heuristic escalates three files upwards; inspect affected files and revise estimates as scope changes.',
   },
   {
     id: 'modules',
     prompt: 'How many separate modules or packages does it touch?',
     values: 'integer >= 1',
-    why: 'Cross-module coordination is the primary failure surface for coding agents.',
+    why: 'Changes across modules may require explicit coordination of contracts and verification.',
   },
   {
     id: 'crossesContract',
@@ -46,13 +35,13 @@ export const FIT_QUESTIONS = [
     id: 'ambiguity',
     prompt: 'Does the request still hold a material ambiguity that would change the implementation?',
     values: ['none', 'material', 'blocked'],
-    why: 'Models cannot detect ambiguity on their own, and ambiguous requirements cost correctness on their own.',
+    why: 'Inspect available evidence, then ask about material unresolved intent rather than inventing an answer.',
   },
   {
     id: 'existingTests',
     prompt: 'Do automated tests already cover the area being changed?',
     values: [true, false],
-    why: 'Without existing coverage the change needs its own task breakdown.',
+    why: 'The current heuristic requires a design for verification when existing coverage is absent.',
   },
 ];
 
@@ -128,11 +117,11 @@ export function classifyFit(answers, spec = {}) {
   } else {
     if (answers.files >= 3) {
       route = 'full';
-      reasons.push(`${answers.files} files are touched; planning overhead only pays back from three files upwards.`);
+      reasons.push(`${answers.files} files are touched; the current heuristic escalates three files upwards.`);
     }
     if (answers.modules >= 2) {
       route = 'full';
-      reasons.push(`${answers.modules} modules are touched; cross-module coordination is the primary failure surface.`);
+      reasons.push(`${answers.modules} modules are touched; plan cross-module contracts and verification.`);
     }
     if (answers.crossesContract) {
       route = 'full';

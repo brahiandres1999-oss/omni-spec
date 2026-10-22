@@ -79,6 +79,19 @@ export async function auditSpec(baseDir, specIdentifier = null) {
   const errors = [];
   const warnings = [];
   let taskStats = { total: 0, completed: 0, pending: 0, percentage: 0 };
+  const route = await specRoute(baseDir, spec);
+  if (route?.route === 'invalid') errors.push(`fit.json is invalid: ${route.errors.join(' ')}`);
+  const needsPlan = !route || route.artifacts.plan;
+  const needsTasks = !route || route.artifacts.tasks;
+  const optionalArtifacts = new Set();
+  if (['feature', 'debt'].includes(spec.type)) {
+    if (!needsPlan) optionalArtifacts.add(spec.type === 'feature' ? 'plan.md' : 'migration-plan.md');
+    if (!needsTasks) optionalArtifacts.add('tasks.md');
+  }
+  if (optionalArtifacts.size)
+    warnings.push(
+      `Spec fit route is ${route.route}: ${[...optionalArtifacts].join(', ')} are not required and are not audited. Keep required decisions in the active contract or select a fuller route.`,
+    );
 
   let files = [];
   try {
@@ -92,9 +105,9 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     };
   }
 
-  // Common check across all archetypes: placeholder tokens and regular files
+  // Optional route artifacts remain on disk for later promotion, but do not block this route.
   for (const file of files) {
-    if (!file.endsWith('.md') || file === 'verification.md') continue;
+    if (!file.endsWith('.md') || file === 'verification.md' || optionalArtifacts.has(file)) continue;
     const readResult = await readRegularFile(join(specDir, file));
     if (readResult.error) {
       errors.push(`File ${file} could not be read as a regular file: ${readResult.error}`);
@@ -183,10 +196,6 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       }
 
       // 2. Audit plan.md
-      const route = await specRoute(baseDir, spec);
-      if (route?.route === 'invalid') errors.push(`fit.json is invalid: ${route.errors.join(' ')}`);
-      const needsPlan = !route || route.artifacts.plan;
-      const needsTasks = !route || route.artifacts.tasks;
       if (needsPlan) {
         const planData = await getCleanMandatoryContent('plan.md', 'feature');
         if (planData) {
@@ -210,8 +219,6 @@ export async function auditSpec(baseDir, specIdentifier = null) {
             errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
           }
         }
-      } else {
-        warnings.push(`Spec fit route is ${route.route}: plan.md and tasks.md are not required for this change.`);
       }
       break;
     }
@@ -246,11 +253,6 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         errors.push('audit.md lacks substantive debt analysis and blast radius.');
       }
 
-      const route = await specRoute(baseDir, spec);
-      if (route?.route === 'invalid') errors.push(`fit.json is invalid: ${route.errors.join(' ')}`);
-      const needsPlan = !route || route.artifacts.plan;
-      const needsTasks = !route || route.artifacts.tasks;
-
       if (needsPlan) {
         const migrationData = await getCleanMandatoryContent('migration-plan.md', 'tech-debt');
         if (migrationData && migrationData.clean.length < 30) {
@@ -267,8 +269,6 @@ export async function auditSpec(baseDir, specIdentifier = null) {
             errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
           }
         }
-      } else {
-        warnings.push(`Spec fit route is ${route.route}: tasks.md is not required for this change.`);
       }
       break;
     }

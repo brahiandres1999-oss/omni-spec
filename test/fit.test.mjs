@@ -7,6 +7,7 @@ import { classifyFit, validateFitAnswers, specRoute, FIT_QUESTIONS, FIT_SCHEMA_V
 import { auditSpec } from '../src/auditor.mjs';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
 import { runCli } from '../src/cli.mjs';
+import { verifySpec, completeSpec } from '../src/verification.mjs';
 
 const baseAnswers = {
   schemaVersion: FIT_SCHEMA_VERSION,
@@ -70,7 +71,7 @@ describe('Spec Fit route selection', () => {
     assert.match(route.reasons.join(' '), /light route is enough/);
   });
 
-  test('planning overhead only pays back from three files upwards', () => {
+  test('the current routing heuristic escalates from three files upwards', () => {
     assert.equal(classifyFit({ ...baseAnswers, files: 2 }, { type: 'feature' }).route, 'light');
     const full = classifyFit({ ...baseAnswers, files: 3 }, { type: 'feature' });
     assert.equal(full.route, 'full');
@@ -150,15 +151,11 @@ describe('Spec Fit in the working project', () => {
     });
     const spec = await createSpec(tempDir, type, 'small change');
     const dir = join(tempDir, 'specs', spec.slug);
-    await writeFile(join(dir, 'spec.md'), lightSpec, 'utf8');
-    // The generator also drops template design and task artifacts. A light change keeps
-    // none of them, so remove the untouched templates and let each test add what it needs.
-    await rm(join(dir, 'plan.md'), { force: true });
-    await rm(join(dir, 'tasks.md'), { force: true });
+    await writeFile(join(dir, type === 'debt' ? 'audit.md' : 'spec.md'), lightSpec, 'utf8');
     return { spec, dir };
   }
 
-  test('the light route lets a feature close without plan.md and tasks.md', async () => {
+  test('the light route audits a feature with its generated optional templates still present', async () => {
     const { spec, dir } = await project();
     await writeFile(join(dir, 'fit.json'), JSON.stringify(baseAnswers, null, 2), 'utf8');
     const route = await specRoute(tempDir, spec);
@@ -170,7 +167,9 @@ describe('Spec Fit in the working project', () => {
   });
 
   test('without a fit.json the full route still demands the design and the task breakdown', async () => {
-    const { spec } = await project();
+    const { spec, dir } = await project();
+    await rm(join(dir, 'plan.md'));
+    await rm(join(dir, 'tasks.md'));
     const report = await auditSpec(tempDir, spec.id);
     assert.equal(report.valid, false);
     assert.match(report.errors.join(' '), /Missing mandatory feature artifact: plan.md/);
@@ -190,11 +189,84 @@ describe('Spec Fit in the working project', () => {
     await writeFile(join(dir, 'fit.json'), JSON.stringify({ ...baseAnswers, files: 5 }), 'utf8');
     const report = await auditSpec(tempDir, spec.id);
     assert.equal(report.valid, false);
-    assert.match(report.errors.join(' '), /Missing mandatory feature artifact: plan.md/);
+    assert.match(report.errors.join(' '), /File plan.md still contains/);
     await writeFile(join(dir, 'plan.md'), planArtifact, 'utf8');
     await writeFile(join(dir, 'tasks.md'), tasksArtifact, 'utf8');
     const ready = await auditSpec(tempDir, spec.id);
     assert.deepEqual(ready.errors, []);
+  });
+
+  for (const type of ['feature', 'debt']) {
+    for (const route of ['light', 'standard']) {
+      test(`${type} ${route}: create, fit, verify and complete without deleting optional templates`, async () => {
+        const { spec, dir } = await project(type);
+        const design = type === 'feature' ? 'plan.md' : 'migration-plan.md';
+        const originalTasks = await readFile(join(dir, 'tasks.md'), 'utf8');
+        const originalDesign = await readFile(join(dir, design), 'utf8');
+        await writeFile(join(dir, 'fit.json'), JSON.stringify({ ...baseAnswers, existingTests: route === 'light' }));
+        if (route === 'standard') {
+          const draft = await auditSpec(tempDir, spec.id);
+          assert.equal(draft.valid, false);
+          assert.match(draft.errors.join(' '), new RegExp(`File ${design} still contains`));
+          assert.ok(!draft.errors.some(error => error.includes('tasks.md')));
+          await writeFile(join(dir, design), planArtifact);
+        }
+        await writeFile(
+          join(dir, 'acceptance.json'),
+          JSON.stringify({
+            schemaVersion: 1,
+            criteria: [
+              {
+                id: 'AC-01',
+                status: 'passed',
+                method: 'manual',
+                evidence:
+                  'Fixture reviewer checked the requested label; no interaction or browser coverage is claimed.',
+              },
+            ],
+          }),
+        );
+        await writeFile(
+          join(dir, 'verification.md'),
+          '# Evidence\nAC-01: fixture reviewer checked the requested label; no browser or integration behavior is claimed.\n',
+        );
+        const record = await verifySpec(tempDir, spec.id, {
+          manual: 'A static label change is manually reviewed in this fixture.',
+        });
+        assert.equal(record.passed, true);
+        assert.equal((await completeSpec(tempDir, spec.id)).status, 'COMPLETED');
+        assert.equal(await readFile(join(dir, 'tasks.md'), 'utf8'), originalTasks);
+        if (route === 'light') assert.equal(await readFile(join(dir, design), 'utf8'), originalDesign);
+      });
+    }
+  }
+
+  test('promoting light to full requires retained templates to be completed without losing authored notes', async () => {
+    const { spec, dir } = await project();
+    const notes =
+      '# Design notes\nThe existing label contract must remain stable.\n[TODO] complete contracts and rollback.\n';
+    await writeFile(join(dir, 'plan.md'), notes);
+    await writeFile(join(dir, 'fit.json'), JSON.stringify(baseAnswers));
+    const light = await auditSpec(tempDir, spec.id);
+    assert.equal(light.valid, true);
+    assert.match(light.warnings.join(' '), /not audited/);
+    await writeFile(join(dir, 'fit.json'), JSON.stringify({ ...baseAnswers, files: 3 }));
+    const full = await auditSpec(tempDir, spec.id);
+    assert.equal(full.valid, false);
+    assert.match(full.errors.join(' '), /File plan.md still contains/);
+    assert.match(full.errors.join(' '), /File tasks.md still contains/);
+    assert.equal(await readFile(join(dir, 'plan.md'), 'utf8'), notes);
+  });
+
+  test('light does not hide unresolved criteria or placeholders in other authored documents', async () => {
+    const { spec, dir } = await project();
+    await writeFile(join(dir, 'fit.json'), JSON.stringify(baseAnswers));
+    await writeFile(join(dir, 'spec.md'), lightSpec + '\n[NEEDS CLARIFICATION] Who can use the label?\n');
+    await writeFile(join(dir, 'decision.md'), '# Decision\n[TODO] resolve the required behavior.\n');
+    const report = await auditSpec(tempDir, spec.id);
+    assert.equal(report.valid, false);
+    assert.match(report.errors.join(' '), /File spec.md still contains/);
+    assert.match(report.errors.join(' '), /File decision.md still contains/);
   });
 
   test('the CLI prints the questionnaire when the change is not classified yet', async () => {
