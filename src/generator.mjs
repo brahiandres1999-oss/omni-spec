@@ -327,7 +327,9 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
 
       // Inject profile compliance matrix if feature and questions exist, preserving custom template rows
       if (file === 'spec.md' && profile && profile.specSecurityQuestions) {
-        const tableMatch = content.match(/(^\| Control de Seguridad[^\r\n]*\r?\n(?:\|[^\r\n]*(?:\r?\n|$))*)/m);
+        const tableMatch = content.match(
+          /(^\| (?:Control de Seguridad|Security Control)[^\r\n]*\r?\n(?:\|[^\r\n]*(?:\r?\n|$))*)/m,
+        );
         if (tableMatch) {
           const tableText = tableMatch[1];
           const lines = tableText.split('\n');

@@ -4,4 +4,4 @@
 [TODO] Cite actual code, failures or measurable maintenance cost.
 
 ## Scope, acceptance criteria and Non-Goals
-[TODO] Define observable outcomes with stable IDs such as AC-01 and behavior that must remain unchanged. Identify affected consumers and blast radius.
+[TODO] Define observable outcomes with stable IDs and kinds such as `AC-01 [functional]` and behavior that must remain unchanged. Identify affected consumers and blast radius.

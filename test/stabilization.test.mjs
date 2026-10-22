@@ -179,25 +179,29 @@ test('init, create and closure serialize without dropping records or statuses', 
   assert.equal(manifest.specs.find(spec => spec.id === '001').status, 'CLOSED');
 });
 
-test('automatic initialization preserves the package scripts that exist', async () => {
+test('automatic initialization records existing scripts as candidates, not implicit gates', async () => {
   await writeFile(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
   const config = await runWizard(dir, { yes: true });
-  assert.equal(config.qualityGates, 'npm test');
+  assert.equal(config.qualityGates, '');
   await scaffoldProject(dir, config);
-  assert.equal((await loadManifest(dir)).qualityGates, 'npm test');
+  assert.equal((await loadManifest(dir)).qualityGates, '');
   assert.ok(!(await readFile(join(dir, 'CONSTITUTION.md'), 'utf8')).includes('npm run lint'));
+  const context = await readFile(join(dir, 'specs', 'project-context.md'), 'utf8');
+  assert.match(context, /\| `npm test` \| `\.` \|.*NOT_RUN \|/);
+  const explicit = await runWizard(dir, { yes: true, gates: 'npm test' });
+  assert.equal(explicit.qualityGates, 'npm test');
 });
 
 for (const [marker, command] of [
   ['pom.xml', 'mvn test'],
   ['build.gradle', 'gradle test'],
 ]) {
-  test(`interactive and automatic ${marker} use Java and retain build-tool gates`, async t => {
+  test(`interactive ${marker} offers build-tool gates and automatic mode leaves them as candidates`, async t => {
     await writeFile(join(dir, marker), '');
     const automatic = await runWizard(dir, { yes: true });
     assert.equal(automatic.stack, marker === 'pom.xml' ? 'Java / Maven' : 'Java / Gradle');
     assert.equal(automatic.docStandard, 'JavaDoc');
-    assert.ok(automatic.qualityGates.includes(command));
+    assert.equal(automatic.qualityGates, '', 'automatic mode never adopts detected commands as gates');
     const result = await interactive(t);
     assert.equal(result.code, 0, result.stderr);
     const manifest = await loadManifest(dir);
@@ -249,14 +253,14 @@ test('profile injection retains edited original rows, added rows and table notes
   const template = join(dir, 'specs', '_templates', '01-feature', 'spec.md');
   let content = await readFile(template, 'utf8');
   content = content.replace(
-    'Si es SÍ: Especificar cifrado en reposo/tránsito y permisos mínimos.',
+    'If yes: specify protection in transit/at rest and least-privilege access.',
     'MANDATORY_HSM_POLICY',
   );
   content = content.replace(
-    '| **¿Accede o procesa',
-    '| CUSTOM_CONTROL Control de Seguridad | YES | Owner signoff. |\n| **¿Accede o procesa',
+    '| **Does it access or process',
+    '| CUSTOM_CONTROL Security Control | YES | Owner signoff. |\n| **Does it access or process',
   );
-  content = content.replace('## 4. Experiencia', 'CUSTOM_TABLE_NOTE\n\n## 4. Experiencia').replace(/\r?\n/g, '\r\n');
+  content = content.replace('## 4. Experience', 'CUSTOM_TABLE_NOTE\n\n## 4. Experience').replace(/\r?\n/g, '\r\n');
   await writeFile(template, content);
   const spec = await createSpec(dir, 'feature', 'custom');
   const generated = await readFile(join(spec.specDir, 'spec.md'), 'utf8');

@@ -146,6 +146,8 @@ await writeFile(
 exec([installed, 'init', '--yes', '--agent', 'antigravity'], existing);
 assert.equal(await readFile(join(existing, 'app.cjs'), 'utf8'), 'exports.greet = () => undefined;');
 const adopted = join(existing, 'specs', '.omni', 'runtime', 'bin', 'omni-spec.mjs');
+assert.equal(JSON.parse(await readFile(join(existing, 'specs', 'manifest.json'), 'utf8')).qualityGates, '');
+exec([adopted, 'configure', '--gates', 'npm test'], existing);
 exec([adopted, 'create', 'fix', 'greeting'], existing);
 await fillSpec(existing, { slug: '001-greeting', type: 'bugfix' });
 exec([adopted, 'verify', '001'], existing, 1);
@@ -226,11 +228,29 @@ await writeFile(
     ],
   }),
 );
+await writeFile(join(delivery, 'api/package.json'), '{"name":"api","private":true}');
 exec([candidate, 'context-record'], delivery);
 await writeFile(join(delivery, 'api/new-source.cjs'), 'module.exports = true;');
-assert.match(exec([candidate, 'verify', '001', '--json'], delivery, 1), /Context is stale/);
+assert.equal(
+  JSON.parse(exec([candidate, 'status', '--json'], delivery)).progress.context.status,
+  'CURRENT',
+  'source edits are not context inputs',
+);
+await writeFile(
+  join(delivery, 'api/package.json'),
+  '{"name":"api","private":true,"scripts":{"test":"node check.cjs"}}',
+);
+assert.match(exec([candidate, 'verify', '001', '--json'], delivery, 1), /Context is stale: api\/package\.json/);
 exec([candidate, 'context-record'], delivery);
+assert.match(exec([candidate, 'guide', 'evidence'], delivery), /specs\/\.omni\/inputs\//);
+await writeFile(
+  join(delivery, 'api/check.cjs'),
+  'require("node:assert/strict").equal(require("./app.cjs").greet("Ada"),"Hello Ada");' +
+    'require("node:fs").mkdirSync("test-results",{recursive:true});' +
+    'require("node:fs").writeFileSync("test-results/.last-run.json",String(Date.now()));',
+);
 const deliveryVerified = JSON.parse(exec([candidate, 'verify', '001', '--json'], delivery));
+assert.equal(deliveryVerified.passed, true, 'generated test-results do not invalidate verification');
 assert.equal(deliveryVerified.results[0].checkId, 'api-unit');
 assert.equal(deliveryVerified.results[0].cwd, join(delivery, 'api'));
 assert.equal(JSON.parse(exec([candidate, 'status', '--json'], delivery)).progress.delivery, 'READY_TO_COMPLETE');
@@ -291,7 +311,9 @@ console.log(
         'context structural check and nonportable citation rejection',
         'bundled design guide without external skills',
         'module check catalogue, typed acceptance and shared ready state',
-        'stale context rejection, reconciliation and contract activation',
+        'context staleness from manifests only, reconciliation and contract activation',
+        'generated check outputs excluded from the verification snapshot',
+        'bundled evidence guide with exact record shapes',
         'visual criterion rejects source-only evidence in installed package',
       ],
       liveAgentChatTested: false,

@@ -2,6 +2,58 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { safePath } from './managed.mjs';
 
+/** @returns {string[]} Unique Markdown link destinations with titles and angle brackets removed. */
+export function linkDestinations(text) {
+  const links = [
+    ...[...text.matchAll(/\[[^\]\n]*\]\((<[^>\n]+>|[^)\n]+)\)/g)].map(m => m[1]),
+    ...[...text.matchAll(/^\s{0,3}\[[^\]\n]+\]:\s*(<[^>\n]+>|\S+)/gm)].map(m => m[1]),
+    ...[...text.matchAll(/<(file:\/\/[^>\n]+)>/gi)].map(m => m[1]),
+  ];
+  return [
+    ...new Set(
+      links.map(destination =>
+        destination
+          .trim()
+          .replace(/^<|>$/g, '')
+          .replace(/\s+["'][^"']*["']$/, ''),
+      ),
+    ),
+  ];
+}
+
+/**
+ * Project-relative files cited by local links in specs/project-context.md.
+ * External URLs, anchors and nonportable destinations are skipped; validity is audited separately.
+ * @returns {string[]} Normalized paths such as `package.json` or `api/pom.xml`.
+ */
+export function citedProjectFiles(text) {
+  const result = new Set();
+  for (const destination of linkDestinations(text)) {
+    if (/^https?:\/\//i.test(destination) || destination.startsWith('#')) continue;
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/|\\)/i.test(destination) || destination.includes('\\')) continue;
+    let decoded;
+    try {
+      decoded = decodeURIComponent(destination.split('#')[0]);
+    } catch {
+      continue;
+    }
+    const parts = [];
+    for (const part of `specs/${decoded}`.split('/')) {
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        if (!parts.length) {
+          parts.length = 0;
+          parts.push('..');
+          break;
+        }
+        parts.pop();
+      } else parts.push(part);
+    }
+    if (parts.length && parts[0] !== '..') result.add(parts.join('/'));
+  }
+  return [...result];
+}
+
 // A deliberately structural check: existence of a citation is not proof of its meaning.
 export async function auditProjectContext(root) {
   const errors = [],
@@ -31,16 +83,7 @@ export async function auditProjectContext(root) {
       'Include a source-conflict section (<!-- omni:source-conflicts -->): conflicting declarations, or compared sources and coverage limits.',
     );
   let linksChecked = 0;
-  const links = [
-    ...[...text.matchAll(/\[[^\]\n]*\]\((<[^>\n]+>|[^)\n]+)\)/g)].map(m => m[1]),
-    ...[...text.matchAll(/^\s{0,3}\[[^\]\n]+\]:\s*(<[^>\n]+>|\S+)/gm)].map(m => m[1]),
-    ...[...text.matchAll(/<(file:\/\/[^>\n]+)>/gi)].map(m => m[1]),
-  ];
-  for (let destination of new Set(links)) {
-    destination = destination
-      .trim()
-      .replace(/^<|>$/g, '')
-      .replace(/\s+["'][^"']*["']$/, '');
+  for (const destination of linkDestinations(text)) {
     if (/^https?:\/\//i.test(destination) || destination.startsWith('#')) continue;
     linksChecked++;
     if (/^(?:[a-z][a-z0-9+.-]*:|\/|\\)/i.test(destination) || destination.includes('\\')) {

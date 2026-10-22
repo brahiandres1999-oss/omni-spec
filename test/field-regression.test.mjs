@@ -188,7 +188,7 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
 
     const refreshed = await readFile(templateSpecPath, 'utf-8');
     assert.equal(refreshed.includes('STALE MARKER R21'), false, 'stale template content must be replaced on update');
-    assert.match(refreshed, /Fase de Clarificaci/);
+    assert.match(refreshed, /## 0\. Clarification and Assumptions/);
 
     // Templates for all four archetypes must be present after the copy.
     const templates = await readdir(join(tempDir, 'specs', '_templates'));

@@ -1,35 +1,96 @@
-import { readFile, writeFile, readdir, mkdir, rename, stat } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { safePath, hash } from './managed.mjs';
+import { writeFileAtomic } from './fs-retry.mjs';
 import { loadManifest, withManifestLock } from './manifest.mjs';
-import { auditProjectContext } from './context-auditor.mjs';
+import { auditProjectContext, citedProjectFiles } from './context-auditor.mjs';
+import { hashProjectFiles } from './snapshot.mjs';
 
 const file = 'specs/project-state.json';
 const capabilities = ['questions', 'web', 'terminal', 'render', 'delegation'];
-const ignored = new Set([
-  '.git',
-  '.research',
-  'node_modules',
-  'specs',
-  '.agents',
-  '.agent',
-  '.codex',
-  '.claude',
-  '.cursor',
-  '.gemini',
-  '.kilo',
-  '.opencode',
-  '.venv',
-  'venv',
-  '__pycache__',
-  'dist',
-  'build',
-  'target',
-  'coverage',
-  '.next',
-  '.nuxt',
+export const CONTEXT_SCOPE = 'CONTEXT_INPUTS_V2';
+const MAX_SESSION_HISTORY = 100;
+// Files that usually carry facts recorded in project-context.md: build/dependency
+// declarations, runtime pins, containers, CI and agent instructions. Source code is not a
+// context input unless the context cites it, so implementing a change does not stale context.
+const CONTEXT_NAMES = new Set([
+  'package.json',
+  'pnpm-workspace.yaml',
+  'lerna.json',
+  'nx.json',
+  'turbo.json',
+  'deno.json',
+  'bunfig.toml',
+  'angular.json',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  'settings.gradle',
+  'settings.gradle.kts',
+  'gradle.properties',
+  'pyproject.toml',
+  'setup.py',
+  'setup.cfg',
+  'Pipfile',
+  'tox.ini',
+  'go.mod',
+  'go.work',
+  'Cargo.toml',
+  'composer.json',
+  'Gemfile',
+  'pubspec.yaml',
+  'mix.exs',
+  'CMakeLists.txt',
+  'Makefile',
+  'Jenkinsfile',
+  '.gitlab-ci.yml',
+  'azure-pipelines.yml',
+  '.nvmrc',
+  '.node-version',
+  '.python-version',
+  '.ruby-version',
+  '.tool-versions',
+  'global.json',
 ]);
+const CONTEXT_PATTERNS = [
+  /^tsconfig(?:\.[\w-]+)?\.json$/,
+  /^jsconfig\.json$/,
+  /^requirements[\w.-]*\.txt$/,
+  /^Dockerfile(?:\.[\w-]+)?$/,
+  /^(?:docker-)?compose(?:\.[\w-]+)?\.ya?ml$/,
+  /\.(?:csproj|fsproj|sln)$/,
+  /^\.env\.(?:example|sample|template)$/,
+  /^(?:vite|vitest|next|nuxt|svelte|astro|webpack|rollup|playwright|jest|cypress|karma)\.config\.[cm]?[jt]s$/,
+];
+const ROOT_CONTEXT = new Set([
+  'AGENTS.md',
+  'CONSTITUTION.md',
+  'CLAUDE.md',
+  'GEMINI.md',
+  'README.md',
+  'CONTRIBUTING.md',
+]);
+const managedSection = /<!-- OMNI-SPEC-START -->[\s\S]*?<!-- OMNI-SPEC-END -->/;
+
+// OmniSpec rewrites these while working; citing them must not make context permanently stale.
+function generatedState(name) {
+  return (
+    name === 'specs/project-context.md' ||
+    name.startsWith('specs/.omni/') ||
+    ['specs/manifest.json', 'specs/project-state.json', 'specs/contracts.json'].includes(name) ||
+    name.startsWith('specs/manifest.lock') ||
+    /^specs\/[^/]+\/verification\.json$/.test(name)
+  );
+}
+
+function isContextInput(name, cited) {
+  if (cited.has(name)) return true;
+  if (!name.includes('/') && ROOT_CONTEXT.has(name)) return true;
+  if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(name) || name === '.circleci/config.yml') return true;
+  const base = name.slice(name.lastIndexOf('/') + 1);
+  return CONTEXT_NAMES.has(base) || CONTEXT_PATTERNS.some(pattern => pattern.test(base));
+}
 
 /** @returns {object} Unconfirmed state; never implies application readiness. */
 export function projectStateSeed() {
@@ -92,14 +153,17 @@ function validateState(state) {
         throw new Error(`Technology decision ${item.id} requires a value and dated official-source references.`);
     }
   }
-  if (state.session) {
+  if (state.sessions !== undefined && !Array.isArray(state.sessions))
+    throw new Error('Invalid project-state.json sessions history.');
+  for (const session of [...(state.sessions || []), ...(state.session ? [state.session] : [])]) {
     if (
-      typeof state.session.host !== 'string' ||
-      !state.session.host.trim() ||
-      !Number.isFinite(Date.parse(state.session.observedAt || state.session.recordedAt))
+      !session ||
+      typeof session.host !== 'string' ||
+      !session.host.trim() ||
+      !Number.isFinite(Date.parse(session.observedAt || session.recordedAt))
     )
       throw new Error('Invalid recorded session host/time.');
-    for (const [name, observation] of Object.entries(state.session.capabilities || {})) {
+    for (const [name, observation] of Object.entries(session.capabilities || {})) {
       if (
         !capabilities.includes(name) ||
         !['available', 'unavailable', 'unknown'].includes(observation?.status) ||
@@ -129,40 +193,40 @@ function validSource(source) {
 async function save(root, state) {
   const path = await safePath(root, file);
   await mkdir(dirname(path), { recursive: true });
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temporary, JSON.stringify(state, null, 2) + '\n');
-  await rename(temporary, path);
+  await writeFileAtomic(path, JSON.stringify(state, null, 2) + '\n');
 }
 
 /**
- * Hash bounded application inputs and context without reading generated runtime copies.
- * @param {string} root Project root, excluding caches and OmniSpec metadata.
+ * Hash the inputs that project-context.md describes: the context itself, files it cites,
+ * build/dependency/runtime declarations, CI and agent instructions. Ignored paths
+ * (.gitignore, .omnispecignore and defaults) and symlinks are skipped. The OmniSpec-managed
+ * section of AGENTS.md is excluded so adapter updates do not stale user context.
+ * @param {string} root Project root.
  * @returns {Promise<Object<string,string>>} Relative paths and SHA-256 values.
- * @throws {Error} Symlinks, unsafe paths or snapshot limits.
  */
 export async function contextSnapshot(root) {
-  const files = {};
-  let count = 0,
-    bytes = 0;
-  async function walk(relative = '') {
-    for (const entry of await readdir(join(root, relative), { withFileTypes: true })) {
-      if (ignored.has(entry.name)) continue;
-      const name = relative ? `${relative}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) throw new Error(`Context snapshot refuses symlink: ${name}`);
-      if (entry.isDirectory()) await walk(name);
-      else if (entry.isFile()) {
-        const path = await safePath(root, name);
-        count += 1;
-        bytes += (await stat(path)).size;
-        if (count > 20000 || bytes > 256 * 1024 * 1024)
-          throw new Error('Context snapshot exceeds 20,000 files / 256 MiB. Narrow the project root.');
-        const data = await readFile(path);
-        files[name] = hash(data);
-      }
+  const contextText = await readFile(await safePath(root, 'specs/project-context.md'), 'utf8');
+  const citations = citedProjectFiles(contextText).filter(name => !generatedState(name));
+  const cited = new Set(citations.filter(name => !name.startsWith('specs/')));
+  const files = Object.fromEntries(
+    await hashProjectFiles(root, {
+      skipTop: new Set(['specs']),
+      select: name => isContextInput(name, cited),
+      symlinks: 'reject-selected',
+      label: 'Context snapshot',
+    }),
+  );
+  // hashProjectFiles has already confirmed AGENTS.md is a regular file or an in-project link.
+  if (files['AGENTS.md'])
+    files['AGENTS.md'] = hash((await readFile(join(root, 'AGENTS.md'), 'utf8')).replace(managedSection, ''));
+  for (const name of citations.filter(item => item.startsWith('specs/'))) {
+    try {
+      files[name] = hash(await readFile(await safePath(root, name)));
+    } catch (error) {
+      if (!['ENOENT', 'EISDIR'].includes(error.code)) throw error;
     }
   }
-  await walk();
-  files['specs/project-context.md'] = hash(await readFile(await safePath(root, 'specs/project-context.md')));
+  files['specs/project-context.md'] = hash(contextText);
   return files;
 }
 
@@ -185,6 +249,7 @@ export async function recordContext(root) {
     }
     state.context = {
       recordedAt: new Date().toISOString(),
+      scope: CONTEXT_SCOPE,
       inputs,
       reviewScope: 'BYTE_BASELINE_AND_STRUCTURAL_LINKS_ONLY',
       semanticReview: 'AGENT_OR_HUMAN_REQUIRED',
@@ -205,13 +270,41 @@ export async function contextFreshness(root, state = null) {
   if (!state.context.inputs || typeof state.context.inputs !== 'object')
     throw new Error('Invalid context baseline. Reconcile and run context-record.');
   const current = await contextSnapshot(root);
-  const changed = [...new Set([...Object.keys(current), ...Object.keys(state.context.inputs)])]
-    .filter(name => current[name] !== state.context.inputs[name])
-    .sort();
+  const baseline = state.context.inputs;
+  // Baselines recorded before 0.7.0-rc.2 hashed every source file; compare only the
+  // inputs selected today so ordinary code changes do not report stale context.
+  const legacy = state.context.scope !== CONTEXT_SCOPE;
+  // A legacy baseline also detects deleted inputs, but never hashed files under specs/ other
+  // than project-context.md, and hashed AGENTS.md including the managed section.
+  const comparable = name =>
+    name !== 'AGENTS.md' && (!name.startsWith('specs/') || name === 'specs/project-context.md');
+  const cited = legacy
+    ? new Set(citedProjectFiles(await readFile(await safePath(root, 'specs/project-context.md'), 'utf8')))
+    : null;
+  const legacyInputs = legacy
+    ? Object.keys(baseline).filter(
+        name => comparable(name) && (name === 'specs/project-context.md' || isContextInput(name, cited)),
+      )
+    : [];
+  const names = legacy
+    ? [...new Set([...Object.keys(current).filter(comparable), ...legacyInputs])]
+    : [...new Set([...Object.keys(current), ...Object.keys(baseline)])];
+  const changed = [];
+  for (const name of names.sort()) {
+    if (current[name] === baseline[name]) continue;
+    // A legacy full-tree baseline also hashed files that are ignored today (vendor/, .gradle/).
+    // Such a file only counts as changed when it was actually deleted.
+    if (legacy && current[name] === undefined && (await exists(root, name))) continue;
+    changed.push(name);
+  }
   return {
     status: changed.length ? 'STALE' : 'CURRENT',
     changed,
     recordedAt: state.context.recordedAt,
+    scope: legacy ? 'LEGACY_FULL_SNAPSHOT' : CONTEXT_SCOPE,
+    ...(legacy
+      ? { recommendation: 'Run context-record after reviewing context to adopt the input-based baseline.' }
+      : {}),
     semanticReview: 'REQUIRED',
   };
 }
@@ -265,6 +358,8 @@ export async function recordSession(root, declaration) {
   }
   return withManifestLock(root, async () => {
     const state = await readProjectState(root);
+    // Earlier sessions stay available so evidence observed in them remains attributable.
+    if (state.session) state.sessions = [...(state.sessions || []), state.session].slice(-MAX_SESSION_HISTORY);
     state.session = {
       id: randomUUID(),
       host: declaration.host,
@@ -415,7 +510,17 @@ export async function projectStatus(root) {
                 action: `verify ${spec.id}`,
               });
             }
-          } else blockers.push({ code: 'VERIFICATION_FAILED', action: 'Inspect recorded check failures' });
+          } else {
+            const { describeFailure } = await import('./verification.mjs');
+            blockers.push({
+              code: record.sourceChangedDuringVerification ? 'VERIFICATION_SOURCE_CHANGED' : 'VERIFICATION_FAILED',
+              message: describeFailure(record),
+              ...(record.changedDuringVerification ? { files: record.changedDuringVerification } : {}),
+              action: record.sourceChangedDuringVerification
+                ? 'Exclude generated outputs in .gitignore/.omnispecignore or stop concurrent edits, then verify again'
+                : `Fix the failing check or evidence, then verify ${spec.id}`,
+            });
+          }
         } catch (error) {
           if (error.code !== 'ENOENT') throw error;
         }
@@ -439,6 +544,46 @@ export async function projectStatus(root) {
       publication: 'NOT_AUTHORIZED_BY_STATUS',
     },
   };
+}
+
+async function exists(root, name) {
+  try {
+    await access(await safePath(root, name));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const secondFloor = value => Math.floor(Date.parse(value) / 1000) * 1000;
+
+/**
+ * Find the recorded session an observation belongs to: its sessionId, or otherwise the latest
+ * session recorded at or before the observation (second precision, since hosts often omit ms).
+ * @param {object} state Validated project state.
+ * @param {object} observation Observation with observedAt and optional sessionId.
+ * @returns {object|null} Session whose window [start, next session start) contains the observation.
+ */
+export function observationSession(state, observation) {
+  const observed = Date.parse(observation.observedAt);
+  const start = session => secondFloor(session.observedAt || session.recordedAt);
+  // Windows follow observation start times, even if a later record declared an earlier start.
+  const sessions = [...(state.sessions || []), ...(state.session ? [state.session] : [])]
+    .map((session, order) => ({ session, order }))
+    .sort((left, right) => start(left.session) - start(right.session) || left.order - right.order)
+    .map(item => item.session);
+  if (observation.sessionId) {
+    const index = sessions.findIndex(item => item.id === observation.sessionId);
+    if (index < 0) return null;
+    const session = sessions[index];
+    // A session's window ends when the next recorded session starts.
+    const next = sessions[index + 1];
+    return observed >= start(session) && (!next || observed < start(next)) ? session : null;
+  }
+  // The latest session started by then owns the observation.
+  let owner = null;
+  for (const session of sessions) if (start(session) <= observed) owner = session;
+  return owner;
 }
 
 function decisionApplies(item, spec) {

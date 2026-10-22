@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import { safePath } from './managed.mjs';
-import { readProjectState } from './project-state.mjs';
+import { readProjectState, observationSession } from './project-state.mjs';
 
 const primaryFiles = { feature: 'spec.md', bugfix: 'bug.md', debt: 'audit.md', rfc: 'rfc.md' };
 /** @param {string} type Spec archetype. @returns {object} Pending v2 criteria. */
@@ -117,12 +117,10 @@ export async function reviewAcceptance(root, spec) {
             );
           if (
             observation.actor === 'agent' &&
-            (state.session?.capabilities?.render?.status !== 'available' ||
-              Date.parse(observation.observedAt) < Date.parse(state.session.observedAt || state.session.recordedAt) ||
-              (observation.sessionId && observation.sessionId !== state.session.id))
+            observationSession(state, observation)?.capabilities?.render?.status !== 'available'
           )
             throw new Error(
-              `Agent UI evidence for ${item.id} requires a render capability observed in the current recorded session.`,
+              `Agent UI evidence for ${item.id} requires a recorded session with render capability available at the observation time. Run session-record before observing, and use its sessionId or a later observedAt.`,
             );
           if (
             item.kind === 'visual' &&

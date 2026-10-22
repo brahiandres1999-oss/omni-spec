@@ -1,11 +1,12 @@
 import { mkdir, mkdtemp, writeFile, readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
 import { scaffoldProject } from '../src/generator.mjs';
 import { seedOnboardingFixture } from '../test-support/onboarding-fixtures.mjs';
 
 // Preparation only: never launches a model, publishes, or installs into a user's host.
-const parent = resolve(process.argv[2] || '.research/behavior-evals');
+const parent = resolve(process.argv[2] || join(tmpdir(), `omnispec-behavior-evals-${Date.now()}`));
 await mkdir(parent, { recursive: true });
 const run = await mkdtemp(join(parent, 'candidate-'));
 async function snapshot(root, relative = '') {

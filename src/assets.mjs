@@ -2,6 +2,19 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Machine-local OmniSpec state. Specifications, acceptance/verification records, context,
+// decisions, contracts and the portable runtime stay versioned.
+export const SPECS_GITIGNORE = `# OMNI-SPEC-START
+# OmniSpec local state (managed section). Specs and their records remain versioned.
+manifest.lock/
+*.tmp
+manifest.json.tmp.*
+.omni/verify.lock/
+.omni/verification-logs/
+.omni/backups/
+.omni/inputs/
+# OMNI-SPEC-END`;
+
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 async function files(directory, destination) {
   const result = [];
@@ -24,5 +37,6 @@ export async function packageEntries() {
     content: await readFile(join(packageRoot, 'package.json'), 'utf8'),
   });
   entries.push({ path: 'specs/.omni/runtime/LICENSE', content: await readFile(join(packageRoot, 'LICENSE'), 'utf8') });
+  entries.push({ path: 'specs/.gitignore', content: SPECS_GITIGNORE, section: 'hash' });
   return entries;
 }

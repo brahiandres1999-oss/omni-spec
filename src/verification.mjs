@@ -1,31 +1,16 @@
-import { readFile, writeFile, readdir, stat, mkdir } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { auditSpec } from './auditor.mjs';
-import { loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
+import { loadManifest, saveManifest, withManifestLock, withVerificationLock } from './manifest.mjs';
 import { safePath } from './managed.mjs';
+import { writeFileAtomic } from './fs-retry.mjs';
+import { hashProjectFiles, hashTree, digestFiles, changedFiles, newBudget } from './snapshot.mjs';
 import { reviewAcceptance, bindAcceptance } from './acceptance.mjs';
 import { loadChecks, checkDirectory } from './checks.mjs';
 import { assertContextFresh } from './project-state.mjs';
 
-const excluded = new Set([
-  '.git',
-  'node_modules',
-  '.venv',
-  'venv',
-  '__pycache__',
-  '.pytest_cache',
-  '.mypy_cache',
-  '.ruff_cache',
-  'dist',
-  'build',
-  'target',
-  'coverage',
-  '.next',
-  '.nuxt',
-  '.omni',
-]);
 const placeholders = /\[TODO\]|\[NEEDS CLARIFICATION\]|\b(?:SPEC|BUG|DEBT|RFC)-XXX\b/i;
 
 async function getSpec(root, identifier) {
@@ -69,49 +54,61 @@ async function ready(root, spec) {
   return { ...audit, acceptance };
 }
 
-// Bind evidence to source and spec contents in non-Git as well as Git projects.
-// Build/dependency caches are excluded explicitly; nothing invokes Git or edits it.
-export async function projectFingerprint(root, spec, gates) {
-  const digest = createHash('sha256');
-  let count = 0,
-    bytes = 0;
-  async function addFile(path, name) {
-    count += 1;
-    bytes += (await stat(path)).size;
-    if (count > 20000 || bytes > 256 * 1024 * 1024)
-      throw new Error('Verification snapshot exceeds 20,000 files / 256 MiB. Narrow the project root.');
-    digest
-      .update(name + '\0')
-      .update(await readFile(path))
-      .update('\0');
-  }
-  async function walk(directory, relative = '', specFiles = false) {
-    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )) {
-      if (!specFiles && excluded.has(entry.name)) continue;
-      const name = relative ? `${relative}/${entry.name}` : entry.name;
-      if (!specFiles && name === 'specs') continue;
-      if (specFiles && name === `specs/${spec.slug}/verification.json`) continue;
-      if (entry.isSymbolicLink())
-        throw new Error(`Verification cannot attest symlinked source: ${name}. Use a regular-file project copy.`);
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) await walk(path, name, specFiles);
-      else if (entry.isFile()) await addFile(path, name);
-    }
-  }
-  await walk(root);
+const STATE_FILES = ['project-context.md', 'checks.json', 'contracts.json'];
+
+/**
+ * Snapshot source and specification inputs bound by verification. Git and .omnispecignore
+ * rules exclude generated outputs; unrelated specs and OmniSpec metadata are outside it.
+ * Session observations in project-state.json do not change the snapshot; decisions and the
+ * context baseline do. Nothing invokes Git or edits the project.
+ * @returns {Promise<{fingerprint:string, files:Map<string,string>}>}
+ */
+export async function projectSnapshot(root, spec, gates) {
+  const budget = newBudget();
+  const label = 'Verification snapshot';
+  const files = await hashProjectFiles(root, { skipTop: new Set(['specs']), label, budget });
   const specPath = `specs/${spec.slug}`;
-  await walk(await safePath(root, specPath), specPath, true);
-  for (const name of ['project-context.md', 'checks.json', 'project-state.json', 'contracts.json']) {
+  await safePath(root, specPath);
+  for (const [name, digest] of await hashTree(root, specPath, {
+    exclude: new Set([`${specPath}/verification.json`]),
+    label,
+    budget,
+  }))
+    files.set(name, digest);
+  for (const name of STATE_FILES) {
     try {
-      await addFile(await safePath(root, `specs/${name}`), `specs/${name}`);
+      files.set(
+        `specs/${name}`,
+        createHash('sha256')
+          .update(await readFile(await safePath(root, `specs/${name}`)))
+          .digest('hex'),
+      );
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
   }
-  digest.update(JSON.stringify({ type: spec.type, gates }));
-  return digest.digest('hex');
+  let state = { decisions: [], context: null };
+  try {
+    state = JSON.parse(
+      (await readFile(await safePath(root, 'specs/project-state.json'), 'utf8')).replace(/^\uFEFF/, ''),
+    );
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  files.set(
+    'specs/project-state.json#decisions-context',
+    createHash('sha256')
+      .update(JSON.stringify({ decisions: state.decisions ?? [], context: state.context ?? null }))
+      .digest('hex'),
+  );
+  const configuration = JSON.stringify({ type: spec.type, gates });
+  files.set('#configuration', createHash('sha256').update(configuration).digest('hex'));
+  return { fingerprint: digestFiles(files, 'omnispec-snapshot-v3'), files };
+}
+
+/** @returns {Promise<string>} Fingerprint of the current verification snapshot. */
+export async function projectFingerprint(root, spec, gates) {
+  return (await projectSnapshot(root, spec, gates)).fingerprint;
 }
 
 async function runCommand(check, root, timeoutOverride) {
@@ -166,6 +163,7 @@ async function runCommand(check, root, timeoutOverride) {
         command,
         checkId,
         cwd,
+        checkCwd: check.cwd,
         kind: check.kind,
         timeoutMs: timeout,
         processId: child.pid ?? null,
@@ -246,26 +244,37 @@ async function runCommand(check, root, timeoutOverride) {
   return record;
 }
 
+export const VERIFICATION_RECORD_VERSION = 3;
+
+/**
+ * Run approved checks and bind the result to a snapshot. The manifest lock is held only to
+ * prepare and record; checks run under a separate verification lock so other commands stay
+ * responsive. Any snapshot change while checks run is reported by path and fails the record.
+ */
 export async function verifySpec(root, identifier, options = {}) {
-  return withManifestLock(root, async () => {
-    const { manifest, spec } = await getSpec(root, identifier);
-    const initial = await ready(root, spec);
-    if (
-      options.timeout !== undefined &&
-      (!Number.isInteger(options.timeout) || options.timeout < 100 || options.timeout > 3600000)
-    )
-      throw new Error('Verification timeout must be an integer from 100 to 3600000 milliseconds.');
-    const checks = await loadChecks(root, manifest);
-    const mode = spec.type === 'rfc' ? 'decision' : checks.length ? 'automated' : 'manual';
-    bindAcceptance(initial.acceptance, checks);
-    if (mode === 'manual' && (!options.manual || options.manual.trim().length < 20))
-      throw new Error(
-        'No quality gates configured. Use configure --gates or --manual with a specific reason (at least 20 characters) and verification.md evidence.',
-      );
-    if (checks.length && options.manual && spec.type !== 'rfc')
-      throw new Error('Manual verification cannot bypass configured quality gates.');
-    const configuration = { qualityGates: manifest.qualityGates, checks };
-    const before = await projectFingerprint(root, spec, configuration);
+  if (
+    options.timeout !== undefined &&
+    (!Number.isInteger(options.timeout) || options.timeout < 100 || options.timeout > 3600000)
+  )
+    throw new Error('Verification timeout must be an integer from 100 to 3600000 milliseconds.');
+  return withVerificationLock(root, async () => {
+    const prepared = await withManifestLock(root, async () => {
+      const { manifest, spec } = await getSpec(root, identifier);
+      const initial = await ready(root, spec);
+      const checks = await loadChecks(root, manifest);
+      const mode = spec.type === 'rfc' ? 'decision' : checks.length ? 'automated' : 'manual';
+      bindAcceptance(initial.acceptance, checks);
+      if (mode === 'manual' && (!options.manual || options.manual.trim().length < 20))
+        throw new Error(
+          'No quality gates configured. Use checks --from/configure --gates, or --manual with a specific reason (at least 20 characters) and verification.md evidence.',
+        );
+      if (checks.length && options.manual && spec.type !== 'rfc')
+        throw new Error('Manual verification cannot bypass configured quality gates.');
+      const configuration = { qualityGates: manifest.qualityGates, checks };
+      const before = await projectSnapshot(root, spec, configuration);
+      return { spec, checks, mode, before };
+    });
+    const { spec, checks, mode, before } = prepared;
     const results = [];
     if (mode === 'automated')
       for (const check of checks) {
@@ -273,35 +282,70 @@ export async function verifySpec(root, identifier, options = {}) {
         results.push(result);
         if (result.exitCode !== 0 || result.timedOut || result.error) break;
       }
-    const currentChecks = await loadChecks(root, await loadManifest(root));
-    const after = await projectFingerprint(root, spec, {
-      qualityGates: (await loadManifest(root)).qualityGates,
-      checks: currentChecks,
+    return withManifestLock(root, async () => {
+      const manifest = await loadManifest(root);
+      const current = manifest?.specs.find(item => item.id === spec.id);
+      if (!current || current.slug !== spec.slug)
+        throw new Error('Specification changed during verification. Run verify again.');
+      const after = await projectSnapshot(root, spec, {
+        qualityGates: manifest.qualityGates,
+        checks: await loadChecks(root, manifest),
+      });
+      const changed = changedFiles(before.files, after.files);
+      let acceptance;
+      let acceptanceError = null;
+      try {
+        acceptance = bindAcceptance(await reviewAcceptance(root, spec), checks, results);
+      } catch (error) {
+        acceptanceError = error.message;
+        acceptance = { criteria: [], automatedChecksPassed: false, error: error.message };
+      }
+      const passed =
+        !changed.length &&
+        !acceptanceError &&
+        acceptance.automatedChecksPassed &&
+        results.every(r => r.exitCode === 0 && !r.timedOut && !r.error) &&
+        (mode !== 'automated' || results.length === checks.length);
+      const record = {
+        version: VERIFICATION_RECORD_VERSION,
+        id: spec.id,
+        mode,
+        passed,
+        verifiedAt: new Date().toISOString(),
+        fingerprint: after.fingerprint,
+        // Visible count of attested project files (excluding specs/ and OmniSpec state) so an
+        // ignore rule that hides source is noticed.
+        attestedFiles: [...after.files.keys()].filter(name => !name.startsWith('specs/') && !name.startsWith('#'))
+          .length,
+        sourceChangedDuringVerification: changed.length > 0,
+        changedDuringVerification: changed.slice(0, 50),
+        changedDuringVerificationCount: changed.length,
+        reason: options.manual || null,
+        checks,
+        timeoutOverride: options.timeout ?? null,
+        acceptance,
+        results,
+      };
+      await writeFileAtomic(
+        await safePath(root, `specs/${spec.slug}/verification.json`),
+        JSON.stringify(record, null, 2) + '\n',
+      );
+      return record;
     });
-    const acceptance = bindAcceptance(await reviewAcceptance(root, spec), checks, results);
-    const passed =
-      before === after &&
-      acceptance.automatedChecksPassed &&
-      results.every(r => r.exitCode === 0 && !r.timedOut && !r.error) &&
-      (mode !== 'automated' || results.length === checks.length);
-    const record = {
-      version: 2,
-      id: spec.id,
-      mode,
-      passed,
-      verifiedAt: new Date().toISOString(),
-      fingerprint: after,
-      sourceChangedDuringVerification: before !== after,
-      reason: options.manual || null,
-      checks,
-      timeoutOverride: options.timeout ?? null,
-      acceptance,
-      results,
-    };
-    const path = await safePath(root, `specs/${spec.slug}/verification.json`);
-    await writeFile(path, JSON.stringify(record, null, 2) + '\n');
-    return record;
   });
+}
+
+/** @returns {string} One-line reason a stored verification record failed. */
+export function describeFailure(record) {
+  if (record.sourceChangedDuringVerification)
+    return `files changed while checks ran (${(record.changedDuringVerification || []).slice(0, 5).join(', ') || 'see record'}${record.changedDuringVerificationCount > 5 ? ', ...' : ''}). Exclude generated outputs in .gitignore or .omnispecignore, or stop concurrent edits.`;
+  if (record.acceptance?.error) return `acceptance review failed after checks: ${record.acceptance.error}`;
+  const failed = (record.results || []).find(result => result.exitCode !== 0 || result.timedOut || result.error);
+  if (failed)
+    return `check ${failed.checkId || failed.command} ${failed.timedOut ? 'timed out' : failed.errorType === 'environment' ? 'could not run (environment)' : `exited ${failed.exitCode}`}.`;
+  if (record.acceptance && !record.acceptance.automatedChecksPassed)
+    return 'an automated criterion is not bound to a passing executed check.';
+  return 'see verification.json.';
 }
 
 /** Read-only validation of current audit, criterion bindings, check identities and stored output. */
@@ -313,19 +357,19 @@ export async function inspectVerification(root, spec, manifest) {
   } catch {
     throw new Error('No valid verification record. Run verify before complete.');
   }
-  if (
-    record.version !== 2 ||
-    record.id !== spec.id ||
-    record.passed !== true ||
-    !['automated', 'manual', 'decision'].includes(record.mode)
-  )
-    throw new Error('Verification did not pass. Run verify again.');
+  if (record?.version !== VERIFICATION_RECORD_VERSION)
+    throw new Error('Verification record was produced by an earlier OmniSpec version. Run verify again.');
+  if (record.id !== spec.id || !['automated', 'manual', 'decision'].includes(record.mode))
+    throw new Error('Verification record does not belong to this specification. Run verify again.');
+  if (record.passed !== true)
+    throw new Error(`Verification did not pass: ${describeFailure(record)} Run verify again.`);
   const checks = await loadChecks(root, manifest);
   if (!Array.isArray(record.checks) || JSON.stringify(record.checks) !== JSON.stringify(checks))
     throw new Error(
       'Verification check identity/configuration changed after verification or is missing. Run verify again.',
     );
-  if (record.fingerprint !== (await projectFingerprint(root, spec, { qualityGates: manifest.qualityGates, checks })))
+  const snapshot = await projectSnapshot(root, spec, { qualityGates: manifest.qualityGates, checks });
+  if (record.fingerprint !== snapshot.fingerprint)
     throw new Error('Source, specification or gates changed after verification. Run verify again.');
   const expectedMode = spec.type === 'rfc' ? 'decision' : checks.length ? 'automated' : 'manual';
   if (record.mode !== expectedMode) throw new Error('Verification mode changed. Run verify again.');
@@ -341,7 +385,7 @@ export async function inspectVerification(root, spec, manifest) {
           return (
             result.checkId !== check.id ||
             result.command !== check.command ||
-            result.cwd !== resolve(root, check.cwd) ||
+            (result.checkCwd ?? null) !== check.cwd ||
             result.kind !== check.kind ||
             result.timeoutMs !== (record.timeoutOverride ?? check.timeoutMs) ||
             result.exitCode !== 0 ||
@@ -377,6 +421,10 @@ export async function inspectVerification(root, spec, manifest) {
 }
 
 export async function completeSpec(root, identifier) {
+  return withVerificationLock(root, () => completeUnlocked(root, identifier), { wait: false });
+}
+
+async function completeUnlocked(root, identifier) {
   return withManifestLock(root, async () => {
     const { manifest, spec } = await getSpec(root, identifier);
     const { record, acceptance } = await inspectVerification(root, spec, manifest);

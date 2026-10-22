@@ -1,7 +1,8 @@
-import { readFile, writeFile, mkdir, unlink, rename, readdir, stat, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink, readdir, stat, rm } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { renameWithRetry } from './fs-retry.mjs';
 
 const MANIFEST_FILE = 'manifest.json';
 const LOCK_FILE = 'manifest.lock';
@@ -124,7 +125,7 @@ export async function acquireLock(lockPath, maxRetries = 150, delayMs = 50) {
     // biome-ignore lint/complexity/useMathMinMax: tickets are BigInt; Math.max throws on BigInt operands.
     const ticket = peers.reduce((max, peer) => (peer.ticket > max ? peer.ticket : max), 0n) + 1n;
     await writeFile(join(claimPath, 'ticket.tmp'), String(ticket), { flag: 'wx' });
-    await rename(join(claimPath, 'ticket.tmp'), join(claimPath, 'ticket'));
+    await renameWithRetry(join(claimPath, 'ticket.tmp'), join(claimPath, 'ticket'));
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const others = await participants(lockPath);
       const blocked = others.some(
@@ -139,7 +140,9 @@ export async function acquireLock(lockPath, maxRetries = 150, delayMs = 50) {
       }
       await pause(delayMs + Math.floor(Math.random() * 30));
     }
-    throw new Error('Lock timeout: Another process is updating OmniSpec manifest.');
+    throw new Error(
+      `Lock timeout: another OmniSpec command is updating ${lockLabel(lockPath)}. Retry when it finishes; if no OmniSpec process is running, inspect ${lockPath}.`,
+    );
   } catch (error) {
     await removeClaim(lockPath, name);
     throw error;
@@ -152,6 +155,35 @@ export async function releaseLock(lockPath, lease) {
   }
   await removeClaim(lease.lockPath, lease.name);
   leases.delete(lease);
+}
+
+function lockLabel(lockPath) {
+  return lockPath.endsWith('verify.lock') ? 'a verification run' : 'the project state';
+}
+
+/**
+ * Serialize verification runs and completion without blocking other state commands.
+ * @param {string} baseDir Project root.
+ * @param {Function} action Work performed while the lock is held.
+ * @param {{wait?: boolean}} options wait=false fails at once when a verification is running.
+ */
+export async function withVerificationLock(baseDir, action, options = {}) {
+  const directory = join(baseDir, 'specs', '.omni');
+  await mkdir(directory, { recursive: true });
+  const lockPath = join(directory, 'verify.lock');
+  let lease;
+  try {
+    lease = await acquireLock(lockPath, options.wait === false ? 3 : 150);
+  } catch (error) {
+    if (/^Lock timeout/.test(error.message))
+      throw new Error('A verification is already running for this project. Wait for it to finish, then retry.');
+    throw error;
+  }
+  try {
+    return await action();
+  } finally {
+    await releaseLock(lockPath, lease);
+  }
 }
 
 export async function withManifestLock(baseDir, action) {
@@ -203,7 +235,7 @@ export async function saveManifest(baseDir, manifest) {
   );
   const content = JSON.stringify(manifest, null, 2) + '\n';
   await writeFile(tempPath, content, 'utf-8');
-  await rename(tempPath, targetPath);
+  await renameWithRetry(tempPath, targetPath);
   return manifest;
 }
 

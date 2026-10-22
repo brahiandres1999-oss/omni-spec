@@ -1,11 +1,29 @@
-import { readFile, writeFile, mkdir, rename, lstat } from 'node:fs/promises';
-import { resolve, dirname, relative, isAbsolute, join } from 'node:path';
+import { readFile, writeFile, mkdir, lstat } from 'node:fs/promises';
+import { writeFileAtomic } from './fs-retry.mjs';
+import { resolve, dirname, relative, isAbsolute } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 
 const registryPath = 'specs/.omni/managed.json';
 export const hash = content => createHash('sha256').update(content).digest('hex');
-const sectionPattern = /<!-- OMNI-SPEC-START -->[\s\S]*?<!-- OMNI-SPEC-END -->/;
-const fingerprint = (content, section) => hash(section ? content.match(sectionPattern)?.[0] || '' : content);
+// Managed sections inside user-owned files: HTML comments for Markdown, '#' comments for
+// line-oriented files such as .gitignore. Registry entries store true (html) or 'hash'.
+const SECTION_MARKERS = {
+  html: ['<!-- OMNI-SPEC-START -->', '<!-- OMNI-SPEC-END -->'],
+  hash: ['# OMNI-SPEC-START', '# OMNI-SPEC-END'],
+};
+const markersFor = section => SECTION_MARKERS[section === 'hash' ? 'hash' : 'html'];
+const escapeMarker = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const sectionPatternFor = section => {
+  const [start, end] = markersFor(section);
+  return new RegExp(`${escapeMarker(start)}[\\s\\S]*?${escapeMarker(end)}`);
+};
+// Line endings are normalized so a checkout converted to CRLF (Git core.autocrlf on
+// Windows) is not mistaken for a local edit.
+const lf = content => content.replace(/\r\n/g, '\n');
+/** SHA-256 of a whole managed file with line endings normalized. */
+export const managedHash = content => hash(lf(String(content)));
+const fingerprint = (content, section) =>
+  hash(lf(section ? content.match(sectionPatternFor(section))?.[0] || '' : content));
 
 export async function safePath(root, name) {
   const base = resolve(root);
@@ -42,6 +60,13 @@ export async function loadRegistry(root) {
   return registry;
 }
 
+/** Persist the managed-file registry atomically. */
+export async function saveRegistry(root, registry) {
+  const target = await safePath(root, registryPath);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFileAtomic(target, JSON.stringify(registry, null, 2) + '\n');
+}
+
 // Check every destination before writing. Unknown legacy contents are user-owned.
 export async function syncManagedFiles(root, entries, options = {}) {
   const registry = await loadRegistry(root);
@@ -51,9 +76,11 @@ export async function syncManagedFiles(root, entries, options = {}) {
     const path = await safePath(root, name);
     const previous = await optionalRead(path);
     let content = entry.content;
+    const sectionPattern = entry.section ? sectionPatternFor(entry.section) : null;
     if (entry.section && previous !== null) {
-      const starts = (previous.match(/<!-- OMNI-SPEC-START -->/g) || []).length;
-      const ends = (previous.match(/<!-- OMNI-SPEC-END -->/g) || []).length;
+      const [startMarker, endMarker] = markersFor(entry.section);
+      const starts = previous.split(startMarker).length - 1;
+      const ends = previous.split(endMarker).length - 1;
       if (starts !== ends || starts > 1 || (starts && !sectionPattern.test(previous)))
         throw new Error(`Malformed OmniSpec section: ${name}`);
       content = starts
@@ -62,6 +89,7 @@ export async function syncManagedFiles(root, entries, options = {}) {
     }
     const known = registry.files[name];
     const noOwnedSection = entry.section && previous !== null && !sectionPattern.test(previous);
+    if (previous !== null && previous !== content && lf(previous) === lf(content)) content = previous;
     const changedLocally =
       previous !== null &&
       previous !== content &&
@@ -96,14 +124,10 @@ export async function syncManagedFiles(root, entries, options = {}) {
     }
     registry.files[action.name] = {
       hash: fingerprint(action.content, action.section),
-      section: Boolean(action.section),
+      section: action.section === 'hash' ? 'hash' : Boolean(action.section),
     };
   }
-  const target = await safePath(root, registryPath);
-  await mkdir(dirname(target), { recursive: true });
-  const temporary = join(dirname(target), `managed.${randomUUID()}.tmp`);
-  await writeFile(temporary, JSON.stringify(registry, null, 2) + '\n');
-  await rename(temporary, target);
+  await saveRegistry(root, registry);
   return summary;
 }
 

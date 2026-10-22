@@ -234,6 +234,29 @@ export function fitQuestionnaire(schemaVersion = FIT_SCHEMA_VERSION) {
   return {
     schemaVersion,
     file: 'specs/<slug>/fit.json',
+    example:
+      schemaVersion === 2
+        ? {
+            schemaVersion: 2,
+            reasoning: 'done',
+            files: 1,
+            modules: 1,
+            crossesContract: false,
+            ambiguity: 'none',
+            existingTests: true,
+            risk: 'low',
+            uncertainty: 'clear',
+            reversibility: 'easy',
+          }
+        : {
+            schemaVersion: 1,
+            reasoning: 'done',
+            files: 1,
+            modules: 1,
+            crossesContract: false,
+            ambiguity: 'none',
+            existingTests: true,
+          },
     questions: schemaVersion === 2 ? FIT_V2_QUESTIONS : FIT_QUESTIONS,
     note: 'Answer every question with the recorded value, then run `omni-spec fit <id>` to read the route. The route is derived, never written by hand.',
   };

@@ -1,0 +1,942 @@
+[
+ {
+  "ignores": {
+   ".gitignore": "*.log\n!keep.log\n"
+  },
+  "files": [
+   "a.log",
+   "keep.log",
+   "d/b.log",
+   "d/keep.log",
+   "x.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "/out\n"
+  },
+  "files": [
+   "out/a",
+   "src/out/b",
+   "out.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "doc/*.txt\n"
+  },
+  "files": [
+   "doc/a.txt",
+   "doc/sub/b.txt",
+   "x/doc/c.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "**/gen/\n"
+  },
+  "files": [
+   "gen/a",
+   "x/gen/b",
+   "x/y/gen/c",
+   "gen.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a/**/b\n"
+  },
+  "files": [
+   "a/b",
+   "a/x/b",
+   "a/x/y/b",
+   "a/xb"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "foo/**\n!foo/keep\n"
+  },
+  "files": [
+   "foo/a",
+   "foo/keep",
+   "foo/sub/c"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "foo/\n!foo/keep\n"
+  },
+  "files": [
+   "foo/a",
+   "foo/keep"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[Bb]in/\n[Oo]bj/\n"
+  },
+  "files": [
+   "bin/a",
+   "Bin/b",
+   "obj/c",
+   "src/Obj/d"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*.[oa]\n?.c\n"
+  },
+  "files": [
+   "x.o",
+   "x.a",
+   "x.b",
+   "a.c",
+   "ab.c"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\\#hash\n\\!bang\n"
+  },
+  "files": [
+   "#hash",
+   "!bang",
+   "x"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "trail \nesc\\ \n"
+  },
+  "files": [
+   "trail",
+   "trail ",
+   "esc ",
+   "esc"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "sub/x\n",
+   "sub/.gitignore": "y\n/z\n"
+  },
+  "files": [
+   "sub/x",
+   "sub/y",
+   "sub/z",
+   "sub/q/z",
+   "sub/q/y",
+   "y"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*.tmp\n",
+   "sub/.gitignore": "!keep.tmp\n"
+  },
+  "files": [
+   "sub/keep.tmp",
+   "sub/a.tmp",
+   "keep.tmp"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*\n!*/\n!*.js\n"
+  },
+  "files": [
+   "a.js",
+   "b.txt",
+   "d/c.js",
+   "d/e.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "abc/**/\n"
+  },
+  "files": [
+   "abc/x/y",
+   "abc/z"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a**b\n"
+  },
+  "files": [
+   "ab",
+   "axxb",
+   "a/b",
+   "a/x/b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "**\n!src/**\n"
+  },
+  "files": [
+   "x",
+   "src/a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[!a]x\n"
+  },
+  "files": [
+   "ax",
+   "bx",
+   "cx"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[^a]y\n"
+  },
+  "files": [
+   "ay",
+   "by"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[]]z\n"
+  },
+  "files": [
+   "]z",
+   "az"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[a-]w\n"
+  },
+  "files": [
+   "aw",
+   "-w",
+   "bw"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "/\n"
+  },
+  "files": [
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "!\n"
+  },
+  "files": [
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "dir/sub/\n"
+  },
+  "files": [
+   "dir/sub/a",
+   "x/dir/sub/b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\\*star\n"
+  },
+  "files": [
+   "*star",
+   "xstar"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "foo\\\n"
+  },
+  "files": [
+   "foo",
+   "foo\\"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*.LOG\n"
+  },
+  "files": [
+   "a.log",
+   "b.LOG"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a/b/**/\n"
+  },
+  "files": [
+   "a/b/c/d",
+   "a/b/e"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\ttab\n"
+  },
+  "files": [
+   "\ttab",
+   "tab"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "x\t\n"
+  },
+  "files": [
+   "x",
+   "x\t"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[[:digit:]]n\n"
+  },
+  "files": [
+   "1n",
+   "an"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[a\\]]m\n"
+  },
+  "files": [
+   "am",
+   "]m",
+   "\\m"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "sub/**/x.txt\n"
+  },
+  "files": [
+   "sub/x.txt",
+   "sub/a/x.txt",
+   "q/sub/x.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "**/foo/bar\n"
+  },
+  "files": [
+   "foo/bar",
+   "a/foo/bar",
+   "a/b/foo/bar/c"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "ignored/\n",
+   "ignored/.gitignore": "!a\n"
+  },
+  "files": [
+   "ignored/a"
+  ]
+ },
+ {
+  "ignores": {
+   ".git/info/exclude": "local\n",
+   ".gitignore": "!local\n"
+  },
+  "files": [
+   "local"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a\\*b\nfoo\\?\n"
+  },
+  "files": [
+   "a*b",
+   "b",
+   "src/b",
+   "foo?",
+   "fo",
+   "foo"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\\*star\n[z-a]\n"
+  },
+  "files": [
+   "*star",
+   "star",
+   "m",
+   "z",
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[]]\n[[:digit:]]x\n[abc\n"
+  },
+  "files": [
+   "]",
+   "5x",
+   "ax",
+   "[abc",
+   "abc"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a[/]b\nfoo\\\n"
+  },
+  "files": [
+   "a/b",
+   "foo",
+   "x"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*.log\n!important.log\nlogs/\n!logs/keep.txt\n"
+  },
+  "files": [
+   "a.log",
+   "important.log",
+   "logs/keep.txt",
+   "logs/x.txt",
+   "src/b.log"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "/build\nsrc/**/gen/\n**/tmp/*.js\n"
+  },
+  "files": [
+   "build/a",
+   "x/build/a",
+   "src/a/b/gen/f",
+   "src/gen/g",
+   "tmp/a.js",
+   "q/tmp/b.js",
+   "q/tmp/c.ts"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "dist/\n",
+   "pkg/.gitignore": "!dist/\n"
+  },
+  "files": [
+   "dist/a",
+   "pkg/dist/b",
+   "pkg/c"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[!a-c]*.txt\n?.md\n"
+  },
+  "files": [
+   "a1.txt",
+   "d1.txt",
+   "x.md",
+   "xy.md",
+   "sub/e.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "#comment\n\\#hash\n  \n  lead\nsp\\ \n"
+  },
+  "files": [
+   "#hash",
+   "comment",
+   "  lead",
+   "sp ",
+   "sp"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a\\*b\n"
+  },
+  "files": [
+   "b",
+   "aab",
+   "a*b",
+   "src/b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "foo\\?\n"
+  },
+  "files": [
+   "fo",
+   "foo",
+   "foo?"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[z-a]\n"
+  },
+  "files": [
+   "x",
+   "z",
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[abc\n"
+  },
+  "files": [
+   "[abc",
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "**/\n"
+  },
+  "files": [
+   "a",
+   "d/b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "/**\n!keep\n"
+  },
+  "files": [
+   "a",
+   "keep",
+   "d/keep"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\\\\\n"
+  },
+  "files": [
+   "\\",
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a[/]b\n"
+  },
+  "files": [
+   "a/b",
+   "ab"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*.min.*\n"
+  },
+  "files": [
+   "a.min.js",
+   "src/b.min.css",
+   "c.js"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "src/\n!src/keep/\n"
+  },
+  "files": [
+   "src/a",
+   "src/keep/b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "#c\n  \n  lead\n"
+  },
+  "files": [
+   "  lead",
+   "lead"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\\ \n"
+  },
+  "files": [
+   " ",
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[a\\-z]x\n"
+  },
+  "files": [
+   "ax",
+   "-x",
+   "zx",
+   "bx",
+   "\\x"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[\\]]y\n"
+  },
+  "files": [
+   "]y",
+   "\\y",
+   "y"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[!]a]w\n"
+  },
+  "files": [
+   "]w",
+   "aw",
+   "bw"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[^]]v\n"
+  },
+  "files": [
+   "]v",
+   "av"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[-a]u\n"
+  },
+  "files": [
+   "-u",
+   "au",
+   "bu"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[]-a]t\n"
+  },
+  "files": [
+   "]t",
+   "at",
+   "^t",
+   "-t",
+   "bt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[[:alpha:]-z]s\n"
+  },
+  "files": [
+   "as",
+   "-s",
+   "zs",
+   "1s"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[[:foo:]]r\n"
+  },
+  "files": [
+   "fr",
+   "r",
+   ":r"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[[:alpha:]q\n"
+  },
+  "files": [
+   "aq",
+   "[q"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[a-\\]]p\n"
+  },
+  "files": [
+   "ap",
+   "]p",
+   "bp",
+   "\\p"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a/**b\n"
+  },
+  "files": [
+   "a/b",
+   "a/xb",
+   "a/x/b",
+   "a/x/yb"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "**a\n"
+  },
+  "files": [
+   "a",
+   "xa",
+   "d/xa"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "foo/**/bar/\n"
+  },
+  "files": [
+   "foo/bar/x",
+   "foo/q/bar/y",
+   "foo/barf"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*/\n!keep/\n"
+  },
+  "files": [
+   "top",
+   "d/x",
+   "keep/y"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "foo\\/\n"
+  },
+  "files": [
+   "foo/x",
+   "bar"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\\a\\b\n"
+  },
+  "files": [
+   "ab",
+   "a\\b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "{a,b}\n$x\n(p)\nq+\nm|n\n^c\n"
+  },
+  "files": [
+   "{a,b}",
+   "a",
+   "$x",
+   "(p)",
+   "q+",
+   "qq",
+   "m|n",
+   "m",
+   "^c",
+   "c"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "crlf\r\n*.bak\r\n"
+  },
+  "files": [
+   "crlf",
+   "x.bak",
+   "crl"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a/\n!a/b\n"
+  },
+  "files": [
+   "a/b",
+   "a/c"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "",
+   "sub/.gitignore": "/a/b/\n"
+  },
+  "files": [
+   "sub/a/b/x",
+   "sub/q/a/b/y",
+   "a/b/z"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "d/*\n!d/k\n"
+  },
+  "files": [
+   "d/x",
+   "d/k",
+   "d/k2/y"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "x?y\n"
+  },
+  "files": [
+   "x/y",
+   "xay"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "Build/\n"
+  },
+  "files": [
+   "build/a",
+   "Build/b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[[:upper:]]k\n"
+  },
+  "files": [
+   "Ak",
+   "ak"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a/b/c\n",
+   "a/.gitignore": "!b/c\n"
+  },
+  "files": [
+   "a/b/c",
+   "a/b/d"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "*\n!.gitignore\n!*/\n!src/**\n"
+  },
+  "files": [
+   "x",
+   "src/a",
+   "src/b/c",
+   "d/e"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[\n"
+  },
+  "files": [
+   "[",
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "]\n"
+  },
+  "files": [
+   "]",
+   "a"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[!]\n"
+  },
+  "files": [
+   "!",
+   "a",
+   "[!]"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a[]b\n"
+  },
+  "files": [
+   "a]b",
+   "ab",
+   "a[]b"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "\\[x]\n"
+  },
+  "files": [
+   "[x]",
+   "x"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "!!x\n"
+  },
+  "files": [
+   "!x",
+   "x"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": " \\ \n"
+  },
+  "files": [
+   "  ",
+   " "
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "?.txt\n"
+  },
+  "files": [
+   "a.txt",
+   "é.txt",
+   "ab.txt"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "[à-ü]o\n"
+  },
+  "files": [
+   "éo",
+   "ao"
+  ]
+ },
+ {
+  "ignores": {
+   ".gitignore": "a**/b\n"
+  },
+  "files": [
+   "a/b",
+   "ax/b",
+   "a/x/b"
+  ]
+ }
+]

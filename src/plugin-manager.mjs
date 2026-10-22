@@ -1,5 +1,8 @@
-import { cp, mkdir, rm, stat, readFile, writeFile, readdir } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { cp, mkdir, rm, rmdir, stat, readFile, writeFile, readdir } from 'node:fs/promises';
+import { join, resolve, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { loadRegistry, saveRegistry, safePath, managedHash } from './managed.mjs';
+import { normalizeAgents } from './integrations.mjs';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -118,93 +121,134 @@ export async function getPluginStatus(options = {}) {
   }
 }
 
+const PLUGIN_COMPATIBLE = new Set(['antigravity', 'plugin']);
+
+// Registry keys are versioned data, so a crafted key must never reach outside these trees.
+function cleanable(name) {
+  if (
+    typeof name !== 'string' ||
+    name.includes('\\') ||
+    name.split('/').some(part => !part || part === '.' || part === '..')
+  )
+    return false;
+  return name.startsWith('specs/.omni/runtime/') || /^\.agents\/skills\/omni-[a-z-]+\/[^/]/.test(name);
+}
+
+async function removeEmptyParents(root, name, stop) {
+  let current = dirname(join(root, name));
+  const boundary = resolve(root, stop);
+  while (resolve(current).startsWith(boundary) && resolve(current) !== resolve(root)) {
+    try {
+      if ((await readdir(current)).length) return;
+      await rmdir(current);
+    } catch (error) {
+      if (['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) return;
+      throw error;
+    }
+    if (resolve(current) === boundary) return;
+    current = dirname(current);
+  }
+}
+
+/**
+ * Migrate an Antigravity project to plugin mode by removing only OmniSpec-managed copies:
+ * the local runtime and omni-* skills whose content still matches the managed registry.
+ * User skills, unregistered files, backups and specifications are preserved. Locally
+ * modified managed files block the migration unless acceptUpdates backs them up first.
+ */
 export async function cleanProject(baseDir, options = {}) {
   const manifest = await loadManifest(baseDir);
   if (!manifest) {
     throw new Error('Cannot clean: OmniSpec is not initialized. Run init first.');
   }
-
+  const agents = normalizeAgents(manifest.agent || 'antigravity');
+  const unsupported = agents.filter(agent => !PLUGIN_COMPATIBLE.has(agent));
+  if (unsupported.length)
+    throw new Error(
+      `Plugin mode serves Antigravity only; adapters for ${unsupported.join(', ')} use the local runtime. Run setup-agent antigravity and remove those adapters before clean. No changes made.`,
+    );
   const cliVersion = await getCliVersion();
-  const candidates = [
-    join(baseDir, '.agents', 'skills'),
-    join(baseDir, 'specs', '.omni', 'runtime'),
-    join(baseDir, 'specs', '.omni', 'managed.json'),
-    join(baseDir, 'specs', '.omni', 'backups'),
-  ];
-
-  const toRemove = [];
-  for (const fullPath of candidates) {
+  const registry = await loadRegistry(baseDir);
+  const remove = [],
+    conflicts = [];
+  for (const [name, entry] of Object.entries(registry.files)) {
+    if (!cleanable(name)) continue;
+    let content;
     try {
-      await stat(fullPath);
-      toRemove.push(fullPath);
-    } catch {}
+      content = await readFile(await safePath(baseDir, name));
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        remove.push({ name, missing: true });
+        continue;
+      }
+      throw error;
+    }
+    if (managedHash(content) === (entry.hash || entry)) remove.push({ name, content });
+    else conflicts.push({ name, content });
   }
-
-  if (options.dryRun) {
-    return {
-      dryRun: true,
-      project: manifest.project,
-      fromAgent: manifest.agent,
-      toAgent: 'plugin',
-      fromVersion: manifest.version,
-      toVersion: cliVersion,
-      toRemove: toRemove.map(p => resolve(p)),
-      specsCount: manifest.specs?.length || 0,
-    };
-  }
+  const result = {
+    project: manifest.project,
+    fromAgent: manifest.agent,
+    toAgent: 'plugin',
+    fromVersion: manifest.version,
+    toVersion: cliVersion,
+    toRemove: [...remove, ...(options.acceptUpdates ? conflicts : [])]
+      .filter(item => !item.missing)
+      .map(item => item.name),
+    conflicts: conflicts.map(item => item.name),
+    preserved: 'specs, CONSTITUTION.md, project context, backups, user skills and unregistered files',
+    specsCount: manifest.specs?.length || 0,
+  };
+  if (options.dryRun) return { dryRun: true, ...result };
+  if (conflicts.length && !options.acceptUpdates)
+    throw new Error(
+      `Locally modified OmniSpec files block clean: ${result.conflicts.join(', ')}. Review clean --dry-run, then use --accept-updates to back them up and continue. No changes made.`,
+    );
 
   return withManifestLock(baseDir, async () => {
-    const removed = [];
-    for (const fullPath of toRemove) {
-      try {
-        await rm(fullPath, { recursive: true, force: true });
-        removed.push(fullPath);
-      } catch {}
+    const backups = [];
+    const backupId = `${Date.now()}-${randomUUID()}`;
+    for (const item of conflicts) {
+      const backup = `specs/.omni/backups/${backupId}/${item.name}`;
+      const path = await safePath(baseDir, backup);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, item.content, { flag: 'wx' });
+      backups.push(backup);
     }
-
-    // Safely cleanup parent directories if empty
-    try {
-      const agentsDir = join(baseDir, '.agents');
-      const files = await readdir(agentsDir);
-      if (files.length === 0) {
-        await rm(agentsDir, { recursive: true, force: true });
-        removed.push(agentsDir);
+    const removed = [];
+    for (const item of [...remove, ...conflicts]) {
+      if (!item.missing) {
+        await rm(await safePath(baseDir, item.name), { force: true });
+        removed.push(item.name);
       }
-    } catch {}
+      delete registry.files[item.name];
+      await removeEmptyParents(
+        baseDir,
+        item.name,
+        item.name.startsWith('.agents/') ? '.agents' : 'specs/.omni/runtime',
+      );
+    }
+    await saveRegistry(baseDir, registry);
 
-    try {
-      const dotOmniDir = join(baseDir, 'specs', '.omni');
-      const files = await readdir(dotOmniDir);
-      if (files.length === 0) {
-        await rm(dotOmniDir, { recursive: true, force: true });
-        removed.push(dotOmniDir);
-      }
-    } catch {}
-
-    // Update manifest to plugin mode
     manifest.agent = 'plugin';
     manifest.version = cliVersion;
     manifest.schemaVersion = 1;
     manifest.$schema = MANIFEST_SCHEMA_URL;
     await saveManifest(baseDir, manifest);
 
-    // Update constitution CLI references if present
     try {
       const constitutionPath = join(baseDir, 'CONSTITUTION.md');
-      let constitution = await readFile(constitutionPath, 'utf8');
-      if (constitution.includes('specs/.omni/runtime/bin/omni-spec.mjs')) {
-        constitution = constitution.replaceAll('node specs/.omni/runtime/bin/omni-spec.mjs', 'omni-spec');
-        await writeFile(constitutionPath, constitution, 'utf8');
-      }
-    } catch {}
+      const constitution = await readFile(constitutionPath, 'utf8');
+      if (constitution.includes('node specs/.omni/runtime/bin/omni-spec.mjs'))
+        await writeFile(
+          constitutionPath,
+          constitution.replaceAll('node specs/.omni/runtime/bin/omni-spec.mjs', 'omni-spec'),
+          'utf8',
+        );
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
 
-    return {
-      success: true,
-      project: manifest.project,
-      agent: 'plugin',
-      version: cliVersion,
-      removed: removed.map(p => resolve(p)),
-      specsCount: manifest.specs?.length || 0,
-    };
+    return { success: true, ...result, agent: 'plugin', version: cliVersion, removed, backups };
   });
 }

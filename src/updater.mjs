@@ -3,7 +3,10 @@ import { loadManifest, saveManifest, withManifestLock, MANIFEST_SCHEMA_URL } fro
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
 import { packageEntries } from './assets.mjs';
 import { syncManagedFiles, checkManagedFiles } from './managed.mjs';
-import { ensureProjectContext } from './generator.mjs';
+import { ensureProjectContext, buildConstitutionContent } from './generator.mjs';
+import { join } from 'node:path';
+
+const CONSTITUTION_REFERENCE = 'specs/.omni/reference/CONSTITUTION.md';
 import { compareVersions } from './versions.mjs';
 
 export async function getCliVersion() {
@@ -57,9 +60,35 @@ export async function updateProject(baseDir, options = {}) {
         `Refusing downgrade from ${manifest.version} to ${cliVersion}. Use the matching or newer CLI, or explicitly review update --allow-downgrade --dry-run.`,
       );
     const agent = normalizeAgents(options.agent || manifest.agent).join(',');
-    const entries = [...(await packageEntries()), ...integrationEntries({ ...manifest, version: cliVersion, agent })];
+    const reference = buildConstitutionContent({
+      projectName: manifest.project,
+      profile: manifest.profile,
+      stack: manifest.stack,
+      docStandard: manifest.documentationStandard,
+      qualityGates: manifest.qualityGates,
+    });
+    const entries = [
+      ...(await packageEntries()),
+      ...integrationEntries({ ...manifest, version: cliVersion, agent }),
+      { path: CONSTITUTION_REFERENCE, content: reference },
+    ];
     const assets = await syncManagedFiles(baseDir, entries, options);
+    let constitution = null;
+    try {
+      constitution = await readFile(join(baseDir, 'CONSTITUTION.md'), 'utf8');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
     const result = {
+      // CONSTITUTION.md is user-owned and never replaced; the reference shows current guidance.
+      constitution:
+        constitution === reference
+          ? { status: 'CURRENT' }
+          : {
+              status: 'PRESERVED_REVIEW_RECOMMENDED',
+              reference: CONSTITUTION_REFERENCE,
+              action: 'Compare CONSTITUTION.md with the reference and adopt relevant guidance manually.',
+            },
       dryRun: Boolean(options.dryRun),
       downgrade,
       project: manifest.project,

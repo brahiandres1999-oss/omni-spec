@@ -1,24 +1,24 @@
-# [SPEC-XXX] Título de la Especificación
+# [SPEC-XXX] Short Title
 
 Date: YYYY-MM-DD
 
-## 0. Fase de Clarificación y Supuestos
+## 0. Clarification and Assumptions
 [TODO] Record confirmed decisions, evidence and material questions. Do not invent answers.
 
 ## 1. Need and scope
 [TODO] Who needs what outcome and why? Define the smallest useful change.
 
 ## 2. Acceptance Criteria and Non-Goals
-[TODO] Give observable acceptance criteria with stable IDs (AC-01), inputs and expected outcomes. State Non-Goals explicitly.
+[TODO] Give observable acceptance criteria with stable IDs and kinds, for example `AC-01 [functional]: input X produces Y` or `AC-02 [visual]: at 375px nothing overflows horizontally`. Kinds: functional, visual, interaction, accessibility. State Non-Goals explicitly.
 
 ## 3. Domain applicability
 Review relevant controls only; justify N/A. Domain profiles are not compliance certification.
 
-| Control de Seguridad | Applies? | Evidence / decision |
+| Security Control | Applies? | Evidence / decision |
 | --- | --- | --- |
-| **¿Accede o procesa datos sensibles?** | [TODO] | Si es SÍ: Especificar cifrado en reposo/tránsito y permisos mínimos. |
+| **Does it access or process sensitive data?** | [TODO] | If yes: specify protection in transit/at rest and least-privilege access. |
 
-## 4. Experiencia y límites
+## 4. Experience and limits
 [TODO] Record relevant error/empty/access states or explain why no user interface applies.
 
 ## 5. Traceability

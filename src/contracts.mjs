@@ -1,5 +1,5 @@
-import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { writeFileAtomic } from './fs-retry.mjs';
 import { safePath } from './managed.mjs';
 import { loadManifest, withManifestLock } from './manifest.mjs';
 
@@ -183,15 +183,7 @@ export async function updateContract(root, id, change, options = {}) {
     registry.revision++;
     validateRegistry(registry);
     const target = await safePath(root, CONTRACTS_PATH);
-    const temporary = await safePath(root, `${CONTRACTS_PATH}.tmp.${process.pid}.${randomUUID()}`);
-    try {
-      await writeFile(temporary, JSON.stringify(registry, null, 2) + '\n', { encoding: 'utf8', flag: 'wx' });
-      await rename(temporary, target);
-    } finally {
-      await unlink(temporary).catch(error => {
-        if (error.code !== 'ENOENT') throw error;
-      });
-    }
+    await writeFileAtomic(target, JSON.stringify(registry, null, 2) + '\n');
     return updated;
   });
 }

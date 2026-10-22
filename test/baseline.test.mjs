@@ -13,6 +13,30 @@ import { fillSpec } from '../test-support/fixtures.mjs';
 import { auditSpec } from '../src/auditor.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 let root;
+
+// A killed process may linger as a zombie until an init process reaps it (common in
+// containers whose PID 1 does not reap orphans). A zombie no longer runs code.
+async function processGone(pid) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if (error.code === 'ESRCH') return true;
+      throw error;
+    }
+    if (process.platform === 'linux') {
+      try {
+        const stat = await readFile(`/proc/${pid}/stat`, 'utf8');
+        if (stat.slice(stat.lastIndexOf(')') + 2).startsWith('Z')) return true;
+      } catch (error) {
+        if (error.code === 'ENOENT') return true;
+        throw error;
+      }
+    }
+    await delay(100);
+  }
+  return false;
+}
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omnispec-contract-'));
 });
@@ -251,7 +275,7 @@ test('verification timeout fails and cannot close the specification', async () =
   } else {
     const childPid = /CHILD_PID=(\d+)/.exec(result.results[0].output)?.[1];
     assert.ok(childPid, 'the spawned child must have started for tree termination to be assessed');
-    assert.throws(() => process.kill(Number(childPid), 0), { code: 'ESRCH' }, 'the actual gate child must be gone');
+    assert.ok(await processGone(Number(childPid)), 'the actual gate child must be gone');
   }
 });
 

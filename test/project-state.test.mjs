@@ -43,7 +43,9 @@ test('stale context blocks verification without silently replacing its claims', 
   await fillSpec(root, spec);
   await recordContext(root);
   await writeFile(join(root, 'main.mjs'), 'export const value = 2;');
-  await assert.rejects(verifySpec(root, spec.id), /Context is stale/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT', 'implementation edits are not context inputs');
+  await writeFile(join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+  await assert.rejects(verifySpec(root, spec.id), /Context is stale: package\.json/);
   assert.equal((await projectStatus(root)).progress.blockers[0].code, 'STALE_CONTEXT');
   await recordContext(root);
   await verifySpec(root, spec.id);

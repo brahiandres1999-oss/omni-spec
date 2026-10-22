@@ -1,10 +1,10 @@
-import { readFile, writeFile, access } from 'node:fs/promises';
+import { readFile, access } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { scaffoldProject, createSpec } from './generator.mjs';
 import { runWizard } from './wizard.mjs';
 import { loadManifest, saveManifest, withManifestLock, updateSpecStatus, focusSpec, listSpecs } from './manifest.mjs';
 import { auditSpec } from './auditor.mjs';
-import { verifySpec } from './verification.mjs';
+import { verifySpec, describeFailure } from './verification.mjs';
 import { checkProjectVersion, updateProject, getCliVersion } from './updater.mjs';
 import { installPlugin, updatePlugin, getPluginStatus, cleanProject } from './plugin-manager.mjs';
 import { installAgentIntegrations, normalizeAgents, agentInstructions, AGENTS } from './integrations.mjs';
@@ -14,6 +14,7 @@ import { fitQuestionnaire, specRoute } from './fit.mjs';
 import { projectStatus, recordContext, recordSession, recordDecision } from './project-state.mjs';
 import { loadChecks, validateChecks } from './checks.mjs';
 import { safePath } from './managed.mjs';
+import { writeFileAtomic } from './fs-retry.mjs';
 import { listContracts, readContract, updateContract } from './contracts.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -43,6 +44,7 @@ const valueFlags = new Set(['profile', 'name', 'stack', 'doc', 'gates', 'agent',
 const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade']);
 
 function acceptanceSummary(acceptance) {
+  if (acceptance.error) return `Acceptance review failed: ${acceptance.error}`;
   const methods = {};
   for (const criterion of acceptance.criteria) methods[criterion.method] = (methods[criterion.method] || 0) + 1;
   return `Acceptance: ${acceptance.criteria.length} criteria declared passed (${Object.entries(methods)
@@ -84,6 +86,25 @@ function parse(args) {
   return { flags, positionals };
 }
 
+/**
+ * Read a JSON declaration from a file (absolute, or relative to the project root) or from
+ * standard input with `-`. Input files may live outside the project, for example in a
+ * temporary directory, so they never enter verification or context snapshots.
+ */
+async function readJsonInput(root, from) {
+  let raw;
+  if (from === '-') {
+    const chunks = [];
+    for await (const chunk of process.stdin) chunks.push(chunk);
+    raw = Buffer.concat(chunks).toString('utf8');
+  } else raw = await readFile(resolve(root, from), 'utf8');
+  try {
+    return JSON.parse(raw.replace(/^\uFEFF/, ''));
+  } catch (error) {
+    throw new Error(`Invalid JSON in ${from === '-' ? 'standard input' : from}: ${error.message}`);
+  }
+}
+
 async function findProjectRoot(start) {
   let current = resolve(start);
   while (true) {
@@ -107,12 +128,13 @@ omni-spec <command> [arguments] [options]
   inspect [--json]               Read-only environment inventory; no scripts executed
   context-check [--json]         Check context structure/local links; semantic review required
   context-record                Snapshot reconciled context inputs; retain previous baseline
-  guide <design|setup>          Read bundled procedures; no external skill installation
-  session-record --from <file>   Record actual host capabilities (does not grant tools)
-  decision-record --from <file>  Record answer/delegation and dated technology sources
-  checks [--from <file>]         List/configure reviewed checks with IDs and module cwd
+  guide <design|setup|evidence> Read bundled procedures and record shapes; no external skill
+  session-record --from <file|->  Record actual host capabilities (does not grant tools)
+  decision-record --from <file|-> Record answer/delegation and dated technology sources
+  checks [--from <file|->]        List/configure reviewed checks with IDs and module cwd
+    --from accepts a JSON file anywhere (relative paths resolve from the project root) or - for stdin
   contracts [id]                Inspect proposed and effective capability contracts
-  contract-record <id> --from <file>  Record revision with decision and expectedRevision
+  contract-record <id> --from <file|->  Record revision with decision and expectedRevision
   create <type> <name>           feature, bugfix (bug/fix), debt, rfc (idea)
   status | list [--json]         Resume active work or list specifications
   focus <id|slug>                Select active work without creating duplicates
@@ -127,7 +149,8 @@ omni-spec <command> [arguments] [options]
   update --dry-run              Preview exact changed files and conflicts
   update [--accept-updates]      Preserve edits; opt in to backup and replacement
     --allow-downgrade           Explicitly permit an older/pre-release CLI after review
-  clean [--dry-run]              Migrate project to plugin mode (removes in-repo runtime/.agents)
+  clean [--dry-run] [--accept-updates]  Antigravity plugin mode: remove managed runtime/omni-* skills only
+                                 (modified copies block unless --accept-updates backs them up)
   plugin <install|update|status> Manage Antigravity global plugin (~180 KB clean install)
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
   help | version
@@ -163,8 +186,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       throw new Error('--force is supported only by init. Use update --accept-updates after reviewing conflicts.');
     if (flags.manual !== undefined && command !== 'verify') throw new Error('--manual is supported only by verify.');
     if (flags.timeout !== undefined && command !== 'verify') throw new Error('--timeout is supported only by verify.');
-    if (flags.acceptUpdates && !['update', 'setup-agent'].includes(command))
-      throw new Error('--accept-updates is supported only by update and setup-agent.');
+    if (flags.acceptUpdates && !['update', 'setup-agent', 'clean'].includes(command))
+      throw new Error('--accept-updates is supported only by update, setup-agent and clean.');
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
     const maxPositionals =
       {
@@ -193,7 +216,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (mutating.has(command) && !root) throw new Error('No OmniSpec project found. Run omni-spec init first.');
     switch (command) {
       case 'guide': {
-        if (!['design', 'setup'].includes(positionals[0])) throw new Error('Usage: guide <design|setup>');
+        if (!['design', 'setup', 'evidence'].includes(positionals[0]))
+          throw new Error('Usage: guide <design|setup|evidence>');
         const content = await readFile(
           fileURLToPath(new URL(`./resources/${positionals[0]}.md`, import.meta.url)),
           'utf8',
@@ -236,10 +260,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'session-record':
       case 'decision-record':
       case 'contract-record': {
-        if (!flags.from) throw new Error(`${command} requires --from <project-relative JSON file>.`);
-        const input = JSON.parse(
-          (await readFile(await safePath(workingDir, flags.from), 'utf8')).replace(/^\uFEFF/, ''),
-        );
+        if (!flags.from) throw new Error(`${command} requires --from <JSON file or ->.`);
+        const input = await readJsonInput(workingDir, flags.from);
         const { expectedRevision, ...contractChange } = input;
         const result =
           command === 'session-record'
@@ -253,12 +275,13 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'checks': {
         if (!root) throw new Error('No OmniSpec project found. Run init first.');
         if (flags.from) {
-          const input = JSON.parse(
-            (await readFile(await safePath(workingDir, flags.from), 'utf8')).replace(/^\uFEFF/, ''),
-          );
+          const input = await readJsonInput(workingDir, flags.from);
           await validateChecks(workingDir, input);
           await withManifestLock(workingDir, async () => {
-            await writeFile(await safePath(workingDir, 'specs/checks.json'), JSON.stringify(input, null, 2) + '\n');
+            await writeFileAtomic(
+              await safePath(workingDir, 'specs/checks.json'),
+              JSON.stringify(input, null, 2) + '\n',
+            );
           });
         }
         emit({ checks: await loadChecks(workingDir, await loadManifest(workingDir)), executed: false });
@@ -316,7 +339,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const result = await verifySpec(workingDir, positionals[0], flags);
         emit(
           result,
-          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Gate mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}${r.outputTruncated ? '\n[OUTPUT TRUNCATED: full bounded log ' + r.outputLog + ']' : ''}${r.error ? '\n' + r.error : ''}`).join('\n')}\n${result.sourceChangedDuringVerification ? 'Source changed during verification; run again after reviewing generated changes.' : 'Evidence is bound to the current source/specification snapshot.'}\n${acceptanceSummary(result.acceptance)}`,
+          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Gate mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}${r.outputTruncated ? '\n[OUTPUT TRUNCATED: full bounded log ' + r.outputLog + ']' : ''}${r.error ? '\n' + r.error : ''}`).join('\n')}\n${result.passed ? `Evidence is bound to the current snapshot (${result.attestedFiles} project files outside specs/; ignored paths excluded).` : `Not recorded as passed: ${describeFailure(result)}`}${result.sourceChangedDuringVerification ? `\nChanged while checks ran:\n${result.changedDuringVerification.map(name => '  ' + name).join('\n')}` : ''}\n${acceptanceSummary(result.acceptance)}`,
         );
         return result.passed ? 0 : 1;
       }
@@ -338,10 +361,10 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         if (!spec) throw new Error('Specification not found. Use list and an exact ID.');
         const route = await specRoute(workingDir, spec);
         if (!route) {
-          const questionnaire = fitQuestionnaire(2);
+          const questionnaire = { ...fitQuestionnaire(2), file: `specs/${spec.slug}/fit.json` };
           emit(
             { spec: spec.slug, type: spec.type, classified: false, ...questionnaire },
-            `[FIT] ${spec.slug} is not classified yet.\nRecord the answers in ${questionnaire.file} and run this command again.\n${questionnaire.questions.map(q => `- ${q.id}: ${q.prompt} (${Array.isArray(q.values) ? q.values.map(v => JSON.stringify(v)).join(' | ') : q.values})`).join('\n')}`,
+            `[FIT] ${spec.slug} is not classified yet.\nRecord the answers in ${questionnaire.file} as JSON with "schemaVersion": 2 and every key below, then run this command again.\n${questionnaire.questions.map(q => `- ${q.id}: ${q.prompt} (${Array.isArray(q.values) ? q.values.map(v => JSON.stringify(v)).join(' | ') : q.values})`).join('\n')}\nExample shape: ${JSON.stringify(questionnaire.example)}`,
           );
           return 0;
         }
@@ -386,7 +409,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
             throw new Error(
               'Custom constitution has no recognizable Delivery Quality Gates section. Add that section before configuring commands; custom text was preserved.',
             );
-          await writeFile(
+          await writeFileAtomic(
             path,
             content.replace(pattern, () => section),
           );
@@ -413,7 +436,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const { created, updated, conflicts, backups } = result.assets;
         emit(
           result,
-          `[${result.dryRun ? 'DRY RUN' : 'UPDATED'}] ${result.project}: ${result.fromVersion} -> ${result.toVersion}\nFiles: ${created.length} new, ${updated.length} changed, ${conflicts.length} conflicts. Specs preserved: ${result.specsPreserved}.\n${result.dryRun ? [...created.map(p => 'CREATE ' + p), ...updated.map(p => 'UPDATE ' + p)].join('\n') : ''}\n${conflicts.map(p => 'CONFLICT ' + p).join('\n')}\n${backups.map(p => 'BACKUP ' + p).join('\n')}`,
+          `[${result.dryRun ? 'DRY RUN' : 'UPDATED'}] ${result.project}: ${result.fromVersion} -> ${result.toVersion}\nFiles: ${created.length} new, ${updated.length} changed, ${conflicts.length} conflicts. Specs preserved: ${result.specsPreserved}.\n${result.dryRun ? [...created.map(p => 'CREATE ' + p), ...updated.map(p => 'UPDATE ' + p)].join('\n') : ''}\n${conflicts.map(p => 'CONFLICT ' + p).join('\n')}\n${backups.map(p => 'BACKUP ' + p).join('\n')}${result.constitution?.status === 'PRESERVED_REVIEW_RECOMMENDED' ? `\nCONSTITUTION.md preserved. Compare it with ${result.constitution.reference} to adopt current guidance.` : ''}`,
         );
         return conflicts.length ? 1 : 0;
       }
@@ -464,12 +487,12 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         if (result.dryRun) {
           emit(
             result,
-            `[DRY RUN] OmniSpec clean for ${result.project} (${result.fromAgent} -> ${result.toAgent})\nFiles/directories to remove:\n${result.toRemove.map(p => '- ' + p).join('\n') || 'None'}\nSpecs preserved: ${result.specsCount}`,
+            `[DRY RUN] OmniSpec clean for ${result.project} (${result.fromAgent} -> ${result.toAgent})\nManaged files to remove: ${result.toRemove.length}\n${result.toRemove.map(p => '- ' + p).join('\n') || 'None'}\n${result.conflicts.map(p => 'CONFLICT ' + p).join('\n')}\nPreserved: ${result.preserved}. Specs: ${result.specsCount}`,
           );
         } else {
           emit(
             result,
-            `[CLEANED] ${result.project} migrated to plugin mode (v${result.version}).\nRemoved:\n${result.removed.map(p => '- ' + p).join('\n') || 'None'}\nSpecs preserved: ${result.specsCount}.\nWorkspace is clean (no in-repo engine or .agents folder).`,
+            `[CLEANED] ${result.project} migrated to plugin mode (v${result.version}).\nRemoved ${result.removed.length} managed files.${result.backups.length ? `\n${result.backups.map(p => 'BACKUP ' + p).join('\n')}` : ''}\nPreserved: ${result.preserved}. Specs: ${result.specsCount}.`,
           );
         }
         return 0;
