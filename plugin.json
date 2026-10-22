@@ -1,6 +1,5 @@
 {
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "omni-spec",
-  "description": "Universal Spec-Driven Development (SDD) framework for agentic AI coding. First-pass precision, zero slop, and evidence-based verification.",
-  "logo": "assets/omni-spec-icon.svg",
-  "suggestedPrompts": ["/omni-init", "/omni-discuss", "/omni-specify"]
+  "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding."
 }

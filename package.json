@@ -42,6 +42,7 @@
     "rules/",
     "skills/",
     "plugin.json",
+    "plugin.extra.json",
     "docs/ONBOARDING.md",
     "docs/STANDARDS.md",
     "docs/COMPATIBILITY.md",

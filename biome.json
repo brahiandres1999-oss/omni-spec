@@ -15,6 +15,7 @@
       "bin/**/*.mjs",
       "package.json",
       "plugin.json",
+      "plugin.extra.json",
       "schema/**/*.json"
     ]
   },

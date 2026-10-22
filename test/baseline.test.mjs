@@ -71,7 +71,7 @@ test('setup-agent persists selection and rejects invalid agents without changing
   const before = await readFile(join(root, 'specs', 'manifest.json'), 'utf8');
   assert.equal(await runCli(['setup-agent', 'misspelled'], root), 1);
   assert.equal(await readFile(join(root, 'specs', 'manifest.json'), 'utf8'), before);
-  assert.match(await readFile(join(root, '.cursor', 'commands', 'omni-init.md'), 'utf8'), /omni-init/);
+  assert.match(await readFile(join(root, '.cursor', 'skills', 'omni-init', 'SKILL.md'), 'utf8'), /omni-init/);
 });
 
 test('update previews conflicts, preserves edits, then backs up explicit replacement', async () => {

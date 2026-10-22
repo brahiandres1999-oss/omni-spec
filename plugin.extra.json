@@ -1,0 +1,5 @@
+{
+  "$comment": "Undocumented Antigravity plugin metadata, kept outside the validated manifest. The published plugin.json schema is a closed object (additionalProperties: false) that only allows $schema, name and description, so unknown fields make `agy plugin validate --strict` fail. The official Antigravity changelog confirms the runtime surfaces a per-plugin icon and suggested prompts, but it does not publish the field names or their shape, so these entries are unverified. Promote them into plugin.json once Google documents the contract.",
+  "logo": "assets/omni-spec-icon.svg",
+  "suggestedPrompts": ["/omni-init", "/omni-discuss", "/omni-specify"]
+}

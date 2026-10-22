@@ -2,6 +2,7 @@ import { cp, mkdir, rm, stat, readFile, writeFile, readdir } from 'node:fs/promi
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { loadManifest, saveManifest, withManifestLock, MANIFEST_SCHEMA_URL } from './manifest.mjs';
 import { getCliVersion } from './updater.mjs';
 
@@ -9,6 +10,31 @@ const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 
 export function getPluginDir() {
   return join(homedir(), '.gemini', 'config', 'plugins', 'omni-spec');
+}
+
+// Antigravity ships a plugin validator in its CLI. It is optional: an absent CLI is a
+// reported fact, not a failure, but a validator that runs and rejects the bundle is fatal.
+function validatePluginBundle(targetDir) {
+  const result = spawnSync('agy', ['plugin', 'validate', '--strict', '--json'], {
+    cwd: targetDir,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (result.error) return { ran: false, ok: null, reason: 'Antigravity CLI not available' };
+  let report = null;
+  try {
+    report = JSON.parse(result.stdout);
+  } catch {
+    report = null;
+  }
+  return {
+    ran: true,
+    ok: result.status === 0,
+    exitCode: result.status,
+    report,
+    stderr: result.stderr ? result.stderr.trim() : null,
+  };
 }
 
 export async function installPlugin(options = {}) {
@@ -42,11 +68,18 @@ export async function installPlugin(options = {}) {
     }
   }
 
+  const validation = validatePluginBundle(targetDir);
+  if (validation.ran && !validation.ok)
+    throw new Error(
+      `Antigravity plugin validation failed (exit ${validation.exitCode}). ${validation.stderr || 'Run `agy plugin validate` in the plugin directory for details.'}`,
+    );
+
   return {
     success: true,
     targetDir,
     version: cliVersion,
     copied,
+    validation,
   };
 }
 

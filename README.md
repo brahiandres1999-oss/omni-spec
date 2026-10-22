@@ -108,18 +108,21 @@ OmniSpec adapta los artefactos generados según la naturaleza exacta de la tarea
 
 ## Agentes y Editores Compatibles
 
-OmniSpec genera adaptadores nativos para cada entorno sin dependencias propietarias:
+OmniSpec genera adaptadores nativos para cada entorno sin dependencias propietarias. Todos los agentes reciben además un bloque gestionado en `AGENTS.md`, que es el único archivo que todos los hosts documentan.
 
 | Agente / Editor | Archivos generados | Cómo se invoca |
 | :--- | :--- | :--- |
-| **Cursor** | `.cursor/commands/omni-*.md` + regla de proyecto | `/omni-init` en Cursor Composer / Chat |
-| **VS Code (GitHub Copilot)** | `.github/prompts/omni-*.prompt.md` + instrucciones | `/omni-init` en Chat de Copilot |
-| **Claude Code** | `.claude/skills/omni-*/SKILL.md` | `/omni-init` en Claude CLI |
 | **Google Antigravity** | `.agents/skills/omni-*/SKILL.md` o Plugin nativo | `/omni-init` o gestor `/plugin` |
-| **Kilo / OpenCode** | `.kilo/` o `.opencode/` + bloque en `AGENTS.md` | `/omni-init` en consola interactiva |
-| **Gemini CLI** | `.gemini/commands/omni-*.toml` | `/omni-init` en Gemini Code Assist |
+| **Cursor** | `.cursor/skills/omni-*/SKILL.md` + regla de proyecto | `/omni-init` en Cursor Composer / Chat |
+| **VS Code (GitHub Copilot)** | `.agents/skills/omni-*/SKILL.md` + instrucciones | `/omni-init` en Chat de Copilot |
+| **Claude Code** | `.claude/skills/omni-*/SKILL.md` | `/omni-init` en Claude CLI |
+| **Kilo** | `.kilo/skills/omni-*/SKILL.md` + `.kilo/commands/omni-*.md` | `/omni-init` en consola interactiva |
+| **OpenCode** | `.opencode/skills/omni-*/SKILL.md` | `/omni-init` en consola interactiva |
+| **Gemini CLI** | `.gemini/skills/omni-*/SKILL.md` + `.gemini/commands/omni-*.toml` | `/omni-init` en Gemini Code Assist |
 | **Codex** | `.agents/skills/omni-*/SKILL.md` | `$omni-init` o selector de skills |
 | **Genérico / Cualquier LLM** | `specs/commands/omni-*.md` | Pide al agente que lea y ejecute el prompt |
+
+`.agents/skills/` es la ruta de interoperabilidad: la leen Antigravity, Copilot, Codex, Cursor, Kilo y OpenCode. El adaptador `antigravity` produce el árbol más portable.
 
 ### Uso como Plugin Nativo en Google Antigravity
 
@@ -131,6 +134,8 @@ npm run sync:plugin
 ```
 
 Esto expone los 9 comandos de slash, la Constitución y el subagente `omni-auditor` en todos tus proyectos dentro de Antigravity sin necesidad de instalar archivos en cada repositorio.
+
+El manifiesto se mantiene dentro del esquema publicado de Antigravity (`$schema`, `name`, `description`). Los campos que el runtime de Antigravity reconoce pero whose nombres no están documentados (icono y prompts sugeridos) viven aparte en `plugin.extra.json` hasta que Google publique el contrato. Tras instalar, `omni-spec plugin install` ejecuta `agy plugin validate --strict --json` cuando la CLI de Antigravity está disponible y falla si el bundle no valida.
 
 Para añadir o cambiar adaptadores en cualquier momento:
 

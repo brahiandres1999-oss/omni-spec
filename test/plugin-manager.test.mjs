@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, stat } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, stat, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installPlugin, getPluginStatus, cleanProject } from '../src/plugin-manager.mjs';
@@ -32,7 +32,7 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
 
     // Verify mandatory plugin elements exist
     await stat(join(targetDir, 'plugin.json'));
-    await stat(join(targetDir, 'rules', 'AGENTS.md'));
+    await stat(join(targetDir, 'rules', 'constitution.md'));
     await stat(join(targetDir, 'agents', 'omni-auditor.md'));
     await stat(join(targetDir, 'assets', 'omni-spec-icon.svg'));
     await stat(join(targetDir, 'bin', 'omni-spec.mjs'));
@@ -52,6 +52,34 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
       hasGit = true;
     } catch {}
     assert.equal(hasGit, false, '.git directory must not be deployed in plugin');
+  });
+
+  test('plugin manifest stays inside the published Antigravity schema', async () => {
+    const targetDir = join(tempDir, 'plugins', 'omni-spec');
+    await installPlugin({ targetDir });
+    const manifest = JSON.parse(await readFile(join(targetDir, 'plugin.json'), 'utf8'));
+    // The published schema is a closed object: unknown fields make `agy plugin validate --strict` fail.
+    assert.deepEqual(Object.keys(manifest).sort(), ['$schema', 'description', 'name']);
+    assert.match(manifest.name, /^[a-zA-Z0-9-_]+$/);
+    assert.equal(manifest.$schema, 'https://antigravity.google/schemas/v1/plugin.json');
+  });
+
+  test('plugin rules carry the frontmatter Antigravity requires or the rule is discarded', async () => {
+    const targetDir = join(tempDir, 'plugins', 'omni-spec');
+    await installPlugin({ targetDir });
+    const rule = await readFile(join(targetDir, 'rules', 'constitution.md'), 'utf8');
+    assert.ok(rule.startsWith('---\n'), 'rules need YAML frontmatter on the first line');
+    const frontmatter = rule.slice(4, rule.indexOf('\n---', 4));
+    assert.match(frontmatter, /trigger: (always_on|model_decision|glob|manual)/);
+    assert.match(frontmatter, /description: /);
+  });
+
+  test('plugin install reports the Antigravity validator outcome', async () => {
+    const targetDir = join(tempDir, 'plugins', 'omni-spec');
+    const result = await installPlugin({ targetDir });
+    assert.equal(typeof result.validation.ran, 'boolean');
+    assert.ok('ok' in result.validation);
+    if (!result.validation.ran) assert.match(result.validation.reason, /Antigravity CLI/);
   });
 
   test('getPluginStatus returns accurate state and detects installed version', async () => {

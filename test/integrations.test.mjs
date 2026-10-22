@@ -17,13 +17,20 @@ const adapters = {
   antigravity: '.agents/skills/omni-init/SKILL.md',
   codex: '.agents/skills/omni-init/SKILL.md',
   claude: '.claude/skills/omni-init/SKILL.md',
-  cursor: '.cursor/commands/omni-init.md',
-  copilot: '.github/prompts/omni-init.prompt.md',
-  kilo: '.kilo/commands/omni-init.md',
-  opencode: '.opencode/commands/omni-init.md',
-  gemini: '.gemini/commands/omni-init.toml',
+  cursor: '.cursor/skills/omni-init/SKILL.md',
+  copilot: '.agents/skills/omni-init/SKILL.md',
+  kilo: '.kilo/skills/omni-init/SKILL.md',
+  opencode: '.opencode/skills/omni-init/SKILL.md',
+  gemini: '.gemini/skills/omni-init/SKILL.md',
   generic: 'specs/commands/omni-init.md',
 };
+
+// Hosts that document a slash-command surface their skills do not already expose.
+const commandSurfaces = {
+  kilo: '.kilo/commands/omni-init.md',
+  gemini: '.gemini/commands/omni-init.toml',
+};
+
 for (const [agent, path] of Object.entries(adapters))
   test(`${agent} creates invocable onboarding and exploration using its documented format`, async () => {
     const result = await installAgentIntegrations(root, { version: '0.5.0' }, { agent });
@@ -31,18 +38,52 @@ for (const [agent, path] of Object.entries(adapters))
     assert.match(content, /inspect --json/);
     assert.match(content, /project-context/);
     assert.ok(result.created.some(p => p.includes('omni-discuss')));
-    if (agent === 'gemini') {
-      const prompt = content
-        .split('\n')
-        .find(l => l.startsWith('prompt = '))
-        .slice('prompt = '.length);
-      assert.match(JSON.parse(prompt), /User request: \{\{args\}\}/);
-    } else assert.match(content, /^---\nname: omni-init\ndescription: /);
+    if (agent === 'generic') assert.match(content, /^---\nname: omni-init\ndescription: /);
+    else assert.match(content, /^---\nname: omni-init\ndescription: /);
     if (agent === 'antigravity') {
-      for (const name of ['.cursor', '.claude', '.github', '.kilo', 'AGENTS.md'])
+      for (const name of ['.cursor', '.claude', '.github', '.kilo', '.opencode', '.gemini'])
         await assert.rejects(access(join(root, name)), { code: 'ENOENT' });
     }
   });
+
+test('every supported host receives AGENTS.md and its own skill tree', async () => {
+  for (const agent of Object.keys(adapters).filter(a => a !== 'generic')) {
+    const scope = await mkdtemp(join(tmpdir(), 'omnispec-agents-'));
+    try {
+      await installAgentIntegrations(scope, { version: '0.5.0' }, { agent });
+      const instructions = await readFile(join(scope, 'AGENTS.md'), 'utf8');
+      assert.match(instructions, /OMNI-SPEC-START/);
+      assert.match(instructions, /OmniSpec 0\.5\.0/);
+    } finally {
+      await rm(scope, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  }
+});
+
+test('legacy slash-command surfaces survive only where the host documents them', async () => {
+  for (const [agent, path] of Object.entries(commandSurfaces)) {
+    const scope = await mkdtemp(join(tmpdir(), 'omnispec-commands-'));
+    try {
+      await installAgentIntegrations(scope, { version: '0.5.0' }, { agent });
+      const content = await readFile(join(scope, path), 'utf8');
+      if (path.endsWith('.toml')) {
+        const prompt = content
+          .split('\n')
+          .find(l => l.startsWith('prompt = '))
+          .slice('prompt = '.length);
+        assert.match(JSON.parse(prompt), /User request: \{\{args\}\}/);
+      } else assert.match(content, /User request: \$ARGUMENTS/);
+    } finally {
+      await rm(scope, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  }
+});
+
+test('OpenCode skills expose a slash invocation through Agent Skills metadata', async () => {
+  await installAgentIntegrations(root, { version: '0.5.0' }, { agent: 'opencode' });
+  const content = await readFile(join(root, adapters.opencode), 'utf8');
+  assert.match(content, /opencode\/slash: "true"/);
+});
 
 test('all adapters share the nine workflows without hard-coded npm test or tool permissions', async () => {
   assert.equal(OMNI_SKILLS.length, 9);

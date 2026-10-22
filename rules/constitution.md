@@ -1,3 +1,7 @@
+---
+trigger: always_on
+description: OmniSpec constitution and engineering standards for AI-assisted work
+---
 <!-- OMNI-SPEC-START -->
 ## OmniSpec 0.6.1 Constitution & Engineering Standards
 

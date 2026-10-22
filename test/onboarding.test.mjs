@@ -89,7 +89,9 @@ for (const scenario of ['conflicting', 'conflicting-python'])
 
 test('every adapter carries the bare-command evidence and bounded onboarding contract', () => {
   const entries = integrationEntries({ version: '0.5.0' }, { agent: 'all' }).filter(e => e.path.includes('omni-init'));
-  assert.equal(entries.length, 8); // Eight concrete adapters, including two sharing the skills path.
+  // One entry per adapter output: eight concrete adapters, three of which share the
+  // .agents/skills path, plus the documented slash-command surfaces of Kilo and Gemini.
+  assert.equal(entries.length, 10);
   for (const entry of entries) {
     const content = entry.path.endsWith('.toml')
       ? JSON.parse(
