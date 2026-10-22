@@ -28,3 +28,6 @@ artifacts/
 # Static analysis artifacts
 coverage/
 *.sarif
+
+# Internal research planning (never published)
+.research/
