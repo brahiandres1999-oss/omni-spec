@@ -933,6 +933,8 @@
   "ignores": {
    ".gitignore": "a**/b\n"
   },
+  "expectedFiles": [".gitignore", "a/x/b"],
+  "legacyGitFiles": [".gitignore"],
   "files": [
    "a/b",
    "ax/b",

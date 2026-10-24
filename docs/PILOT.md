@@ -1,6 +1,6 @@
-# Piloto de OmniSpec 0.7.0 Preview — 0.7.0-preview.1
+# Piloto de OmniSpec 0.7.0 Preview — 0.7.0-preview.2
 
-Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. El [estado de la próxima versión](releases/0.7.0-preview.1.md) describe la Preview que se prueba aquí y las validaciones pendientes.
+Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. El [estado de la próxima versión](releases/0.7.0-preview.2.md) describe la Preview que se prueba aquí y las validaciones pendientes.
 
 ## Preparar el paquete exacto
 
@@ -11,7 +11,7 @@ Genera el tarball desde el repositorio de OmniSpec, fuera de él, y anota su SHA
 ```powershell
 $repo = 'C:\dev\omni-spec' # Cambia esta ruta por tu copia del repositorio candidato
 npm pack $repo --pack-destination $env:TEMP
-$paqueteOmniSpec = Join-Path $env:TEMP 'omni-spec-0.7.0-preview.1.tgz'
+$paqueteOmniSpec = Join-Path $env:TEMP 'omni-spec-0.7.0-preview.2.tgz'
 Get-FileHash -LiteralPath $paqueteOmniSpec -Algorithm SHA256
 ```
 
@@ -23,7 +23,7 @@ npm exec --offline --yes --package "$paqueteOmniSpec" -- omni-spec init --agent 
 node specs/.omni/runtime/bin/omni-spec.mjs version
 ```
 
-Las dos comprobaciones de versión deben indicar `0.7.0-preview.1`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
+Las dos comprobaciones de versión deben indicar `0.7.0-preview.2`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
 
 El asistente de `init` pregunta idioma y confirmación de la carpeta. Si omites `--agent`, también pregunta qué herramienta usarás. En una terminal interactiva, usa flechas, Espacio para marcar una o varias integraciones y Enter para continuar; Ctrl+A marca todas las integraciones concretas. La opción genérica es exclusiva. `--plain` usa preguntas por líneas, con nombres separados por comas o `generic` si aún no elegiste. Stack, documentación, perfil y checks ya no se solicitan en el instalador: se revisan con el agente cuando se conoce el objetivo. Una decisión ya tomada puede declararse con argumentos, por ejemplo `--profile healthtech`; es un conjunto de controles a revisar, no una certificación.
 

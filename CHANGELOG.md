@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Changes after the prepared Preview will be recorded here.
 
+## [0.7.0-preview.2] — Preview (publication pending)
+
+Supersedes the failed `v0.7.0-preview.1` tag without rewriting it. No npm package or GitHub prerelease was published for that first tag. npm channel remains `preview`; `latest` stays on 0.6.1.
+
+### Fixed
+- Keep embedded double asterisks within one directory: `a**/b` excludes `a/b` and `ax/b`, while `a/x/b` remains in verification snapshots. Only a complete globstar segment such as `a/**/b` crosses directories. Add a platform-independent regression and recognize the exact legacy Git oracle result without weakening the documented matching contract.
+
 ## [0.7.0-preview.1] — Preview (publication pending)
 
 Prepared for the npm `preview` channel and a GitHub prerelease. npm `latest` remains `0.6.1` (checked 2026-10-23). See the [Preview notes](docs/releases/0.7.0-preview.1.md).

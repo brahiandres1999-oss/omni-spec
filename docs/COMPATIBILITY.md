@@ -1,6 +1,6 @@
 # Compatibilidad y verificación — 0.7.0 Preview
 
-La versión preparada es `0.7.0-preview.1`, canal npm `preview`. Los resultados históricos de rc.1/rc.2 se conservan con su alcance; no implican una ejecución nueva de todos los hosts. Ver [notas de la Preview](releases/0.7.0-preview.1.md).
+La versión preparada es `0.7.0-preview.2`, canal npm `preview`. Los resultados históricos de rc.1/rc.2 se conservan con su alcance; no implican una ejecución nueva de todos los hosts. Ver [notas de la Preview](releases/0.7.0-preview.2.md).
 
 OmniSpec instala flujos de especificación y revisión por proyecto, con soporte de Plugin en Google Antigravity y adaptadores para otros hosts. Conserva contexto y especificaciones al actualizar y exige auditoría, cobertura declarada de criterios y un registro de verificación antes de cerrar trabajo. No garantiza precisión al primer intento ni certifica la aplicación o el razonamiento de un modelo por instalarse.
 
@@ -11,6 +11,12 @@ El candidato requiere Node >=22.19.0. La matriz configurada de GitHub Actions co
 `npm run test:package` recorre proyectos nuevos, existentes, con fallos, stacks desconocidos, monorepos y documentos sin código. También verifica los cuatro tipos de trabajo y el rechazo de cierres sin evidencia. Son fixtures reproducibles, no una certificación de todos los proyectos.
 
 `0.7.0-preview.1` se comprobó localmente en Windows con Node 24.22.1 y npm 11.19.1: 300 pruebas (297 aprobadas, 3 omitidas por permisos de enlaces), cobertura de líneas 94,80 %, lint y 21 escenarios del paquete aprobados. La migración desde el tarball rc.2 conservó especificaciones, idioma, contexto y constitución; requiere la opción explícita de versión descrita en [RELEASING](RELEASING.md#copias-locales-de-070-rc1-o-rc2).
+
+## Reglas de exclusión y Preview 2
+
+La candidata actual es `0.7.0-preview.2`, pendiente de publicación; el tag Preview 1 falló en CI antes de empaquetar.
+
+El ajuste posterior al primer tag Preview conserva la semántica documentada de globstar: `a**/b` no excluye `a/x/b`; `a/**/b` sí. Algunas compilaciones de Git, incluida la 2.51.0.windows.1 comprobada localmente, difieren en el primer patrón. OmniSpec mantiene la misma regla en todos los sistemas para evitar omitir fuentes de la huella. La regresión independiente y la prueba diferencial reconocen únicamente ese resultado antiguo concreto. Ver la [sintaxis oficial de gitignore](https://git-scm.com/docs/gitignore#_pattern_format).
 
 ## Agentes
 

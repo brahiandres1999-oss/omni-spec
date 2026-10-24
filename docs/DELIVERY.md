@@ -1,6 +1,6 @@
 # Entrega con estado y evidencia
 
-La [Preview de 0.7.0](releases/0.7.0-preview.1.md) conserva formatos anteriores y añade contratos explícitos. Su publicación como Preview permite probarla mientras continúa la validación; no implica promoción a una versión normal. No confundir el paquete instalado con una versión anterior disponible en npm o un plugin global.
+La [Preview de 0.7.0](releases/0.7.0-preview.2.md) conserva formatos anteriores y añade contratos explícitos. Su publicación como Preview permite probarla mientras continúa la validación; no implica promoción a una versión normal. No confundir el paquete instalado con una versión anterior disponible en npm o un plugin global.
 
 ## Empezar y reanudar
 

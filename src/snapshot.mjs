@@ -175,12 +175,6 @@ export function compileIgnoreRule(line, base = '') {
           index += 1;
           continue;
         }
-        // Git lets a '**' that follows other characters cross directories before a '/'.
-        if (!startsSegment && text[index + 2] === '/') {
-          source += '.*';
-          index += 1;
-          continue;
-        }
         index += 1;
       }
       source += '[^/]*';
