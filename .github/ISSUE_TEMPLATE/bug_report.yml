@@ -13,7 +13,7 @@ body:
     attributes:
       label: OmniSpec Version
       description: Run `omni-spec version` or inspect `package.json`.
-      placeholder: "0.1.0"
+      placeholder: "0.7.0-preview.1"
     validations:
       required: true
 
@@ -33,7 +33,7 @@ body:
     id: node_version
     attributes:
       label: Node.js Version
-      placeholder: "v20.x or v22.x"
+      placeholder: "v22.19.0 or newer"
     validations:
       required: true
 

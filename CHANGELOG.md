@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Changes after the prepared Preview will be recorded here.
+
+## [0.7.0-preview.1] — Preview (publication pending)
+
+Prepared for the npm `preview` channel and a GitHub prerelease. npm `latest` remains `0.6.1` (checked 2026-10-23). See the [Preview notes](docs/releases/0.7.0-preview.1.md).
+
 ### Changed
 - Add a zero-dependency terminal installer with OmniPage's isometric logo geometry and colors sampled at responsive character densities, keyboard selection, multi-select, cancellation, scrollable details and grouped results. Preserve plain/pipe/JSON output, `--plain` and `NO_COLOR`; restore raw input without breaking subsequent ConPTY writes on Windows.
 - Install the Antigravity workspace auditor with sandbox policy and retain a portable review role for other hosts. Replace duplicated onboarding fallback text with a short entry pointing to the installed skill; generic prompts remain complete. Clean preserves user agents and updates the entry when moving to plugin mode.
 - Rework `init` as one installation journey for every experience level: choose language and AI tool, confirm the destination, defer engineering questions to the agent, and preserve explicit CLI declarations. Automation without a selected host uses generic prompts rather than assuming Antigravity.
 - Check managed-file integrity and local runtime version before reporting installation readiness. Every installation includes `specs/commands/omni-init.md` as a recovery path when the host does not discover skills. Report discovery and project onboarding as pending, and preserve active work on reinitialization.
 - Explain npm's `--yes` versus OmniSpec's `init --yes`, retry invalid answers, and exit without installation on EOF/cancellation. Reject home/root destinations, nested OmniSpec installations and version migrations through init; retain the update preview path.
+- Align public documentation with 0.7.0 Preview's release status, correct the workspace tree and banner, and keep local session reports and obsolete generated diagrams outside version control.
 
 ## [0.7.0-rc.2] - 2026-10-22
 

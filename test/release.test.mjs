@@ -31,3 +31,12 @@ test('release metadata distinguishes channels and rejects mismatched tags', () =
   assert.equal(releaseMetadata({ name: 'omni-spec', version: '0.5.0' }).npmTag, 'latest');
   assert.throws(() => releaseMetadata({ name: 'omni-spec', version: '0.5.0-rc.1' }, 'v0.5.0'), /does not match/);
 });
+
+test('preview releases use their own npm channel and remain GitHub prereleases', () => {
+  const preview = releaseMetadata({ name: 'omni-spec', version: '0.7.0-preview.1' });
+  assert.equal(preview.npmTag, 'preview');
+  assert.equal(preview.prerelease, true);
+  assert.equal(preview.tag, 'v0.7.0-preview.1');
+  assert.equal(preview.filename, 'omni-spec-0.7.0-preview.1.tgz');
+  assert.equal(preview.notes, 'docs/releases/0.7.0-preview.1.md');
+});

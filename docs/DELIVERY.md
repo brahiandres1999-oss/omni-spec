@@ -1,6 +1,6 @@
 # Entrega con estado y evidencia
 
-El candidato 0.7.0-rc.2 conserva formatos anteriores y añade contratos explícitos. La versión es local hasta decidir su publicación después del piloto. No confundir el paquete instalado con una versión anterior disponible en npm o un plugin global.
+La [Preview de 0.7.0](releases/0.7.0-preview.1.md) conserva formatos anteriores y añade contratos explícitos. Su publicación como Preview permite probarla mientras continúa la validación; no implica promoción a una versión normal. No confundir el paquete instalado con una versión anterior disponible en npm o un plugin global.
 
 ## Empezar y reanudar
 
@@ -81,4 +81,4 @@ Los checks corren bajo `specs/.omni/verify.lock`, separado del bloqueo del manif
 
 `init` y `update` mantienen una sección administrada en `specs/.gitignore` para el estado local: `specs/.omni/verification-logs/`, `backups/`, `inputs/`, bloqueos y temporales. Las especificaciones, `acceptance.json`, `verification.json`, el contexto, las decisiones, los contratos y el runtime portable siguen versionados. Las reglas propias del archivo se conservan.
 
-`clean` (modo plugin de Antigravity) elimina solo copias administradas sin modificar del runtime y de las skills `omni-*`. Conserva skills propias, respaldos y archivos no registrados, y se niega si hay adaptadores que necesitan el runtime local.
+`clean` (modo plugin de Antigravity) elimina solo copias administradas sin modificar del runtime, las skills `omni-*` y `.agents/agents/omni-auditor.md`. Actualiza la entrada de onboarding para apuntar al plugin. Conserva agentes/skills propios y archivos no registrados; las personalizaciones bloquean el reemplazo salvo aceptación explícita con respaldo.

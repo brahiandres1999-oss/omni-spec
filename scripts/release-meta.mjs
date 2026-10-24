@@ -10,7 +10,7 @@ export function releaseMetadata(pkg, ref = `v${pkg.version}`) {
     version: pkg.version,
     tag: ref,
     prerelease: version.pre.length > 0,
-    npmTag: version.pre.length ? 'next' : 'latest',
+    npmTag: version.pre[0] === 'preview' ? 'preview' : version.pre.length ? 'next' : 'latest',
     filename: `${pkg.name.replace(/^@/, '').replaceAll('/', '-')}-${pkg.version}.tgz`,
     notes: `docs/releases/${pkg.version}.md`,
   };

@@ -18,6 +18,7 @@ npm-debug.log*
 # Packages and archives
 *.tgz
 *.tar.gz
+*.bundle
 
 # Test artifacts
 test-temp/
@@ -31,3 +32,6 @@ coverage/
 
 # Internal research planning (never published)
 .research/
+
+# Local maintainer/session report; public status belongs in release documentation
+/docs/LOCAL-CANDIDATE-STATUS.md

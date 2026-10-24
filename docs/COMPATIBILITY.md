@@ -1,4 +1,6 @@
-# Compatibilidad y verificación
+# Compatibilidad y verificación — 0.7.0 Preview
+
+La versión preparada es `0.7.0-preview.1`, canal npm `preview`. Los resultados históricos de rc.1/rc.2 se conservan con su alcance; no implican una ejecución nueva de todos los hosts. Ver [notas de la Preview](releases/0.7.0-preview.1.md).
 
 OmniSpec instala flujos de especificación y revisión por proyecto, con soporte de Plugin en Google Antigravity y adaptadores para otros hosts. Conserva contexto y especificaciones al actualizar y exige auditoría, cobertura declarada de criterios y un registro de verificación antes de cerrar trabajo. No garantiza precisión al primer intento ni certifica la aplicación o el razonamiento de un modelo por instalarse.
 
@@ -7,6 +9,8 @@ OmniSpec instala flujos de especificación y revisión por proyecto, con soporte
 El candidato requiere Node >=22.19.0. La matriz configurada de GitHub Actions contempla Windows y Ubuntu con Node 22.19, 22 y 24: suite del motor, instalación del tarball, ejecución mediante npm-exec, CLI global en prefijo temporal y runtime autónomo. Esa configuración no implica una ejecución remota. rc.1 se validó localmente en Windows y Ubuntu (WSL) con Node 22.23.4 y en Windows con 22.19.0. rc.2 se validó en Linux con Node 22.22.0 (suite, cobertura, lint, paquete instalado y paridad de reglas de ignorado con Git); el ajuste local del instalador del 2026-10-23 se comprobó en Windows con Node 24.22.1 (299 pruebas: 296 aprobadas y 3 omitidas por permisos de enlaces; 21 escenarios de paquete, incluidos npx interactivo y automático, interfaz de teclado y auditor instalado). La matriz completa y el descubrimiento real por host siguen pendientes. Consultar el resultado del workflow correspondiente a una etiqueta cuando exista; la matriz aprobada de una candidata no sustituye la de otra versión.
 
 `npm run test:package` recorre proyectos nuevos, existentes, con fallos, stacks desconocidos, monorepos y documentos sin código. También verifica los cuatro tipos de trabajo y el rechazo de cierres sin evidencia. Son fixtures reproducibles, no una certificación de todos los proyectos.
+
+`0.7.0-preview.1` se comprobó localmente en Windows con Node 24.22.1 y npm 11.19.1: 300 pruebas (297 aprobadas, 3 omitidas por permisos de enlaces), cobertura de líneas 94,80 %, lint y 21 escenarios del paquete aprobados. La migración desde el tarball rc.2 conservó especificaciones, idioma, contexto y constitución; requiere la opción explícita de versión descrita en [RELEASING](RELEASING.md#copias-locales-de-070-rc1-o-rc2).
 
 ## Agentes
 

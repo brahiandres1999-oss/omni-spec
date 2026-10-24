@@ -1,13 +1,19 @@
 # Instalación y primera entrega al agente
 
-Este contrato corresponde al código de la candidata local 0.7.0-rc.2, base de la futura 0.7.0 estable. No significa que `latest` ya contenga estos cambios. Para probar los bytes actuales utiliza el tarball de [PILOT](PILOT.md).
+Este contrato corresponde a [0.7.0 Preview](releases/0.7.0-preview.1.md), versión `0.7.0-preview.1`, en preparación para publicación. Se distribuirá mediante el canal npm `preview`; no sustituye a la versión normal en `latest`. Para probar los bytes actuales utiliza el tarball de [PILOT](PILOT.md); `latest` todavía corresponde a 0.6.1 (consultado el 2026-10-23).
 
 ## Punto de entrada
 
-Con Node.js >=22.19.0, abre una terminal en la carpeta del proyecto y, cuando la versión esté publicada en latest, ejecuta:
+Para el candidato actual, desde la carpeta destino:
 
 ```sh
-npx --yes omni-spec@latest init
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.1.tgz" -- omni-spec init
+```
+
+Con Node.js >=22.19.0, abre una terminal en la carpeta del proyecto y, cuando la Preview esté publicada, ejecuta:
+
+```sh
+npx --yes omni-spec@preview init
 ```
 
 El primer `--yes` es de npm: acepta obtener el paquete, pero no contesta las preguntas de OmniSpec. No elige tecnologías ni aprueba publicación. No hace falta instalar globalmente.
@@ -34,15 +40,15 @@ Si el destino, las declaraciones o los avisos ocupan más espacio, PgUp/PgDn per
 La interfaz visual requiere entrada y salida TTY y un tamaño mínimo de 40 columnas por 18 filas. `--plain`, `TERM=dumb`, CI o salida redirigida usan texto por líneas. `NO_COLOR` desactiva colores sin cambiar el recorrido. `--json` conserva JSON sin controles ANSI. No se modifica el historial anterior ni se requieren paquetes de UI externos.
 
 ```sh
-npx --yes omni-spec@latest init --plain
+npx --yes omni-spec@preview init --plain
 ```
 
 Si no hay entrada disponible, falla con instrucciones concretas antes de instalar. Para ejecución desatendida:
 
 ```sh
-npx --yes omni-spec@latest init --yes --agent codex --lang es
-npx --yes omni-spec@latest init --yes --agent cursor,claude --lang es
-npx --yes omni-spec@latest init --yes --agent generic --lang es --json
+npx --yes omni-spec@preview init --yes --agent codex --lang es
+npx --yes omni-spec@preview init --yes --agent cursor,claude --lang es
+npx --yes omni-spec@preview init --yes --agent generic --lang es --json
 ```
 
 El segundo `--yes` es de OmniSpec y acepta preparar la carpeta con los datos declarados. Sin `--agent`, el modo automático conserva la integración existente o usa `generic`; no selecciona silenciosamente un host. `--json` requiere `init --yes` para que la salida no se mezcle con preguntas. La salida incluye `installation` con `FILES_READY`, integridad `PASSED`, `agentDiscovery: NOT_CHECKED`, `projectOnboarding: PENDING`, versión, idioma, invocaciones y ruta de recuperación.

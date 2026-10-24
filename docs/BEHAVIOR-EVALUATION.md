@@ -26,4 +26,4 @@ Preservar también corridas interrumpidas o fallidas. Las recomendaciones poster
 
 ## Límites de las primeras corridas
 
-Una corrida por escenario, en un solo host y sin brazo de control, es un diagnóstico. No demuestra superioridad sobre otro producto ni estabilidad universal. El roadmap conserva la comparación entre agente base, versión anterior y candidato, así como evaluación funcional, visual y de continuidad. IPS seguirá siendo el piloto posterior que ejecutará el usuario, sin convertirse en la plantilla del producto.
+Una corrida por escenario, en un solo host y sin brazo de control, es un diagnóstico. No demuestra superioridad sobre otro producto ni estabilidad universal. El roadmap conserva la comparación entre agente base, versión anterior y candidato, así como evaluación funcional, visual y de continuidad. El piloto con una aplicación real complementa estos escenarios sintéticos, sin convertir un proyecto particular en la plantilla del producto.

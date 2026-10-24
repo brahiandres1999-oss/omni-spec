@@ -3,7 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.7.0--rc.2-blue.svg" alt="Version 0.7.0-rc.2"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.7.0--preview.1-blue.svg" alt="Version 0.7.0-preview.1"></a>
+  <a href="docs/releases/0.7.0-preview.1.md"><img src="https://img.shields.io/badge/canal-preview-amber.svg" alt="0.7.0 Preview, pendiente de publicación"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -12,7 +13,7 @@
 
 ---
 
-# OmniSpec 0.7.0-rc.2
+# OmniSpec 0.7.0-preview.1
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
@@ -21,7 +22,7 @@ Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un frame
 
 ---
 
-> **Candidato local para piloto.** Esta versión aún no se ha publicado: `npx omni-spec` sin versión ejecuta la última publicada en npm (0.6.1). Para probar 0.7.0-rc.2 genera el tarball local como explica el [piloto](docs/PILOT.md). Consulta también [entrega y evidencia](docs/DELIVERY.md).
+> **0.7.0 Preview — lanzamiento en preparación.** Esta rama prepara `0.7.0-preview.1` para distribución pública en el canal npm `preview` y como prerelease en GitHub. Es una versión para probar y recibir feedback, con validaciones pendientes. `0.6.1` sigue en npm `latest` (consultado el 2026-10-23). Consulta las [notas de la Preview](docs/releases/0.7.0-preview.1.md) y el [piloto local](docs/PILOT.md).
 
 ## ¿Por qué OmniSpec?
 
@@ -37,19 +38,19 @@ OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
 ---
 
-## Inicio Rápido (60 segundos)
+## Empezar con 0.7.0 Preview
 
 ### 1. Prepara la carpeta donde vas a trabajar
 
 Necesitas Node.js >=22.19.0 y una herramienta con agente de IA. OmniSpec prepara instrucciones y conserva acuerdos en tu proyecto; tu agente conduce la conversación y realiza el trabajo. No necesitas elegir las tecnologías de tu aplicación para instalar OmniSpec.
 
-Abre una terminal en la carpeta del proyecto. Para uno nuevo, crea una carpeta y entra en ella; para uno existente, usa su raíz. El comando de entrada para la versión publicada es:
+Abre una terminal en la carpeta del proyecto. Para uno nuevo, crea una carpeta y entra en ella; para uno existente, usa su raíz. Genera el tarball como explica el [piloto](docs/PILOT.md) y utiliza la ruta de ese archivo:
 
 ```sh
-npx --yes omni-spec@latest init
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.1.tgz" -- omni-spec init
 ```
 
-*(O instálalo globalmente con `npm install -g omni-spec` si prefieres el comando `omni-spec` directo). Mientras 0.7.0 sea candidata, usa el tarball local del [piloto](docs/PILOT.md): el nombre sin versión instala la última publicada.*
+Una vez publicada la Preview, el punto de entrada será `npx --yes omni-spec@preview init`; también podrá fijarse `@0.7.0-preview.1`. `@latest` seguirá ejecutando 0.6.1 mientras no se promueva una versión normal. Antes de publicar, utiliza el tarball local. La instalación global es opcional.
 
 En la candidata 0.7.0, el asistente pregunta idioma, herramienta con IA y confirmación de la carpeta. Permite varias herramientas o `generic` si aún no elegiste una. No presupone Antigravity ni pregunta tu nivel de experiencia. Producto, stack, documentación y checks se acuerdan después con el agente. `init` conserva el código existente y no ejecuta scripts de aplicación; los comandos detectados quedan como candidatos en `specs/project-context.md`.
 
@@ -58,7 +59,7 @@ En una terminal compatible verás el logo de caracteres y una pregunta activa: f
 El `--yes` **antes** del paquete pertenece a npm: evita su confirmación de descarga, pero el asistente de OmniSpec sigue siendo interactivo. Para automatización, añade el `--yes` de OmniSpec **después** de `init` y declara la integración:
 
 ```sh
-npx --yes omni-spec@latest init --yes --agent codex --lang es
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.1.tgz" -- omni-spec init --yes --agent codex --lang es
 # También admite --agent cursor,claude o --agent all.
 ```
 
@@ -130,7 +131,7 @@ OmniSpec genera adaptadores nativos para cada entorno sin dependencias propietar
 
 | Agente / Editor | Archivos generados | Cómo se invoca |
 | :--- | :--- | :--- |
-| **Google Antigravity** | `.agents/skills/omni-*/SKILL.md` o Plugin nativo | `/omni-init` o gestor `/plugin` |
+| **Google Antigravity** | `.agents/skills/omni-*/SKILL.md` y `.agents/agents/omni-auditor.md`, o Plugin nativo | `/omni-init` o gestor `/plugin` |
 | **Cursor** | `.cursor/skills/omni-*/SKILL.md` + regla de proyecto | `/omni-init` en Cursor Composer / Chat |
 | **VS Code (GitHub Copilot)** | `.agents/skills/omni-*/SKILL.md` + instrucciones | `/omni-init` en Chat de Copilot |
 | **Claude Code** | `.claude/skills/omni-*/SKILL.md` | `/omni-init` en Claude CLI |
@@ -158,43 +159,43 @@ El manifiesto se mantiene dentro del esquema publicado de Antigravity (`$schema`
 Para añadir o cambiar adaptadores en cualquier momento:
 
 ```sh
-npx omni-spec setup-agent cursor,copilot,claude
+node specs/.omni/runtime/bin/omni-spec.mjs setup-agent cursor,copilot,claude
 ```
 
 ---
 
 ## Referencia del CLI
 
-Puedes ejecutar comandos con el runtime embebido en tu repositorio (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`) o con `npx omni-spec <comando>`. Mientras 0.7.0 no esté publicada, `npx omni-spec` sin versión ejecuta 0.6.1, que no incluye `guide evidence`, `checks`, `session-record` ni `decision-record`: usa el runtime del proyecto o el tarball del [piloto](docs/PILOT.md).
+Usa el runtime instalado (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`) o el tarball del [piloto](docs/PILOT.md). Después de publicar la Preview, los comandos por nombre serán los siguientes. `@preview` selecciona la Preview; `@latest` conserva la versión normal publicada.
 
 ```sh
 # Inspección y diagnóstico
-npx omni-spec status                 # Muestra el estado del proyecto y trabajo activo
-npx omni-spec doctor                 # Verifica integridad de archivos y adaptadores
-npx omni-spec inspect --json         # Muestra tecnologías, módulos y comandos detectados
+npx omni-spec@preview status                 # Muestra el estado del proyecto y trabajo activo
+npx omni-spec@preview doctor                 # Verifica integridad de archivos y adaptadores
+npx omni-spec@preview inspect --json         # Muestra tecnologías, módulos y comandos detectados
 
 # Gestión de especificaciones
-npx omni-spec create feature auth    # Crea manualmente un nuevo trabajo estructurado
-npx omni-spec list                   # Lista todas las especificaciones activas y cerradas
-npx omni-spec focus 001              # Enfoca el trabajo activo en la spec 001
+npx omni-spec@preview create feature auth    # Crea manualmente un nuevo trabajo estructurado
+npx omni-spec@preview list                   # Lista todas las especificaciones activas y cerradas
+npx omni-spec@preview focus 001              # Enfoca el trabajo activo en la spec 001
 
 # Ceremonia proporcional al cambio
-npx omni-spec fit 001                # Pregunta y deriva la ruta: light, standard o full
+npx omni-spec@preview fit 001                # Pregunta y deriva la ruta: light, standard o full
 
 # Contexto, sesión y decisiones
-npx omni-spec context-check          # Estructura y enlaces locales del contexto
-npx omni-spec context-record         # Guarda el baseline de entradas de contexto
-npx omni-spec session-record --from specs/.omni/inputs/session.json   # Capacidades reales del host
-npx omni-spec decision-record --from -   # Decisión/delegación leída de stdin
-npx omni-spec guide evidence         # Forma exacta de cada JSON (también: guide setup, guide design)
+npx omni-spec@preview context-check          # Estructura y enlaces locales del contexto
+npx omni-spec@preview context-record         # Guarda el baseline de entradas de contexto
+npx omni-spec@preview session-record --from specs/.omni/inputs/session.json   # Capacidades reales del host
+npx omni-spec@preview decision-record --from -   # Decisión/delegación leída de stdin
+npx omni-spec@preview guide evidence         # Forma exacta de cada JSON (también: guide setup, guide design)
 
 # Calidad y Verificación
-npx omni-spec audit 001              # Audita consistencia de artefactos y placeholders
-npx omni-spec checks --from specs/.omni/inputs/checks.json   # Catálogo de checks con ID y cwd por módulo
-npx omni-spec configure --gates "npm test"  # Gates heredados desde la raíz
-npx omni-spec verify 001             # Ejecuta los checks y liga la evidencia a la huella
-npx omni-spec complete 001           # Cierra el trabajo tras comprobar evidencia
-npx omni-spec contracts              # Contratos de capacidad vigentes y propuestos
+npx omni-spec@preview audit 001              # Audita consistencia de artefactos y placeholders
+npx omni-spec@preview checks --from specs/.omni/inputs/checks.json   # Catálogo de checks con ID y cwd por módulo
+npx omni-spec@preview configure --gates "npm test"  # Gates heredados desde la raíz
+npx omni-spec@preview verify 001             # Ejecuta los checks y liga la evidencia a la huella
+npx omni-spec@preview complete 001           # Cierra el trabajo tras comprobar evidencia
+npx omni-spec@preview contracts              # Contratos de capacidad vigentes y propuestos
 ```
 
 ### Qué atesta `verify`
@@ -223,15 +224,21 @@ standard añade rca.md y fix.md; full añade el desglose de tareas en fix.md.
 
 ## Estructura en tu Repositorio
 
-OmniSpec mantiene tu proyecto ordenado bajo un único directorio `specs/`:
+OmniSpec guarda el estado y los contratos en `specs/`, la constitución en la raíz y las integraciones en la ruta que lee cada host. Ejemplo con Antigravity; los registros de trabajo aparecen conforme se utiliza el flujo:
 
 ```text
-├── CONSTITUTION.md             # Reglas, estilo e invariantes innegociables del proyecto
+├── AGENTS.md                   # Instrucciones compartidas, en una sección administrada
+├── CONSTITUTION.md             # Reglas y decisiones del proyecto
+├── .agents/
+│   ├── skills/omni-*/SKILL.md   # Nueve skills de Antigravity
+│   └── agents/omni-auditor.md   # Auditor del workspace cuando el host lo admite
 └── specs/
-    ├── project-context.md      # Arquitectura, decisiones y comandos reales verificados
+    ├── project-context.md      # Contexto, decisiones y comandos con su estado de evidencia
     ├── manifest.json           # Estado del framework, spec activa e historial
     ├── project-state.json      # Baseline de contexto, sesiones y decisiones
     ├── checks.json             # Catálogo de checks aprobados (ID, cwd, timeout, tipo)
+    ├── commands/omni-init.md    # Entrada breve a la skill; prompts completos en generic
+    ├── manifest.lock/          # Tickets temporales de escritura; vacío en reposo
     ├── .gitignore              # Sección administrada para estado local (logs, backups, inputs)
     ├── _templates/             # Plantillas editables por arquetipo
     ├── 001-nombre-del-trabajo/ # Espacio de trabajo de la spec activa
@@ -240,7 +247,7 @@ OmniSpec mantiene tu proyecto ordenado bajo un único directorio `specs/`:
     │   ├── plan.md             # Diseño arquitectónico y estrategia de tests
     │   ├── tasks.md            # Tareas atómicas con checkboxes
     │   ├── acceptance.json     # Criterios vinculados a evidencia verificable
-    │   └── verification.md     # Snapshot de validación y resultados de gates
+    │   └── verification.json   # Huella, logs y resultados ejecutados de checks
     └── .omni/
         ├── runtime/            # Motor CLI portable independiente
         └── inputs/             # JSON de entrada para --from (ignorado por Git)
@@ -254,10 +261,10 @@ Cuando salga una nueva versión de OmniSpec, actualiza tu proyecto sin perder tu
 
 ```sh
 # Previsualiza qué archivos cambiarían (modo seguro):
-npx omni-spec update --dry-run
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.1.tgz" -- omni-spec update --dry-run
 
 # Aplica la actualización de plantillas y adaptadores:
-npx omni-spec update
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.1.tgz" -- omni-spec update
 ```
 
 > **Garantía de Preservación:** `update` nunca sobreescribe tu `CONSTITUTION.md`, tus especificaciones activas ni `specs/project-context.md`. Las personalizaciones en archivos gestionados bloquean la actualización hasta revisarlas; con `--accept-updates` se respaldan en `specs/.omni/backups/`. Si tu constitución difiere de la guía actual, `update` deja `specs/.omni/reference/CONSTITUTION.md` para compararla.
@@ -268,16 +275,17 @@ npx omni-spec update
 
 OmniSpec nace como una iniciativa personal con el propósito de contar con un framework de *Spec-Driven Development* verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, sin ataduras a dependencias externas ni flujos rígidos.
 
-El proyecto se encuentra en **desarrollo activo continuo**. De forma constante se revisan optimizaciones, refinamientos ergonómicos y nuevas capacidades para elevar la precisión del código generado por agentes. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
+La próxima publicación es **0.7.0 Preview** (`0.7.0-preview.1`, canal `preview`). Se están validando el instalador, las integraciones y el recorrido conversacional; la aprobación de pruebas del motor no demuestra por sí sola mayor estabilidad que 0.6.1. Las [notas de la Preview](docs/releases/0.7.0-preview.1.md) distinguen cambios incluidos, comprobaciones realizadas y pendientes. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
 
 ---
 
 ## Documentación
 
-- [Notas de la versión 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [0.6.1](docs/releases/0.6.1.md) · [0.6.0](docs/releases/0.6.0.md)
+- [0.7.0 Preview: estado, cambios y límites](docs/releases/0.7.0-preview.1.md)
+- [Historial de candidatas: 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [Publicada: 0.6.1](docs/releases/0.6.1.md)
 - [Piloto local con el paquete exacto](docs/PILOT.md)
 - [Instalación, automatización y recuperación](docs/INSTALLATION.md)
-- [Estado del candidato](docs/LOCAL-CANDIDATE-STATUS.md)
+- [Evaluación de comportamiento de los agentes](docs/BEHAVIOR-EVALUATION.md)
 - [Entrega, evidencia y formatos](docs/DELIVERY.md)
 - [Contrato de Onboarding (/omni-init)](docs/ONBOARDING.md)
 - [Estándares de los Adaptadores de Agentes](docs/STANDARDS.md)

@@ -36,7 +36,11 @@ assert.ok(
 );
 assert.ok(packageInfo.files.some(f => f.path === 'assets/omni-spec-banner.svg'));
 assert.ok(
-  !packageInfo.files.some(f => /(?:BASELINE-|VALIDATION-|^artifacts\/|^docs\/releases\/)/.test(f.path)),
+  !packageInfo.files.some(f =>
+    /(?:BASELINE-|VALIDATION-|^artifacts\/|^\.research\/|^docs\/LOCAL-CANDIDATE-STATUS\.md$|^docs\/releases\/)/.test(
+      f.path,
+    ),
+  ),
   'Exclude internal reports and repository release history from the user package',
 );
 const tool = join(temporary, 'installed-tool');

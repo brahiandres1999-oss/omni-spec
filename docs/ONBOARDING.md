@@ -1,4 +1,6 @@
-# Contrato de onboarding — candidato local
+# Contrato de onboarding — 0.7.0 Preview
+
+Contrato distribuido en `0.7.0-preview.1`. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [estado y alcance de la Preview](releases/0.7.0-preview.1.md).
 
 ## Preparación y decisiones pendientes
 
@@ -12,7 +14,7 @@ Para interfaces nuevas o rediseños importantes, se define una dirección con re
 
 Estos son contratos de comportamiento distribuidos al agente. Las pruebas de generación comprueban su presencia y la preservación del proyecto; no certifican su ejecución por todos los hosts ni la calidad del producto generado.
 
-El usuario invoca `/omni-init` sin instrucciones de auditoría adicionales. El agente adapta su recorrido a la evidencia del proyecto y documenta su contexto. Las mismas instrucciones se distribuyen mediante todos los adaptadores; cambia su formato e invocación según el host.
+El usuario usa la invocación mostrada por el instalador (`/omni-init`, `$omni-init` en Codex o lectura explícita de la skill/prompt), sin instrucciones de auditoría adicionales. El agente confirma la instalación que lee y su versión. El agente adapta su recorrido a la evidencia del proyecto y documenta su contexto. Las mismas instrucciones se distribuyen mediante todos los adaptadores; cambia su formato e invocación según el host.
 
 ## Alcance predeterminado
 
