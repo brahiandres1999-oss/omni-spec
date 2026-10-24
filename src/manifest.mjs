@@ -271,6 +271,7 @@ export async function _initManifestUnlocked(baseDir, options = {}) {
       'Project conventions',
     qualityGates: options.qualityGates ?? existing?.qualityGates ?? '',
     agent: options.agent || options.ai || existing?.agent || 'antigravity',
+    language: options.language || existing?.language || 'en',
     active_spec: existing?.active_spec || null,
     active_archetype: existing?.active_archetype || null,
     specs: existing && Array.isArray(existing.specs) ? existing.specs : [],

@@ -35,7 +35,32 @@ Entorno: Linux, Node 22.22.0.
 - `release:check` aprobado; no publica.
 - Recorridos manuales: proyecto con frontend y backend, salidas de tipo Playwright, archivos del IDE, ruta con espacios y "ñ", actualización desde 0.6.1 y desde rc.1, evidencia UI manual y `clean` con skills propias.
 
-rc.1 se había validado en Windows (Node 22.23.4 y 22.19.0) y en Ubuntu mediante WSL. rc.2 no se ha ejecutado todavía en Windows: el piloto y la CI, cuando se autorice, lo confirman.
+rc.1 se había validado en Windows (Node 22.23.4 y 22.19.0) y en Ubuntu mediante WSL. La validación anterior de rc.2 corresponde a Linux; el ajuste posterior de instalación se comprobó en Windows como se detalla a continuación.
+
+## Ajuste local del primer recorrido — 2026-10-23
+
+Se revisó el punto de entrada `npx --yes omni-spec@latest init` sobre el código de rc.2, base de la futura 0.7.0. La versión se mantiene como candidata local; no se publicó npm ni se modificó la web.
+
+- Un solo recorrido para cualquier nivel de experiencia: idioma, herramienta con IA y confirmación de carpeta. Stack, documentación, perfil y checks dejan de ser preguntas obligatorias del instalador; los argumentos explícitos siguen disponibles.
+- Sin integración indicada en modo automático, usar `generic`; preservar la integración y decisiones de instalaciones existentes. Todas las instalaciones reciben un prompt local de recuperación. La integridad de archivos y versión se comprueban antes de informar FILES_READY; descubrimiento del host y onboarding siguen pendientes.
+- Windows, Node 24.22.1, npm 11.19.1: suite mediante `test:coverage`, 285 pruebas, 282 aprobadas, 0 fallidas y 3 omitidas por EPERM al crear enlaces. Cobertura: 95,81 % de líneas y 88,29 % de ramas; lint aprobado.
+- Paquete instalado: 21 escenarios aprobados. Se ejercitó el parser real de npx, usando el tarball local en lugar de @latest para no ejecutar la versión publicada anterior. El --yes de npm mantiene las preguntas de OmniSpec; el modo automático requiere `init --yes`.
+- `release:check` y `git diff --check` aprobados. Las ejecuciones temporales se hicieron en una ruta permitida fuera del repositorio porque el temporal del sandbox deniega renombres.
+
+Estas pruebas no confirman descubrimiento en cada host ni el onboarding conversacional. Ese bloque no se amplió durante la corrección del instalador. Ver [INSTALLATION](INSTALLATION.md) para variantes y límites.
+
+## Interfaz del instalador y auditor — 2026-10-23
+
+- Menús de teclado, selección múltiple, cancelación y resultado organizado por propósito; modo de texto explícito y conservación de tuberías/JSON. Los detalles largos se recorren con PgUp/PgDn. No hay porcentajes ni esperas de presentación.
+- Logo tomado de la geometría, orden de superficies y colores de `ascii-spec-canvas` en OmniPage. La densidad se adapta al tamaño de la terminal, hasta 69 × 27 caracteres. El tamaño de fuente lo controla el terminal; no se eliminan filas para obtener la versión compacta.
+- Antigravity recibe `.agents/agents/omni-auditor.md` con política sandbox. El runtime incluye el rol para otros hosts; su presencia no confirma descubrimiento ni ejecución independiente.
+- La entrada `specs/commands/omni-init.md` enlaza la skill instalada. Se comprobó la sustitución de la copia completa anterior y la preservación de una copia editada. `generic` conserva sus nueve prompts completos. `clean` conserva agentes propios y cambia la entrada al plugin, con conflicto/backup si fue personalizada.
+- `manifest.lock/` vacío sigue siendo el estado normal en reposo; se documentó su finalidad sin cambiar el protocolo de concurrencia.
+- Recorridos manuales en ConPTY de Windows: instalación con los tres pasos desde PowerShell y cancelación desde PowerShell y CMD. Se corrigieron la restauración de entrada al cancelar con Esc y la continuidad de stdout tras salir del menú.
+- Validación final en Windows, Node 24.22.1 y npm 11.19.1: 299 pruebas, 296 aprobadas, 0 fallidas y 3 omitidas por permisos para crear enlaces. Cobertura: 94,83 % de líneas y 88,62 % de ramas. Las diez pruebas de interfaz incluyen restauración, selección múltiple, escalado, detalles largos y salida sin color.
+- `test:package`: 21 escenarios aprobados con la versión del logo de mayor densidad, incluidos instalación offline y parser real de npx. Se comprobó además que reemplazar el tarball en la misma ruta carga los bytes nuevos al repetir npm exec.
+
+La ejecución del auditor y el descubrimiento en el editor se comprobarán en el bloque conversacional del piloto; no se atribuyen al instalador.
 
 ## Lo que valida el piloto
 

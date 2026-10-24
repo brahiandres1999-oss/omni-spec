@@ -1,8 +1,8 @@
 import { cp, mkdir, rm, rmdir, stat, readFile, writeFile, readdir } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { loadRegistry, saveRegistry, safePath, managedHash } from './managed.mjs';
-import { normalizeAgents } from './integrations.mjs';
+import { loadRegistry, saveRegistry, safePath, managedHash, syncManagedFiles } from './managed.mjs';
+import { normalizeAgents, integrationEntries } from './integrations.mjs';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -131,7 +131,11 @@ function cleanable(name) {
     name.split('/').some(part => !part || part === '.' || part === '..')
   )
     return false;
-  return name.startsWith('specs/.omni/runtime/') || /^\.agents\/skills\/omni-[a-z-]+\/[^/]/.test(name);
+  return (
+    name.startsWith('specs/.omni/runtime/') ||
+    /^\.agents\/skills\/omni-[a-z-]+\/[^/]/.test(name) ||
+    name === '.agents/agents/omni-auditor.md'
+  );
 }
 
 async function removeEmptyParents(root, name, stop) {
@@ -168,6 +172,8 @@ export async function cleanProject(baseDir, options = {}) {
       `Plugin mode serves Antigravity only; adapters for ${unsupported.join(', ')} use the local runtime. Run setup-agent antigravity and remove those adapters before clean. No changes made.`,
     );
   const cliVersion = await getCliVersion();
+  const pluginEntry = integrationEntries({ version: cliVersion, agent: 'plugin' });
+  const handoff = await syncManagedFiles(baseDir, pluginEntry, { dryRun: true });
   const registry = await loadRegistry(baseDir);
   const remove = [],
     conflicts = [];
@@ -195,12 +201,12 @@ export async function cleanProject(baseDir, options = {}) {
     toRemove: [...remove, ...(options.acceptUpdates ? conflicts : [])]
       .filter(item => !item.missing)
       .map(item => item.name),
-    conflicts: conflicts.map(item => item.name),
+    conflicts: [...conflicts.map(item => item.name), ...handoff.conflicts],
     preserved: 'specs, CONSTITUTION.md, project context, backups, user skills and unregistered files',
     specsCount: manifest.specs?.length || 0,
   };
   if (options.dryRun) return { dryRun: true, ...result };
-  if (conflicts.length && !options.acceptUpdates)
+  if (result.conflicts.length && !options.acceptUpdates)
     throw new Error(
       `Locally modified OmniSpec files block clean: ${result.conflicts.join(', ')}. Review clean --dry-run, then use --accept-updates to back them up and continue. No changes made.`,
     );
@@ -229,6 +235,8 @@ export async function cleanProject(baseDir, options = {}) {
       );
     }
     await saveRegistry(baseDir, registry);
+    const pluginHandoff = await syncManagedFiles(baseDir, pluginEntry, { acceptUpdates: options.acceptUpdates });
+    backups.push(...pluginHandoff.backups);
 
     manifest.agent = 'plugin';
     manifest.version = cliVersion;

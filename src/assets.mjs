@@ -29,7 +29,7 @@ async function files(directory, destination) {
 
 export async function packageEntries() {
   const entries = await files(join(packageRoot, 'src', 'templates'), 'specs/_templates');
-  for (const directory of ['src', 'bin', 'schema']) {
+  for (const directory of ['src', 'bin', 'schema', 'agents']) {
     entries.push(...(await files(join(packageRoot, directory), `specs/.omni/runtime/${directory}`)));
   }
   entries.push({

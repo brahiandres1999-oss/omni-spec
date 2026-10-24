@@ -51,7 +51,9 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "docs/DELIVERY.md"
+    "docs/DELIVERY.md",
+    "docs/INSTALLATION.md",
+    "docs/PILOT.md"
   ],
   "keywords": [
     "spec-driven-development",

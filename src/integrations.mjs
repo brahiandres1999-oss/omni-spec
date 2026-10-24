@@ -1,6 +1,8 @@
 import { syncManagedFiles } from './managed.mjs';
 import { OMNI_SKILLS } from './workflows.mjs';
 import { HOST_RULE } from './protocols.mjs';
+import { readFileSync } from 'node:fs';
+const auditorDefinition = readFileSync(new URL('../agents/omni-auditor.md', import.meta.url), 'utf8');
 export { OMNI_SKILLS } from './workflows.mjs';
 
 // One canonical skill body, one renderer, one table.
@@ -16,7 +18,13 @@ export { OMNI_SKILLS } from './workflows.mjs';
 // and OpenCode. The `antigravity` adapter therefore yields the most portable tree.
 export const AGENTS = {
   plugin: { skills: null, commands: null, commandFormat: 'markdown', invocation: '/omni-init (Antigravity Plugin)' },
-  antigravity: { skills: '.agents/skills', commands: null, commandFormat: 'markdown', invocation: '/omni-init' },
+  antigravity: {
+    skills: '.agents/skills',
+    commands: null,
+    agents: '.agents/agents',
+    commandFormat: 'markdown',
+    invocation: '/omni-init',
+  },
   codex: {
     skills: '.agents/skills',
     commands: null,
@@ -71,7 +79,16 @@ export function integrationEntries(manifest, options = {}) {
   const rule = `<!-- OMNI-SPEC-START -->\n## OmniSpec ${version}\n${HOST_RULE}\nRun the OmniSpec CLI with \`node specs/.omni/runtime/bin/omni-spec.mjs\` (or global plugin CLI \`omni-spec\` / \`npx omni-spec\`).\n<!-- OMNI-SPEC-END -->`;
   for (const target of targets) {
     const adapter = AGENTS[target];
-    if (!adapter.skills && !adapter.commands) continue;
+    if (!adapter.skills && !adapter.commands) {
+      if (target === 'plugin')
+        entries.push({
+          path: 'specs/commands/omni-init.md',
+          content:
+            '# OmniSpec plugin onboarding\n\nRead the installed plugin skill at `~/.gemini/config/plugins/omni-spec/skills/omni-init/SKILL.md` and follow it. Confirm its CLI version matches specs/manifest.json. If the plugin is absent, install/select the intended plugin or run setup-agent with a workspace integration before continuing.\n',
+        });
+      continue;
+    }
+    if (adapter.agents) entries.push({ path: `${adapter.agents}/omni-auditor.md`, content: auditorDefinition });
 
     if (adapter.skills)
       for (const skill of OMNI_SKILLS)
@@ -104,7 +121,23 @@ export function integrationEntries(manifest, options = {}) {
     // AGENTS.md is the only file every supported host reads.
     entries.push({ path: 'AGENTS.md', content: rule, section: true });
   }
+  if (!targets.includes('generic') && !targets.includes('plugin'))
+    entries.push({
+      path: 'specs/commands/omni-init.md',
+      content:
+        '# OmniSpec onboarding entry\n\nRead one of the installed skills below and follow its instructions. These are the same workflows discovered by the host; this entry does not duplicate them. Confirm the local CLI version before starting.\n\n' +
+        [...new Set(targets.map(target => `${AGENTS[target].skills}/omni-init/SKILL.md`))]
+          .map(path => `- \`${path}\``)
+          .join('\n') +
+        '\n',
+    });
   return entries;
+}
+
+/** File a user can explicitly ask the host to read when skill discovery is unavailable. */
+export function onboardingPath(agent) {
+  const target = normalizeAgents(agent)[0];
+  return AGENTS[target].skills ? `${AGENTS[target].skills}/omni-init/SKILL.md` : 'specs/commands/omni-init.md';
 }
 
 export async function installAgentIntegrations(projectDir, manifest, options = {}) {

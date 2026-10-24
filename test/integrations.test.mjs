@@ -41,6 +41,10 @@ for (const [agent, path] of Object.entries(adapters))
     if (agent === 'generic') assert.match(content, /^---\nname: omni-init\ndescription: /);
     else assert.match(content, /^---\nname: omni-init\ndescription: /);
     if (agent === 'antigravity') {
+      const auditor = await readFile(join(root, '.agents/agents/omni-auditor.md'), 'utf8');
+      assert.match(auditor, /subagent: true/);
+      assert.match(auditor, /commandExecutionPolicy: sandbox/);
+      assert.ok((await readFile(join(root, 'specs/commands/omni-init.md'), 'utf8')).length < 1000);
       for (const name of ['.cursor', '.claude', '.github', '.kilo', '.opencode', '.gemini'])
         await assert.rejects(access(join(root, name)), { code: 'ENOENT' });
     }

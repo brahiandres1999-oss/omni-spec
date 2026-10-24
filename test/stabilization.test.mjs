@@ -84,20 +84,16 @@ function worker(t, mode) {
 
 async function interactive(t, flags = [], answers = []) {
   const cli = fileURLToPath(new URL('../bin/omni-spec.mjs', import.meta.url));
-  const child = spawn(process.execPath, [cli, 'init', ...flags], { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [cli, 'init', '--lang', 'en', '--agent', 'generic', ...flags], {
+    cwd: dir,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
   const closed = once(child, 'close');
   t.after(async () => {
     if (child.exitCode === null && child.signalCode === null) child.kill();
     await closed;
   });
-  const prompts = [
-    'Project Name [',
-    'Select an option (1-8)',
-    'Preferred Documentation Standard [',
-    'Select an option (1-5)',
-    'Quality Gates command(s) [',
-    'Proceed with scaffolding?',
-  ];
+  const prompts = ['Prepare OmniSpec in this folder?'];
   let output = '',
     stderr = '',
     index = 0;
@@ -196,7 +192,7 @@ for (const [marker, command] of [
   ['pom.xml', 'mvn test'],
   ['build.gradle', 'gradle test'],
 ]) {
-  test(`interactive ${marker} offers build-tool gates and automatic mode leaves them as candidates`, async t => {
+  test(`interactive and automatic ${marker} preserve the detected stack and leave gates as candidates`, async t => {
     await writeFile(join(dir, marker), '');
     const automatic = await runWizard(dir, { yes: true });
     assert.equal(automatic.stack, marker === 'pom.xml' ? 'Java / Maven' : 'Java / Gradle');
@@ -205,9 +201,10 @@ for (const [marker, command] of [
     const result = await interactive(t);
     assert.equal(result.code, 0, result.stderr);
     const manifest = await loadManifest(dir);
-    assert.equal(manifest.stack, 'Java / Spring Boot');
+    assert.equal(manifest.stack, automatic.stack);
     assert.equal(manifest.documentationStandard, 'JavaDoc');
-    assert.ok(manifest.qualityGates.includes(command));
+    assert.equal(manifest.qualityGates, '');
+    assert.ok((await readFile(join(dir, 'specs/project-context.md'), 'utf8')).includes(command));
   });
 }
 
@@ -218,7 +215,7 @@ test('force interactive choices update constitution and manifest consistently', 
     docStandard: 'TSDoc',
     profile: 'general',
   });
-  const result = await interactive(t, ['--force'], ['', '3', '', '2']);
+  const result = await interactive(t, ['--force', '--stack', 'Python (FastAPI / Django)', '--profile', 'fintech']);
   assert.equal(result.code, 0, result.stderr);
   const manifest = await loadManifest(dir);
   const constitution = await readFile(join(dir, 'CONSTITUTION.md'), 'utf8');

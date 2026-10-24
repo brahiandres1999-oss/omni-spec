@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -12,8 +12,14 @@ const temporary = await mkdtemp(join(tmpdir(), 'omnispec-package-'));
 const npm = process.env.npm_execpath;
 if (!npm)
   throw new Error('Run via npm run test:package so the current npm CLI can be resolved without shell assumptions.');
-function exec(args, cwd, expected = 0) {
-  const result = spawnSync(process.execPath, args, { cwd, encoding: 'utf8', timeout: 120000, windowsHide: true });
+function exec(args, cwd, expected = 0, input) {
+  const result = spawnSync(process.execPath, args, {
+    cwd,
+    input,
+    encoding: 'utf8',
+    timeout: 120000,
+    windowsHide: true,
+  });
   assert.equal(result.status, expected, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
   return expected === 0 ? result.stdout : result.stdout + result.stderr;
 }
@@ -71,6 +77,49 @@ assert.equal(
   ).trim(),
   `omni-spec v${packageInfo.version}`,
 );
+// Exercise npm's actual npx parser: its --yes must not suppress OmniSpec's questions.
+// A tarball replaces @latest so this checks the unpublished candidate entirely offline.
+const guided = join(temporary, 'student npx project');
+await mkdir(guided);
+const npx = join(dirname(npm), 'npx-cli.js');
+const guidedOutput = exec(
+  [npx, '--offline', '--yes', '--package', join(temporary, packageInfo.filename), 'omni-spec', 'init'],
+  guided,
+  0,
+  '2\ncodex\nsí\n',
+);
+assert.match(guidedOutput, /Language \/ Idioma/);
+assert.match(guidedOutput, /Herramienta \[generic\]/);
+assert.match(guidedOutput, /\$omni-init/);
+assert.match(guidedOutput, /Lee .agents\/skills\/omni-init\/SKILL.md/);
+const guidedManifest = JSON.parse(await readFile(join(guided, 'specs/manifest.json'), 'utf8'));
+assert.equal(guidedManifest.agent, 'codex');
+assert.equal(guidedManifest.stack, 'Undecided');
+assert.equal(guidedManifest.qualityGates, '');
+const guidedLocal = join(guided, 'specs/.omni/runtime/bin/omni-spec.mjs');
+assert.equal(exec([guidedLocal, 'version'], guided).trim(), `omni-spec v${packageInfo.version}`);
+const unattended = join(temporary, 'unattended npx project');
+await mkdir(unattended);
+const unattendedOutput = JSON.parse(
+  exec(
+    [
+      npx,
+      '--offline',
+      '--yes',
+      '--package',
+      join(temporary, packageInfo.filename),
+      'omni-spec',
+      'init',
+      '--yes',
+      '--lang',
+      'en',
+      '--json',
+    ],
+    unattended,
+  ),
+);
+assert.equal(unattendedOutput.installation.agentDiscovery, 'NOT_CHECKED');
+assert.equal(unattendedOutput.installation.nextSteps[0].agent, 'generic');
 const globalPrefix = join(temporary, 'global-tool');
 exec(
   [
@@ -105,6 +154,8 @@ exec([installed, 'init', '--yes', '--agent', 'antigravity'], fresh);
 const local = join(fresh, 'specs', '.omni', 'runtime', 'bin', 'omni-spec.mjs');
 assert.equal(exec([local, 'version'], fresh).trim(), `omni-spec v${packageInfo.version}`);
 assert.equal((await readdir(join(fresh, '.agents', 'skills'))).length, 9);
+assert.match(await readFile(join(fresh, '.agents/agents/omni-auditor.md'), 'utf8'), /commandExecutionPolicy: sandbox/);
+assert.ok((await readFile(join(fresh, 'specs/commands/omni-init.md'), 'utf8')).length < 1000);
 exec([local, 'check'], fresh);
 exec([local, 'configure', '--gates', 'node check.cjs'], fresh);
 await writeFile(join(fresh, 'app.cjs'), 'exports.greet = name => "Hello " + name;\n');
@@ -296,6 +347,8 @@ console.log(
       package: join(temporary, packageInfo.filename),
       evidenceDirectory: temporary,
       scenarios: [
+        'real npx --yes parser keeps guided language/tool/confirmation prompts',
+        'unattended npx init --yes returns generic fallback and pending discovery',
         'offline package install and npm binary',
         'npm-exec/npx-style execution from tarball',
         'temporary-prefix global command',

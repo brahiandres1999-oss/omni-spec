@@ -4,6 +4,8 @@ OmniSpec coordinates processes on the **same machine and local filesystem**, wit
 
 `specs/manifest.lock/` contains temporary, unique `<pid>-<uuid>/` claims. The root directory stays in place; empty directories do not become Git changes.
 
+**An empty directory is the normal idle state.** A command creates its own claim only while it needs to update project state, then removes it. The folder is not configuration and users should not add files to it or remove it while OmniSpec commands are running. See [installation](INSTALLATION.md) for the user-facing file guide.
+
 1. A participant creates its unique directory atomically. Its PID is already in the name, so a crash before any file is written still has an identifiable owner. A claim without a published ticket means the participant is choosing a number.
 2. It reads existing tickets, chooses `max + 1`, and publishes the ticket by renaming a completed temporary file. Tickets use integers represented by `BigInt`.
 3. It waits for choosing participants and smaller `(ticket, claim-name)` pairs before accessing the manifest. Participants arriving later observe its published ticket and choose a larger number.

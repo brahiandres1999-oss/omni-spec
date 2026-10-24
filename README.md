@@ -39,32 +39,45 @@ OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
 ## Inicio Rápido (60 segundos)
 
-### 1. Inicializa OmniSpec en tu repositorio
+### 1. Prepara la carpeta donde vas a trabajar
 
-Ejecuta directamente con `npx` (sin necesidad de instalación global):
+Necesitas Node.js >=22.19.0 y una herramienta con agente de IA. OmniSpec prepara instrucciones y conserva acuerdos en tu proyecto; tu agente conduce la conversación y realiza el trabajo. No necesitas elegir las tecnologías de tu aplicación para instalar OmniSpec.
+
+Abre una terminal en la carpeta del proyecto. Para uno nuevo, crea una carpeta y entra en ella; para uno existente, usa su raíz. El comando de entrada para la versión publicada es:
 
 ```sh
-# Inicializa para tu editor preferido:
-npx omni-spec init --agent cursor       # Cursor
-npx omni-spec init --agent copilot      # VS Code (GitHub Copilot)
-npx omni-spec init --agent claude       # Claude Code
-npx omni-spec init --agent antigravity  # Google Antigravity
-npx omni-spec init --agent all          # Configura todos los editores soportados
+npx --yes omni-spec@latest init
 ```
 
 *(O instálalo globalmente con `npm install -g omni-spec` si prefieres el comando `omni-spec` directo). Mientras 0.7.0 sea candidata, usa el tarball local del [piloto](docs/PILOT.md): el nombre sin versión instala la última publicada.*
 
-`init` no convierte los scripts detectados en gates: quedan como candidatos en `specs/project-context.md` hasta que el agente los revise contigo.
+En la candidata 0.7.0, el asistente pregunta idioma, herramienta con IA y confirmación de la carpeta. Permite varias herramientas o `generic` si aún no elegiste una. No presupone Antigravity ni pregunta tu nivel de experiencia. Producto, stack, documentación y checks se acuerdan después con el agente. `init` conserva el código existente y no ejecuta scripts de aplicación; los comandos detectados quedan como candidatos en `specs/project-context.md`.
+
+En una terminal compatible verás el logo de caracteres y una pregunta activa: flechas para moverte, Espacio para marcar herramientas y Enter para continuar; Esc o Ctrl+C cancelan. La presentación se ajusta al tamaño disponible. Usa `--plain` para texto por líneas; tuberías, CI y JSON conservan salida sencilla. `NO_COLOR` desactiva los colores. Antigravity recibe también `.agents/agents/omni-auditor.md` para las superficies que admiten ese formato.
+
+El `--yes` **antes** del paquete pertenece a npm: evita su confirmación de descarga, pero el asistente de OmniSpec sigue siendo interactivo. Para automatización, añade el `--yes` de OmniSpec **después** de `init` y declara la integración:
+
+```sh
+npx --yes omni-spec@latest init --yes --agent codex --lang es
+# También admite --agent cursor,claude o --agent all.
+```
+
+Los argumentos `--name`, `--stack`, `--doc`, `--profile` y `--gates` permiten conservar decisiones explícitas sin repetir preguntas. Sin una integración declarada en modo automático se utiliza `generic`, con prompts de lectura explícita. [Todas las variantes de instalación y recuperación](docs/INSTALLATION.md).
 
 ### 2. Reconoce el proyecto desde el chat
 
-Abre tu editor y escribe en el chat de tu agente:
+Abre **esa misma carpeta** en tu herramienta con IA y usa la invocación que muestra el instalador. Por ejemplo, `/omni-init` en Claude o `$omni-init` en Codex. La instalación comprueba integridad local; todavía no confirma que el host descubra las skills.
+
+Si la skill no aparece, actualiza/reabre el proyecto o pega en el chat:
 
 ```text
-/omni-init
+Lee specs/commands/omni-init.md y sigue la ruta de la skill que indica.
+Confirma la versión del runtime local y usa el idioma de esta conversación.
 ```
 
-El agente escaneará la arquitectura, comandos reales de test/build y convenciones de tu código, generando `specs/project-context.md` sin tocar tu código ni inventar dependencias.
+Explica qué quieres construir o cambiar. El agente reconocerá el punto de partida y registrará objetivos, decisiones pendientes y contexto en `specs/project-context.md`. Instalar OmniSpec no crea ni valida la aplicación. Una instalación ya existente conserva su configuración y trabajo activo; una versión diferente se migra con `update --dry-run`, no con `init`.
+
+La entrada `specs/commands/omni-init.md` apunta a la skill de tu integración; no copia el workflow completo. En modo `generic`, los prompts de `specs/commands/` sí son la vía principal.
 
 ### 3. Especifica, construye y verifica
 
@@ -263,6 +276,7 @@ El proyecto se encuentra en **desarrollo activo continuo**. De forma constante s
 
 - [Notas de la versión 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [0.6.1](docs/releases/0.6.1.md) · [0.6.0](docs/releases/0.6.0.md)
 - [Piloto local con el paquete exacto](docs/PILOT.md)
+- [Instalación, automatización y recuperación](docs/INSTALLATION.md)
 - [Estado del candidato](docs/LOCAL-CANDIDATE-STATUS.md)
 - [Entrega, evidencia y formatos](docs/DELIVERY.md)
 - [Contrato de Onboarding (/omni-init)](docs/ONBOARDING.md)

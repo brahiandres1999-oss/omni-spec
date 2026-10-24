@@ -36,7 +36,7 @@ Do not run the full audit during early clarification: plan/tasks may not exist y
 End with what was found/changed, evidence, unresolved issues and the next appropriate action. Resume existing work rather than creating duplicates.
 
 ## Workflow
-Run audit for the active spec, then review semantic consistency yourself: requirement -> plan -> task -> intended verification. In subagent environments (e.g. Antigravity), invoke omni-auditor for independent criteria verification.
+Run audit for the active spec, then review semantic consistency yourself: requirement -> plan -> task -> intended verification. When the host supports custom subagents and the installed omni-auditor is discoverable, use it for a separate criteria review within the user's authorized scope. Antigravity workspace installations place it at .agents/agents/omni-auditor.md. Otherwise perform the review in the current session using the role at specs/.omni/runtime/agents/omni-auditor.md (or the installed plugin agents/omni-auditor.md) and report that no separate auditor ran. A definition file does not grant tools or permissions.
 Report mechanical errors separately from reasoning findings. Check that scope and non-goals agree and that assumptions have evidence. An audit pass is not a code-test result.
 For unresolved blockers, identify the owning artifact and remediation. Do not silently approve contradictory requirements or claim semantic certainty from a text-length check.
 

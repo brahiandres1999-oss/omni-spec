@@ -43,6 +43,11 @@
       "type": "string",
       "description": "Selected adapters (comma-separated): antigravity, cursor, claude, copilot, kilo, opencode, gemini, codex, generic; all selects concrete adapters. Invocation syntax depends on the host."
     },
+    "language": {
+      "type": "string",
+      "enum": ["en", "es"],
+      "description": "Installation UI language; does not classify user experience or select application technologies."
+    },
     "active_spec": {
       "type": ["string", "null"],
       "description": "Slug of the currently focused specification, or null when none is active."

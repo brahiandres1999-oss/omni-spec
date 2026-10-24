@@ -125,7 +125,7 @@ test('update previews conflicts, preserves edits, then backs up explicit replace
 
 test('integration write failures do not report successful initialization', async () => {
   await writeFile(join(root, '.agents'), 'block directory creation');
-  assert.equal(await runCli(['init', '--yes'], root), 1);
+  assert.equal(await runCli(['init', '--yes', '--agent', 'antigravity'], root), 1);
   assert.equal(await loadManifest(root), null);
 });
 

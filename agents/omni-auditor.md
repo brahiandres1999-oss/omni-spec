@@ -4,7 +4,7 @@ description: Reviews specification consistency, declared criterion evidence, API
 model: inherit
 mainAgent: false
 subagent: true
-commandExecutionPolicy: auto
+commandExecutionPolicy: sandbox
 tools:
   - view_file
   - run_command

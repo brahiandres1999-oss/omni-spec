@@ -290,15 +290,26 @@ test('--from reads JSON outside the project and from stdin', async () => {
 
 test('clean preserves user skills and backups, removes only unmodified managed copies', async () => {
   await scaffoldProject(root, { agent: 'antigravity' });
+  await writeFile(join(root, '.agents', 'agents', 'team-auditor.md'), '# Team auditor');
   await mkdir(join(root, '.agents', 'skills', 'team-skill'), { recursive: true });
   await writeFile(join(root, '.agents', 'skills', 'team-skill', 'SKILL.md'), '# Team skill');
   await mkdir(join(root, 'specs', '.omni', 'backups', 'old'), { recursive: true });
   await writeFile(join(root, 'specs', '.omni', 'backups', 'old', 'spec.md'), 'user customization');
   const preview = await cleanProject(root, { dryRun: true });
   assert.ok(
-    preview.toRemove.every(name => name.startsWith('specs/.omni/runtime/') || name.startsWith('.agents/skills/omni-')),
+    preview.toRemove.every(
+      name =>
+        name.startsWith('specs/.omni/runtime/') ||
+        name.startsWith('.agents/skills/omni-') ||
+        name === '.agents/agents/omni-auditor.md',
+    ),
   );
   await cleanProject(root);
+  assert.equal(await readFile(join(root, '.agents', 'agents', 'team-auditor.md'), 'utf8'), '# Team auditor');
+  await assert.rejects(stat(join(root, '.agents', 'agents', 'omni-auditor.md')), { code: 'ENOENT' });
+  const handoff = await readFile(join(root, 'specs', 'commands', 'omni-init.md'), 'utf8');
+  assert.match(handoff, /installed plugin skill/);
+  assert.doesNotMatch(handoff, /\.agents\/skills/);
   assert.equal(await readFile(join(root, '.agents', 'skills', 'team-skill', 'SKILL.md'), 'utf8'), '# Team skill');
   assert.equal(await readFile(join(root, 'specs', '.omni', 'backups', 'old', 'spec.md'), 'utf8'), 'user customization');
   await assert.rejects(stat(join(root, '.agents', 'skills', 'omni-init')), { code: 'ENOENT' });
@@ -337,7 +348,7 @@ test('init installs specs/.gitignore and update offers a constitution reference 
 });
 
 test('the init wizard accepts piped answers that arrive before each prompt', async () => {
-  const result = await run(['init', '--agent', 'claude'], 'Piped\n8\n\n1\nnone\nY\n');
+  const result = await run(['init', '--agent', 'claude', '--lang', 'en', '--name', 'Piped'], 'Y\n');
   assert.equal(result.code, 0, result.stderr);
   assert.equal((await loadManifest(root)).project, 'Piped');
   assert.equal((await loadManifest(root)).qualityGates, '');
@@ -368,12 +379,18 @@ test('guide evidence documents every validated record shape', async () => {
     assert.ok(content.includes(text), text);
 });
 
-test('symlinked dependency directories are ignored like the directories they replace', async () => {
+test('symlinked dependency directories are ignored like the directories they replace', async t => {
   const spec = await project();
   const { symlink } = await import('node:fs/promises');
   await mkdir(join(root, 'real-modules'), { recursive: true });
   await writeFile(join(root, '.gitignore'), 'real-modules/\n');
-  await symlink(join(root, 'real-modules'), join(root, 'node_modules'), 'junction');
+  try {
+    await symlink(join(root, 'real-modules'), join(root, 'node_modules'), 'junction');
+  } catch (error) {
+    if (!['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) throw error;
+    t.skip(`This environment cannot create directory links: ${error.code}`);
+    return;
+  }
   assert.equal((await verifySpec(root, spec.id)).passed, true);
 });
 

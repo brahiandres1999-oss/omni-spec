@@ -91,7 +91,9 @@ for (const scenario of ['conflicting', 'conflicting-python'])
   });
 
 test('every adapter carries the bare-command evidence and bounded onboarding contract', () => {
-  const entries = integrationEntries({ version: '0.5.0' }, { agent: 'all' }).filter(e => e.path.includes('omni-init'));
+  const entries = integrationEntries({ version: '0.5.0' }, { agent: 'all' }).filter(
+    e => e.path.includes('omni-init') && e.path !== 'specs/commands/omni-init.md',
+  );
   // One entry per adapter output: eight concrete adapters, three of which share the
   // .agents/skills path, plus the documented slash-command surfaces of Kilo and Gemini.
   assert.equal(entries.length, 10);

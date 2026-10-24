@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, stat, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installPlugin, getPluginStatus, cleanProject } from '../src/plugin-manager.mjs';
@@ -152,5 +152,20 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
     const check = await checkProjectVersion(projectDir);
     assert.equal(check.healthy, true);
     assert.match(check.message, /Plugin mode active/);
+  });
+
+  test('clean blocks on an edited handoff before deleting adapters, and backs it up when accepted', async () => {
+    await scaffoldProject(tempDir, { agent: 'antigravity' });
+    const path = join(tempDir, 'specs', 'commands', 'omni-init.md');
+    const edited = (await readFile(path, 'utf8')) + '\nTeam instructions.\n';
+    await writeFile(path, edited);
+    await assert.rejects(cleanProject(tempDir), /Locally modified OmniSpec files block clean/);
+    assert.equal(await readFile(path, 'utf8'), edited);
+    await stat(join(tempDir, '.agents', 'agents', 'omni-auditor.md'));
+    await stat(join(tempDir, 'specs', '.omni', 'runtime', 'bin', 'omni-spec.mjs'));
+    const result = await cleanProject(tempDir, { acceptUpdates: true });
+    assert.equal(result.backups.length, 1);
+    assert.equal(await readFile(join(tempDir, result.backups[0]), 'utf8'), edited);
+    assert.match(await readFile(path, 'utf8'), /installed plugin skill/);
   });
 });

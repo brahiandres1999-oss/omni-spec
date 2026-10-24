@@ -25,11 +25,9 @@ node specs/.omni/runtime/bin/omni-spec.mjs version
 
 Las dos comprobaciones de versión deben indicar `0.7.0-rc.2`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
 
-En el asistente de `init`:
+El asistente de `init` pregunta idioma y confirmación de la carpeta. Si omites `--agent`, también pregunta qué herramienta usarás. En una terminal interactiva, usa flechas, Espacio para marcar una o varias integraciones y Enter para continuar; Ctrl+A marca todas las integraciones concretas. La opción genérica es exclusiva. `--plain` usa preguntas por líneas, con nombres separados por comas o `generic` si aún no elegiste. Stack, documentación, perfil y checks ya no se solicitan en el instalador: se revisan con el agente cuando se conoce el objetivo. Una decisión ya tomada puede declararse con argumentos, por ejemplo `--profile healthtech`; es un conjunto de controles a revisar, no una certificación.
 
-- **Stack:** elige `Undecided / custom stack` (8). El agente lo investigará y te lo propondrá; un preset elegido antes queda escrito en la constitución.
-- **Perfil:** si IPS maneja datos de salud, elige `healthtech`. Son controles a revisar, no una certificación.
-- **Quality gates:** deja `none`. Los checks se configuran cuando existan comandos reales.
+Para ejecución sin entrada interactiva usa `omni-spec init --yes --agent claude --lang es`. El `--yes` anterior a `--package` es de npm y no sustituye al de OmniSpec. El resultado comprueba integridad local y muestra una invocación por host; si no aparece la skill, pide al agente que lea la ruta exacta mostrada (`.claude/skills/omni-init/SKILL.md` para Claude o `.agents/skills/omni-init/SKILL.md` para Antigravity). `specs/commands/omni-init.md` conserva una entrada breve a la misma skill. Consulta [INSTALLATION](INSTALLATION.md).
 
 Abre la carpeta en el agente y comprueba que descubre las nueve skills locales. Una copia global anterior (por ejemplo, el plugin 0.6.x en `~/.gemini/config/plugins/omni-spec`) puede tener prioridad según el host. Identifica qué versión se usa y resuelve ese conflicto antes de continuar. El runtime del proyecto (`node specs/.omni/runtime/bin/omni-spec.mjs`) permite ejecutar el motor exacto de forma explícita.
 

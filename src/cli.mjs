@@ -17,6 +17,8 @@ import { safePath } from './managed.mjs';
 import { writeFileAtomic } from './fs-retry.mjs';
 import { listContracts, readContract, updateContract } from './contracts.mjs';
 import { fileURLToPath } from 'node:url';
+import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
+import { installationProgress } from './terminal-ui.mjs';
 
 const mutating = new Set([
   'create',
@@ -40,8 +42,20 @@ const aliases = {
   'omni-init': 'init',
   prune: 'clean',
 };
-const valueFlags = new Set(['profile', 'name', 'stack', 'doc', 'gates', 'agent', 'ai', 'manual', 'timeout', 'from']);
-const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade']);
+const valueFlags = new Set([
+  'profile',
+  'name',
+  'stack',
+  'doc',
+  'gates',
+  'agent',
+  'ai',
+  'manual',
+  'timeout',
+  'from',
+  'lang',
+]);
+const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade', 'plain']);
 
 function acceptanceSummary(acceptance) {
   if (acceptance.error) return `Acceptance review failed: ${acceptance.error}`;
@@ -156,6 +170,12 @@ omni-spec <command> [arguments] [options]
   help | version
 
 init options: --name --stack --doc --profile --gates --agent (alias --ai)
+  --lang en|es sets the installation language; one workflow for every experience level.
+  --plain disables terminal UI; pipes, TERM=dumb, CI and JSON retain plain output.
+  Interactive UI: arrows to move, Space to select tools, Ctrl+A for all, Enter to continue, Esc/Ctrl+C to cancel.
+  init asks only language, AI tool and destination confirmation; engineering decisions follow in chat.
+  For automation: init --yes --agent <name> --lang en (generic when no tool is selected).
+  npx --yes omni-spec@latest init still opens OmniSpec's installer; npx owns that --yes.
   --force explicitly replaces constitution/templates; existing specs are preserved.
 Agents: ${Object.keys(AGENTS).join(', ')}, all
 After bootstrap: /omni-init -> /omni-discuss or /omni-specify.
@@ -189,6 +209,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (flags.acceptUpdates && !['update', 'setup-agent', 'clean'].includes(command))
       throw new Error('--accept-updates is supported only by update, setup-agent and clean.');
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
+    if (flags.lang !== undefined && command !== 'init') throw new Error('--lang is supported only by init.');
+    if (flags.plain && command !== 'init') throw new Error('--plain is supported only by init.');
     const maxPositionals =
       {
         create: 2,
@@ -226,12 +248,24 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         return 0;
       }
       case 'init': {
-        const options = await runWizard(workingDir, flags);
+        await assertInstallationRuntime();
+        const previous = await loadManifest(workingDir);
+        const version = await getCliVersion();
+        if (previous && previous.version !== version)
+          throw new Error(
+            `OmniSpec ${previous.version} is already installed. Use its matching CLI or review update --dry-run with version ${version}; init does not migrate versions.`,
+          );
+        const options = await runWizard(workingDir, { ...flags, cliVersion: version });
         if (!options) return 0;
+        const progress = installationProgress(process.stdout, options.language, flags.plain || json);
+        progress.start();
         const result = await scaffoldProject(workingDir, options);
+        progress.files();
+        const installation = await inspectInstallation(workingDir, options, version);
+        progress.done();
         emit(
-          result,
-          `[OK] OmniSpec files installed at ${workingDir}\n${agentInstructions(options.agent)}\nContext pending; application not validated. Run omni-init without extra instructions to recognize this project.\nLocal CLI: node specs/.omni/runtime/bin/omni-spec.mjs status`,
+          { ...result, installation },
+          installationMessage(installation, Boolean(previous?.active_spec), { plain: flags.plain || json }),
         );
         return 0;
       }
