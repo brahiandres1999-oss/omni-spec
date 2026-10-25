@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { mkdtemp, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { join, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -8,10 +8,16 @@ import { fillSpec } from '../test-support/fixtures.mjs';
 import { seedOnboardingFixture } from '../test-support/onboarding-fixtures.mjs';
 
 const source = fileURLToPath(new URL('../', import.meta.url));
-const temporary = await mkdtemp(join(tmpdir(), 'omnispec-package-'));
 const npm = process.env.npm_execpath;
 if (!npm)
   throw new Error('Run via npm run test:package so the current npm CLI can be resolved without shell assumptions.');
+const temporary = await mkdtemp(join(tmpdir(), 'omnispec-package-'));
+// npm run exports the user's cache; npm exec and npx would otherwise leave _npx entries there.
+const userCache = process.env.npm_config_cache;
+process.env.npm_config_cache = join(temporary, 'npm-cache');
+process.on('exit', code => {
+  if (code) console.error(`Package smoke failed; its files remain in ${temporary}`);
+});
 function exec(args, cwd, expected = 0, input) {
   const result = spawnSync(process.execPath, args, {
     cwd,
@@ -124,6 +130,10 @@ const unattendedOutput = JSON.parse(
 );
 assert.equal(unattendedOutput.installation.agentDiscovery, 'NOT_CHECKED');
 assert.equal(unattendedOutput.installation.nextSteps[0].agent, 'generic');
+assert.ok(
+  (await readdir(join(temporary, 'npm-cache', '_npx'))).length > 0,
+  'npm exec and npx must install into the isolated cache, not the user cache',
+);
 const globalPrefix = join(temporary, 'global-tool');
 exec(
   [
@@ -151,6 +161,32 @@ const globalResult = spawnSync('omni-spec version', {
 });
 assert.equal(globalResult.status, 0, globalResult.stderr);
 assert.equal(globalResult.stdout.trim(), `omni-spec v${packageInfo.version}`);
+const packageJson = await readFile(join(source, 'package.json'), 'utf8');
+const development = JSON.parse(exec([join(source, 'scripts', 'pack-dev.mjs'), temporary], source));
+assert.match(development.version, new RegExp(`^${packageInfo.version.replaceAll('.', '\\.')}\\+dev\\.\\d{8}T\\d{6}Z$`));
+assert.equal(basename(development.package), `omni-spec-${development.version}.tgz`);
+assert.match(development.sha256, /^[0-9a-f]{64}$/);
+assert.equal(await readFile(join(source, 'package.json'), 'utf8'), packageJson, 'pack:dev must not edit package.json');
+const developmentTool = join(temporary, 'development-tool');
+await mkdir(developmentTool);
+exec(
+  [
+    npm,
+    'install',
+    '--prefix',
+    developmentTool,
+    '--offline',
+    '--ignore-scripts',
+    '--no-audit',
+    '--no-fund',
+    development.package,
+  ],
+  developmentTool,
+);
+assert.equal(
+  exec([join(developmentTool, 'node_modules', 'omni-spec', 'bin', 'omni-spec.mjs'), 'version'], developmentTool).trim(),
+  `omni-spec v${development.version}`,
+);
 
 const fresh = join(temporary, 'fresh project');
 await mkdir(fresh);
@@ -342,20 +378,31 @@ await writeFile(
   }),
 );
 assert.match(exec([candidate, 'verify', '002', '--json'], delivery, 1), /source inspection is insufficient/);
+assert.ok(userCache, 'npm run must export npm_config_cache so the user cache can be checked');
+// A cache may have no _npx yet, and a concurrent npx may not have written its package.json.
+const ignoreMissing = error => {
+  if (error.code !== 'ENOENT') throw error;
+};
+const userNpx = join(userCache, '_npx');
+for (const entry of (await readdir(userNpx).catch(ignoreMissing)) || []) {
+  const manifest = (await readFile(join(userNpx, entry, 'package.json'), 'utf8').catch(ignoreMissing)) || '';
+  // _npx records the tarball as a relative file: path, so match this run's unique folder name.
+  assert.ok(!manifest.includes(basename(temporary)), `User npm cache entry _npx/${entry} points to this smoke run`);
+}
+await rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 console.log(
   JSON.stringify(
     {
       passed: true,
       version: packageInfo.version,
       integrity: packageInfo.integrity,
-      package: join(temporary, packageInfo.filename),
-      evidenceDirectory: temporary,
       scenarios: [
         'real npx --yes parser keeps guided language/tool/confirmation prompts',
         'unattended npx init --yes returns generic fallback and pending discovery',
         'offline package install and npm binary',
         'npm-exec/npx-style execution from tarball',
         'temporary-prefix global command',
+        'development package with +dev build suffix installs offline',
         'portable local runtime',
         'nine Antigravity skill files',
         'four archetype lifecycles with criterion evidence',

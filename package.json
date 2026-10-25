@@ -30,6 +30,7 @@
     "test:package": "node scripts/package-smoke.mjs",
     "release:check": "node scripts/release-check.mjs",
     "release:pack": "node scripts/release-assets.mjs",
+    "pack:dev": "node scripts/pack-dev.mjs",
     "build:skills": "node scripts/build-plugin-skills.mjs",
     "sync:plugin": "node scripts/sync-plugin.mjs"
   },

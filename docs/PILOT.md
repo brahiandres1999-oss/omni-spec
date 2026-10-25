@@ -6,12 +6,12 @@ Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia 
 
 En PowerShell, comprueba `node --version`; el mínimo es 22.19.0. Ese requisito es del CLI y no elige el stack de la aplicación: el agente debe investigarlo con fuentes oficiales, explicarte las opciones y registrar tu aprobación o delegación.
 
-Genera el tarball desde el repositorio de OmniSpec, fuera de él, y anota su SHA256:
+Genera el tarball desde el repositorio de OmniSpec, fuera de él, y anota su SHA256. `pack:dev` añade a la versión el sufijo `+dev.<fecha y hora UTC>`, así que cada paquete local se distingue del publicado y de los anteriores:
 
 ```powershell
 $repo = 'C:\dev\omni-spec' # Cambia esta ruta por tu copia del repositorio candidato
-npm pack $repo --pack-destination $env:TEMP
-$paqueteOmniSpec = Join-Path $env:TEMP 'omni-spec-0.7.0-preview.2.tgz'
+$paquete = npm --prefix $repo run --silent pack:dev $env:TEMP | ConvertFrom-Json
+$paqueteOmniSpec = $paquete.package
 Get-FileHash -LiteralPath $paqueteOmniSpec -Algorithm SHA256
 ```
 
@@ -23,7 +23,7 @@ npm exec --offline --yes --package "$paqueteOmniSpec" -- omni-spec init --agent 
 node specs/.omni/runtime/bin/omni-spec.mjs version
 ```
 
-Las dos comprobaciones de versión deben indicar `0.7.0-preview.2`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
+Las dos comprobaciones de versión deben indicar `$paquete.version`, con su sufijo: por ejemplo, `0.7.0-preview.2+dev.20261024T235356Z`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
 
 El asistente de `init` pregunta idioma y confirmación de la carpeta. Si omites `--agent`, también pregunta qué herramienta usarás. En una terminal interactiva, usa flechas, Espacio para marcar una o varias integraciones y Enter para continuar; Ctrl+A marca todas las integraciones concretas. La opción genérica es exclusiva. `--plain` usa preguntas por líneas, con nombres separados por comas o `generic` si aún no elegiste. Stack, documentación, perfil y checks ya no se solicitan en el instalador: se revisan con el agente cuando se conoce el objetivo. Una decisión ya tomada puede declararse con argumentos, por ejemplo `--profile healthtech`; es un conjunto de controles a revisar, no una certificación.
 
