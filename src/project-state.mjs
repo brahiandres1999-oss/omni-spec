@@ -9,7 +9,10 @@ import { hashProjectFiles } from './snapshot.mjs';
 
 const file = 'specs/project-state.json';
 const capabilities = ['questions', 'web', 'terminal', 'render', 'delegation'];
-export const CONTEXT_SCOPE = 'CONTEXT_INPUTS_V2';
+export const CONTEXT_SCOPE = 'CONTEXT_INPUTS_V3';
+// Baselines written before CONTEXT_INPUTS_V3 hashed raw bytes. Remove this scope and its comparison
+// in contextFreshness when that compatibility is retired.
+const RAW_CONTEXT_SCOPE = 'CONTEXT_INPUTS_V2';
 const MAX_SESSION_HISTORY = 100;
 // Files that usually carry facts recorded in project-context.md: build/dependency
 // declarations, runtime pins, containers, CI and agent instructions. Source code is not a
@@ -196,15 +199,24 @@ async function save(root, state) {
   await writeFileAtomic(path, JSON.stringify(state, null, 2) + '\n');
 }
 
+const withNewline = (bytes, newline) => Buffer.from(bytes.toString('latin1').replace(/\r?\n/g, newline), 'latin1');
+
 /**
- * Hash the inputs that project-context.md describes: the context itself, files it cites,
- * build/dependency/runtime declarations, CI and agent instructions. Ignored paths
- * (.gitignore, .omnispecignore and defaults) and symlinks are skipped. The OmniSpec-managed
- * section of AGENTS.md is excluded so adapter updates do not stale user context.
- * @param {string} root Project root.
- * @returns {Promise<Object<string,string>>} Relative paths and SHA-256 values.
+ * Hashes one context input can match. Git rewrites line endings of text files on checkout
+ * (core.autocrlf, .gitattributes eol), so text is recorded in its LF form; the conversion runs on
+ * latin1, which maps each byte to one character, and never decodes UTF-8. A NUL byte marks a binary
+ * file, which Git does not convert: its three forms are its raw hash.
+ * @param {Buffer} bytes Input content.
+ * @returns {{recorded: string, raw: string, crlf: string}} SHA-256 of the form context-record stores,
+ *   of the raw bytes and of the CRLF form; the last two only matter for CONTEXT_INPUTS_V2 baselines.
  */
-export async function contextSnapshot(root) {
+function inputDigests(bytes) {
+  const raw = hash(bytes);
+  if (bytes.includes(0)) return { recorded: raw, raw, crlf: raw };
+  return { recorded: hash(withNewline(bytes, '\n')), raw, crlf: hash(withNewline(bytes, '\r\n')) };
+}
+
+async function contextDigests(root) {
   const contextText = await readFile(await safePath(root, 'specs/project-context.md'), 'utf8');
   const citations = citedProjectFiles(contextText).filter(name => !generatedState(name));
   const cited = new Set(citations.filter(name => !name.startsWith('specs/')));
@@ -214,24 +226,44 @@ export async function contextSnapshot(root) {
       select: name => isContextInput(name, cited),
       symlinks: 'reject-selected',
       label: 'Context snapshot',
+      digest: inputDigests,
     }),
   );
   // hashProjectFiles has already confirmed AGENTS.md is a regular file or an in-project link.
+  // Buffer.from encodes UTF-8, the bytes that preview.2 hashed from the same text.
   if (files['AGENTS.md'])
-    files['AGENTS.md'] = hash((await readFile(join(root, 'AGENTS.md'), 'utf8')).replace(managedSection, ''));
+    files['AGENTS.md'] = inputDigests(
+      Buffer.from((await readFile(join(root, 'AGENTS.md'), 'utf8')).replace(managedSection, '')),
+    );
   for (const name of citations.filter(item => item.startsWith('specs/'))) {
     try {
-      files[name] = hash(await readFile(await safePath(root, name)));
+      files[name] = inputDigests(await readFile(await safePath(root, name)));
     } catch (error) {
       if (!['ENOENT', 'EISDIR'].includes(error.code)) throw error;
     }
   }
-  files['specs/project-context.md'] = hash(contextText);
+  files['specs/project-context.md'] = inputDigests(Buffer.from(contextText));
   return files;
 }
 
 /**
- * Save a reconciled baseline under the manifest lock and archive its predecessor.
+ * Hash the inputs that project-context.md describes: the context itself, files it cites,
+ * build/dependency/runtime declarations, CI and agent instructions. Ignored paths
+ * (.gitignore, .omnispecignore and defaults) and symlinks are skipped. The OmniSpec-managed
+ * section of AGENTS.md is excluded so adapter updates do not stale user context. Text inputs are
+ * hashed with CRLF converted to LF, so checkouts with other line endings give the same values;
+ * inputs containing a NUL byte are hashed as raw bytes.
+ * @param {string} root Project root.
+ * @returns {Promise<Object<string,string>>} Relative paths and the SHA-256 values context-record stores.
+ * @throws {Error} Missing project-context.md, unsafe paths, symlinked inputs or snapshot limits.
+ */
+export async function contextSnapshot(root) {
+  return Object.fromEntries(Object.entries(await contextDigests(root)).map(([name, { recorded }]) => [name, recorded]));
+}
+
+/**
+ * Save a reconciled baseline under the manifest lock and archive its predecessor. The baseline uses
+ * CONTEXT_SCOPE and the values of contextSnapshot.
  * @param {string} root Project root with a structurally valid context.
  * @returns {Promise<object>} Timestamped baseline; semantic truth remains reviewable.
  */
@@ -251,7 +283,7 @@ export async function recordContext(root) {
       recordedAt: new Date().toISOString(),
       scope: CONTEXT_SCOPE,
       inputs,
-      reviewScope: 'BYTE_BASELINE_AND_STRUCTURAL_LINKS_ONLY',
+      reviewScope: 'EOL_NORMALIZED_BASELINE_AND_STRUCTURAL_LINKS_ONLY',
       semanticReview: 'AGENT_OR_HUMAN_REQUIRED',
     };
     await save(root, state);
@@ -260,20 +292,32 @@ export async function recordContext(root) {
 }
 
 /**
+ * Compare the current context inputs with the recorded baseline. A CONTEXT_SCOPE baseline matches
+ * the form contextSnapshot records. A CONTEXT_INPUTS_V2 baseline, which hashed raw bytes, also
+ * matches the raw or CRLF form of a text input, so a checkout with other line endings stays current.
+ * Any other scope is a legacy full-tree baseline compared on raw bytes.
  * @param {string} root Project root.
  * @param {object|null} state Optional already validated state.
- * @returns {Promise<object>} NOT_RECORDED, CURRENT or STALE and changed paths.
+ * @returns {Promise<object>} NOT_RECORDED, CURRENT or STALE, changed paths and the baseline scope.
+ * @throws {Error} A baseline without inputs, or a failed context snapshot.
  */
 export async function contextFreshness(root, state = null) {
   state ||= await readProjectState(root);
   if (!state.context) return { status: 'NOT_RECORDED', changed: [] };
   if (!state.context.inputs || typeof state.context.inputs !== 'object')
     throw new Error('Invalid context baseline. Reconcile and run context-record.');
-  const current = await contextSnapshot(root);
+  const current = await contextDigests(root);
   const baseline = state.context.inputs;
+  const { scope } = state.context;
   // Baselines recorded before 0.7.0-rc.2 hashed every source file; compare only the
   // inputs selected today so ordinary code changes do not report stale context.
-  const legacy = state.context.scope !== CONTEXT_SCOPE;
+  const legacy = scope !== CONTEXT_SCOPE && scope !== RAW_CONTEXT_SCOPE;
+  const matches =
+    scope === CONTEXT_SCOPE
+      ? (digest, recorded) => digest.recorded === recorded
+      : scope === RAW_CONTEXT_SCOPE
+        ? (digest, recorded) => [digest.recorded, digest.raw, digest.crlf].includes(recorded)
+        : (digest, recorded) => digest.raw === recorded;
   // A legacy baseline also detects deleted inputs, but never hashed files under specs/ other
   // than project-context.md, and hashed AGENTS.md including the managed section.
   const comparable = name =>
@@ -291,7 +335,7 @@ export async function contextFreshness(root, state = null) {
     : [...new Set([...Object.keys(current), ...Object.keys(baseline)])];
   const changed = [];
   for (const name of names.sort()) {
-    if (current[name] === baseline[name]) continue;
+    if (current[name] && matches(current[name], baseline[name])) continue;
     // A legacy full-tree baseline also hashed files that are ignored today (vendor/, .gradle/).
     // Such a file only counts as changed when it was actually deleted.
     if (legacy && current[name] === undefined && (await exists(root, name))) continue;
@@ -301,7 +345,7 @@ export async function contextFreshness(root, state = null) {
     status: changed.length ? 'STALE' : 'CURRENT',
     changed,
     recordedAt: state.context.recordedAt,
-    scope: legacy ? 'LEGACY_FULL_SNAPSHOT' : CONTEXT_SCOPE,
+    scope: legacy ? 'LEGACY_FULL_SNAPSHOT' : scope,
     ...(legacy
       ? { recommendation: 'Run context-record after reviewing context to adopt the input-based baseline.' }
       : {}),

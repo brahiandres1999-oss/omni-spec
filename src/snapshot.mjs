@@ -304,12 +304,19 @@ const compareNames = (left, right) => (left < right ? -1 : left > right ? 1 : 0)
  * Ignored entries (including symlinks inside them) are never read.
  * @param {string} root Project root.
  * @param {object} options select(name) chooses files to hash; skipTop names top-level entries to skip;
- *   label names the snapshot in limit errors.
- * @returns {Promise<Map<string,string>>} Sorted map of relative path to SHA-256.
+ *   label names the snapshot in limit errors; digest(bytes) computes each value (SHA-256 hex of the
+ *   raw bytes by default).
+ * @returns {Promise<Map<string,*>>} Sorted map of relative path to digest(bytes).
  * @throws {Error} Symlinked inputs or snapshot limits.
  */
 export async function hashProjectFiles(root, options = {}) {
-  const { select = () => true, skipTop = new Set(), label = 'Snapshot', symlinks = 'reject' } = options;
+  const {
+    select = () => true,
+    skipTop = new Set(),
+    label = 'Snapshot',
+    symlinks = 'reject',
+    digest = bytes => createHash('sha256').update(bytes).digest('hex'),
+  } = options;
   const budget = options.budget || newBudget();
   const { rules: rootRules, overrides } = await rootIgnoreRules(root);
   const files = new Map();
@@ -338,12 +345,7 @@ export async function hashProjectFiles(root, options = {}) {
         if (target) {
           if (select(name)) {
             await charge(budget, target, label);
-            files.set(
-              name,
-              createHash('sha256')
-                .update(await readFile(target))
-                .digest('hex'),
-            );
+            files.set(name, digest(await readFile(target)));
           }
           continue;
         }
@@ -355,12 +357,7 @@ export async function hashProjectFiles(root, options = {}) {
       else if (entry.isFile() && select(name)) {
         const path = join(root, name);
         await charge(budget, path, label);
-        files.set(
-          name,
-          createHash('sha256')
-            .update(await readFile(path))
-            .digest('hex'),
-        );
+        files.set(name, digest(await readFile(path)));
       }
     }
   }
