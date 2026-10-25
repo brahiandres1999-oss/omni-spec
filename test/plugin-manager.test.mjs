@@ -1,12 +1,54 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, stat, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, stat, readFile, writeFile, readdir, cp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { installPlugin, getPluginStatus, cleanProject } from '../src/plugin-manager.mjs';
 import { checkProjectVersion, getCliVersion } from '../src/updater.mjs';
 import { loadManifest } from '../src/manifest.mjs';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
+
+const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+// The bundled CLI reads schema/ and LICENSE from its own package root (packageEntries in src/assets.mjs).
+const bundleItems = [
+  'plugin.json',
+  'README.md',
+  'package.json',
+  'rules',
+  'skills',
+  'agents',
+  'assets',
+  'bin',
+  'src',
+  'schema',
+  'LICENSE',
+];
+
+function runCli(bin, args, cwd, home) {
+  const result = spawnSync(process.execPath, [bin, ...args], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+    env: { ...process.env, HOME: home, USERPROFILE: home },
+  });
+  assert.ifError(result.error);
+  return result;
+}
+
+async function assertPackageFiles(dir) {
+  const schemas = await readdir(join(packageRoot, 'schema'));
+  assert.deepEqual((await readdir(join(dir, 'schema'))).sort(), schemas.sort());
+  for (const name of schemas)
+    assert.deepEqual(
+      await readFile(join(dir, 'schema', name)),
+      await readFile(join(packageRoot, 'schema', name)),
+      name,
+    );
+  assert.deepEqual(await readFile(join(dir, 'LICENSE')), await readFile(join(packageRoot, 'LICENSE')), 'LICENSE');
+}
 
 describe('OmniSpec Plugin Manager & Project Cleaner', () => {
   let tempDir;
@@ -92,6 +134,50 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
     assert.equal(statusAfter.installed, true);
     assert.equal(statusAfter.version, await getCliVersion());
     assert.equal(statusAfter.isOutdated, false);
+  });
+
+  test('the installed plugin CLI runs init and update with the files it reads from the bundle', async () => {
+    const targetDir = join(tempDir, 'plugins', 'omni-spec');
+    const home = join(tempDir, 'home');
+    const projectDir = join(tempDir, 'project');
+    await mkdir(home, { recursive: true });
+    await mkdir(projectDir, { recursive: true });
+    await installPlugin({ targetDir });
+    const bin = join(targetDir, 'bin', 'omni-spec.mjs');
+
+    const init = runCli(bin, ['init', '--yes', '--agent', 'plugin', '--lang', 'es', '--json'], projectDir, home);
+    assert.equal(init.status, 0, init.stderr);
+    assert.equal(JSON.parse(init.stdout).installation.integrity, 'PASSED');
+    await assertPackageFiles(join(projectDir, 'specs', '.omni', 'runtime'));
+
+    const update = runCli(bin, ['update', '--json'], projectDir, home);
+    assert.equal(update.status, 0, update.stderr);
+    assert.deepEqual(JSON.parse(update.stdout).assets.conflicts, []);
+  });
+
+  test('plugin bundle carries the schemas and license its CLI reads', async () => {
+    const targetDir = join(tempDir, 'plugins', 'omni-spec');
+    const result = await installPlugin({ targetDir });
+    assert.deepEqual((await readdir(targetDir)).sort(), [...bundleItems].sort());
+    assert.deepEqual(result.copied, bundleItems);
+    await assertPackageFiles(targetDir);
+  });
+
+  test('plugin install names the item and removes the incomplete plugin when a copy fails', async () => {
+    const packageCopy = join(tempDir, 'package');
+    const home = join(tempDir, 'home');
+    await mkdir(home, { recursive: true });
+    for (const item of bundleItems.filter(item => item !== 'assets'))
+      await cp(join(packageRoot, item), join(packageCopy, item), { recursive: true });
+
+    const install = runCli(join(packageCopy, 'bin', 'omni-spec.mjs'), ['plugin', 'install', '--json'], tempDir, home);
+    assert.equal(install.status, 1, install.stdout);
+    const { error } = JSON.parse(install.stderr);
+    assert.match(error, /Cannot copy assets into the Antigravity plugin: ENOENT/);
+    assert.match(error, /Removed the incomplete plugin at /);
+    const targetDir = join(home, '.gemini', 'config', 'plugins', 'omni-spec');
+    await assert.rejects(stat(targetDir), { code: 'ENOENT' });
+    assert.equal((await getPluginStatus({ targetDir })).installed, false);
   });
 
   test('cleanProject removes in-repo runtime and .agents while preserving specs', async () => {

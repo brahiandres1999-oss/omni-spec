@@ -40,6 +40,20 @@ function validatePluginBundle(targetDir) {
   };
 }
 
+/**
+ * Install the OmniSpec plugin bundle for Antigravity, replacing the directory at the target.
+ * Copies the plugin components and the files the bundled CLI reads from its package root, then runs
+ * `agy plugin validate --strict --json` when the Antigravity CLI is on PATH. The existing target
+ * directory is deleted before copying; errors from that deletion are ignored.
+ * @param {{targetDir?: string}} [options] `targetDir` defaults to {@link getPluginDir}. Other properties,
+ *   such as the CLI flags passed by `plugin install`, are ignored.
+ * @returns {Promise<{success: true, targetDir: string, version: string, copied: string[], validation: object}>}
+ *   `copied` lists every bundle item in copy order; `validation.ran` is false without the Antigravity CLI.
+ * @throws {Error} When an item cannot be copied. The incomplete target is removed first and the message says
+ *   so; if that removal fails, the message names both failures and the directory to delete. `cause` is the
+ *   copy error.
+ * @throws {Error} When the Antigravity validator rejects the bundle, which stays at the target for diagnosis.
+ */
 export async function installPlugin(options = {}) {
   const targetDir = options.targetDir || getPluginDir();
   const pluginsParent = join(targetDir, '..');
@@ -56,8 +70,20 @@ export async function installPlugin(options = {}) {
 
   await mkdir(targetDir, { recursive: true });
 
-  // Clean items required for full Antigravity Plugin and lightweight CLI execution
-  const itemsToCopy = ['plugin.json', 'README.md', 'package.json', 'rules', 'skills', 'agents', 'assets', 'bin', 'src'];
+  // Plugin components plus everything the bundled CLI reads from its package root (packageEntries in assets.mjs).
+  const itemsToCopy = [
+    'plugin.json',
+    'README.md',
+    'package.json',
+    'rules',
+    'skills',
+    'agents',
+    'assets',
+    'bin',
+    'src',
+    'schema',
+    'LICENSE',
+  ];
 
   const copied = [];
   for (const item of itemsToCopy) {
@@ -66,8 +92,15 @@ export async function installPlugin(options = {}) {
     try {
       await cp(srcPath, destPath, { recursive: true });
       copied.push(item);
-    } catch (_e) {
-      // Ignore optional missing asset
+    } catch (error) {
+      // A partial bundle would still look installed to plugin status and to the Antigravity validator.
+      let next = `Removed the incomplete plugin at ${targetDir}; fix the cause and run plugin install again.`;
+      try {
+        await rm(targetDir, { recursive: true, force: true });
+      } catch (removal) {
+        next = `Could not remove the incomplete plugin at ${targetDir} (${removal.message}); delete that directory and run plugin install again.`;
+      }
+      throw new Error(`Cannot copy ${item} into the Antigravity plugin: ${error.message}. ${next}`, { cause: error });
     }
   }
 
@@ -86,6 +119,7 @@ export async function installPlugin(options = {}) {
   };
 }
 
+/** Reinstall the plugin bundle; same options, result and errors as {@link installPlugin}. */
 export async function updatePlugin(options = {}) {
   return installPlugin(options);
 }
