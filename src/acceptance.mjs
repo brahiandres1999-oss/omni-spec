@@ -21,10 +21,12 @@ export function acceptanceSeed(type) {
 
 /**
  * Validate declared criterion coverage and typed UI evidence without executing evidence text.
+ * Each AC-n ID in the primary artifact needs one row. An RFC without AC-n IDs needs a DECISION row;
+ * an RFC with them also admits an optional DECISION row, validated like the others.
  * @param {string} root Project root.
  * @param {object} spec Active spec ID, slug and archetype.
  * @returns {Promise<object>} Reviewed declarations; evidence truth still requires review.
- * @throws {Error} Missing criteria, unresolved results or insufficient structured evidence.
+ * @throws {Error} Missing, duplicated or invented IDs, unresolved results or insufficient structured evidence.
  */
 export async function reviewAcceptance(root, spec) {
   const prefix = `specs/${spec.slug}/`;
@@ -33,6 +35,7 @@ export async function reviewAcceptance(root, spec) {
   if (spec.type === 'rfc' && !criteria.length) criteria.push('DECISION');
   if (!criteria.length)
     throw new Error('Acceptance criteria need stable AC-01-style IDs in the primary artifact before verification.');
+  const admitted = new Set(spec.type === 'rfc' ? [...criteria, 'DECISION'] : criteria);
   let report;
   try {
     report = JSON.parse(
@@ -46,9 +49,14 @@ export async function reviewAcceptance(root, spec) {
   if (![1, 2].includes(report.schemaVersion) || !Array.isArray(report.criteria))
     throw new Error('Invalid acceptance.json schemaVersion/criteria.');
   const seen = new Set();
-  for (const item of report.criteria) {
-    if (!item || typeof item.id !== 'string' || seen.has(item.id) || !criteria.includes(item.id))
-      throw new Error('Acceptance IDs must be unique and match the primary artifact; remove stale or invented rows.');
+  for (const [index, item] of report.criteria.entries()) {
+    if (!item || typeof item.id !== 'string')
+      throw new Error(`Acceptance row ${index + 1} needs a string id from ${primaryFiles[spec.type]}.`);
+    if (seen.has(item.id)) throw new Error(`Acceptance ID ${item.id} is duplicated; keep one row per criterion.`);
+    if (!admitted.has(item.id))
+      throw new Error(
+        `Acceptance ID ${item.id} is not a criterion in ${primaryFiles[spec.type]}; remove stale or invented rows.`,
+      );
     seen.add(item.id);
     if (item.status !== 'passed')
       throw new Error(
