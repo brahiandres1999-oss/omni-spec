@@ -13,7 +13,7 @@ La publicación Preview no cierra la validación. Para una futura `0.7.0` sin su
 1. Ejecutar `npm test`, `npm run test:package`, `npm run release:check` y `git diff --check`.
 2. Revisar y crear el commit con código, pruebas, workflows y documentación. Las salidas locales (`artifacts/`, `coverage/`, tarballs) están en `.gitignore` y no se versionan.
 3. Crear la etiqueta anotada correspondiente a package.json y enviarla solo después de autorización expresa. Para esta candidata sería `v0.7.0-preview.2`; no se ha creado ni enviado. No mover una etiqueta publicada para cambiar sus bytes.
-4. El workflow `release.yml` tiene configurada validación Ubuntu/Windows con Node 22.19, 22 y 24, comprueba versión/etiqueta/notas y distingue prerelease mediante sufijo. La configuración no demuestra una ejecución remota.
+4. El workflow `release.yml` tiene configurada validación Ubuntu/Windows con Node 22.19, 22, 24 y 26, comprueba versión/etiqueta/notas y distingue prerelease mediante sufijo. La configuración no demuestra una ejecución remota.
 5. La release adjunta el tarball y su SHA256 con el nombre derivado de la versión. Comprobar el resultado del workflow, no solo que exista la etiqueta.
 
 `npm run release:pack` produce los mismos tipos de artefactos localmente en `artifacts/release/`. El checksum identifica cada archivo concreto; no se promete que dos empaquetados separados tengan bytes idénticos. El workflow npm descarga y verifica el archivo concreto publicado en GitHub.
