@@ -6,6 +6,7 @@ import { writeFileAtomic } from './fs-retry.mjs';
 import { loadManifest, withManifestLock } from './manifest.mjs';
 import { auditProjectContext, citedProjectFiles } from './context-auditor.mjs';
 import { hashProjectFiles } from './snapshot.mjs';
+import { specRoute } from './fit.mjs';
 
 const file = 'specs/project-state.json';
 const capabilities = ['questions', 'web', 'terminal', 'render', 'delegation'];
@@ -14,6 +15,16 @@ export const CONTEXT_SCOPE = 'CONTEXT_INPUTS_V3';
 // in contextFreshness when that compatibility is retired.
 const RAW_CONTEXT_SCOPE = 'CONTEXT_INPUTS_V2';
 const MAX_SESSION_HISTORY = 100;
+const CLOSED = ['COMPLETED', 'CLOSED', 'SUPERSEDED'];
+// Artifacts each archetype's route requires, in reading order; mirrors auditSpec.
+const ROUTE_ARTIFACTS = {
+  feature: { primary: ['spec.md'], plan: ['plan.md'], tasks: ['tasks.md'] },
+  bugfix: { primary: ['bug.md'], plan: ['rca.md', 'fix.md'], tasks: [] },
+  debt: { primary: ['audit.md'], plan: ['migration-plan.md'], tasks: ['tasks.md'] },
+  rfc: { primary: ['rfc.md'], plan: [], tasks: [] },
+};
+// Tooling and state files status replaces: status --json --all and contracts --active.
+const AVOID_ALWAYS = ['specs/.omni/', 'specs/_templates/', 'specs/project-state.json', 'specs/contracts.json'];
 // Files that usually carry facts recorded in project-context.md: build/dependency
 // declarations, runtime pins, containers, CI and agent instructions. Source code is not a
 // context input unless the context cites it, so implementing a change does not stale context.
@@ -476,10 +487,17 @@ export async function recordDecision(root, decision) {
 
 /**
  * Derive resumable delivery state using the same closure validator as complete.
+ * Blockers, nextAction and delivery always use every decision. Unless options.all is set, the
+ * returned copy omits verification.acceptance from specs other than the active one, and the
+ * decisions whose appliesTo names only closed specs other than the active one; progress.omitted
+ * counts both. specs/manifest.json and specs/project-state.json are never written.
  * @param {string} root Project root.
- * @returns {Promise<object>} Manifest plus progress, blockers and next action.
+ * @param {{all?: boolean}} [options] all keeps every acceptance record and decision.
+ * @returns {Promise<object>} Manifest copy plus progress: delivery, blockers, nextAction, readSet
+ *   (files to read for the active spec and paths to avoid), omitted and decisions.
+ * @throws {Error} No project, invalid project state, or context freshness cannot be computed.
  */
-export async function projectStatus(root) {
+export async function projectStatus(root, { all = false } = {}) {
   const manifest = await loadManifest(root);
   if (!manifest) throw new Error('No OmniSpec project found. Run init first.');
   const state = await readProjectState(root);
@@ -506,7 +524,7 @@ export async function projectStatus(root) {
       });
   let delivery = 'NO_ACTIVE_WORK',
     nextAction = freshness.status === 'NOT_RECORDED' ? 'omni-init' : 'omni-discuss';
-  if (spec && ['COMPLETED', 'CLOSED', 'SUPERSEDED'].includes(spec.status)) delivery = spec.status;
+  if (spec && CLOSED.includes(spec.status)) delivery = spec.status;
   else if (spec) {
     delivery = spec.status;
     nextAction = 'omni-audit';
@@ -573,21 +591,84 @@ export async function projectStatus(root) {
       blockers.push({ code: 'ASSESSMENT_ERROR', message: error.message, action: 'Resolve the reported error' });
     }
   }
+  let files = [];
+  if (spec)
+    try {
+      files = await readSetFiles(root, spec);
+    } catch (error) {
+      // auditSpec already reports an unreadable fit.json with the same message.
+      if (!blockers.some(item => item.code === 'ASSESSMENT_ERROR' && item.message === error.message))
+        blockers.push({ code: 'ASSESSMENT_ERROR', message: error.message, action: 'Resolve the reported error' });
+    }
+  const readSet = {
+    files,
+    avoid: [
+      ...manifest.specs.filter(item => item.slug !== manifest.active_spec).map(item => `specs/${item.slug}/`),
+      ...(spec ? [`specs/${spec.slug}/verification.json`] : []),
+      ...AVOID_ALWAYS,
+    ],
+  };
   if (blockers.length) nextAction = blockers[0].action;
+  let specs = manifest.specs,
+    decisions = state.decisions;
+  if (!all) {
+    specs = manifest.specs.map(item => {
+      if (item.slug === manifest.active_spec || !item.verification?.acceptance) return item;
+      const { acceptance: _acceptance, ...verification } = item.verification;
+      return { ...item, verification };
+    });
+    const closed = new Set(
+      manifest.specs
+        .filter(item => item.slug !== manifest.active_spec && CLOSED.includes(item.status))
+        .flatMap(item => [item.id, item.slug]),
+    );
+    decisions = state.decisions.filter(
+      item => !item.appliesTo?.length || !item.appliesTo.every(ref => closed.has(ref)),
+    );
+  }
   return {
     ...manifest,
+    specs,
     progress: {
       delivery,
       context: freshness,
       blockers,
       nextAction,
+      readSet,
       capabilities:
         state.session?.capabilities || Object.fromEntries(capabilities.map(name => [name, { status: 'unknown' }])),
-      decisions: state.decisions,
+      omitted: {
+        acceptance: specs.filter((item, index) => item !== manifest.specs[index]).length,
+        decisions: state.decisions.length - decisions.length,
+        command: 'status --json --all',
+      },
+      decisions,
       semanticReview: 'REQUIRED',
       publication: 'NOT_AUTHORIZED_BY_STATUS',
     },
   };
+}
+
+/**
+ * List the files an agent reads for a spec: the artifacts its fit route requires, then
+ * acceptance.json and verification.md. Without fit.json, or with an invalid one, the full route
+ * applies, as in auditSpec.
+ * @param {string} root Project root.
+ * @param {object} spec Manifest entry of the active spec.
+ * @returns {Promise<string[]>} Project-relative paths under specs/<slug>/.
+ * @throws {Error} The spec type is unknown, or fit.json cannot be read (for example, a directory).
+ */
+async function readSetFiles(root, spec) {
+  if (!Object.hasOwn(ROUTE_ARTIFACTS, spec.type)) throw new Error(`Unknown spec type: ${spec.type}`);
+  const artifacts = ROUTE_ARTIFACTS[spec.type];
+  const route = await specRoute(root, spec);
+  return [
+    ...artifacts.primary,
+    ...(!route || route.artifacts.plan ? artifacts.plan : []),
+    ...(!route || route.artifacts.tasks ? artifacts.tasks : []),
+    'acceptance.json',
+    'verification.md',
+  ].map(name => `specs/${spec.slug}/${name}`);
 }
 
 async function exists(root, name) {

@@ -171,6 +171,7 @@ Usa el runtime instalado (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`
 ```sh
 # Inspección y diagnóstico
 npx omni-spec@preview status                 # Muestra el estado del proyecto y trabajo activo
+npx omni-spec@preview status --json --all    # Incluye la aceptación y las decisiones de specs cerradas
 npx omni-spec@preview doctor                 # Verifica integridad de archivos y adaptadores
 npx omni-spec@preview inspect --json         # Muestra tecnologías, módulos y comandos detectados
 
@@ -196,6 +197,7 @@ npx omni-spec@preview configure --gates "npm test"  # Gates heredados desde la r
 npx omni-spec@preview verify 001             # Ejecuta los checks y liga la evidencia a la huella
 npx omni-spec@preview complete 001           # Cierra el trabajo tras comprobar evidencia
 npx omni-spec@preview contracts              # Contratos de capacidad vigentes y propuestos
+npx omni-spec@preview contracts --active     # Solo los contratos activos, sin historial
 ```
 
 ### Qué atesta `verify`

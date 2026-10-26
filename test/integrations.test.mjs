@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { installAgentIntegrations, OMNI_SKILLS } from '../src/integrations.mjs';
+import { AGENTS, installAgentIntegrations, integrationEntries, OMNI_SKILLS } from '../src/integrations.mjs';
 let root;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omnispec-adapter-'));
@@ -99,6 +99,74 @@ test('all adapters share the nine workflows without hard-coded npm test or tool 
     assert.match(skill.instructions, /rfc\.md/);
     assert.match(skill.instructions, /specs\/\.omni\/runtime/);
   }
+});
+
+const LINK_RULE =
+  'Use document-relative Markdown links that resolve inside the project in durable documents, never file:// URLs or machine-specific absolute paths. For example, a link from specs/project-context.md to the root README is ../README.md.';
+const FINAL_RESPONSE =
+  'The final chat response must retain the same evidence category and uncertainty as the saved context: summarizing cannot turn a declared policy into a proven guarantee.';
+const commonBlock = skill =>
+  skill.instructions.slice(
+    skill.instructions.indexOf('## Project protocol'),
+    skill.instructions.indexOf('## Workflow'),
+  );
+
+test('the common block bounds the base reading and pins npx to the manifest version', async () => {
+  const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const common = commonBlock(OMNI_SKILLS[0]);
+  assert.ok(common.startsWith('## Project protocol'));
+  for (const skill of OMNI_SKILLS) {
+    assert.equal(commonBlock(skill), common, skill.name);
+    assert.ok(!skill.instructions.includes(version), skill.name);
+    assert.doesNotMatch(skill.instructions, /npx omni-spec(?!@)/, skill.name);
+  }
+  assert.ok(common.includes('"npx omni-spec@<version in specs/manifest.json> <command>"'));
+  assert.ok(common.includes('specs/.omni/runtime/bin/omni-spec.mjs'));
+  assert.ok(
+    common.includes(
+      'Read specs/manifest.json only to locate the root and its version, then run status --json before reading other project files.',
+    ),
+  );
+  assert.ok(
+    common.includes(
+      'Outside onboarding, read CONSTITUTION.md, specs/project-context.md, progress.readSet.files, the files you will change and only the cited passages the task needs; do not open progress.readSet.avoid unless this workflow or the user requires it or a decision or contract cites it.',
+    ),
+  );
+  assert.ok(
+    common.includes(
+      'Use contracts --active, or contracts <id> for a pending proposal, when the task changes a previously recorded capability.',
+    ),
+  );
+  assert.doesNotMatch(common, /Read CONSTITUTION\.md, specs\/project-context\.md and CLI status --json before acting/);
+  assert.ok(
+    common
+      .split('\n')
+      .includes('For every factual citation, read the exact supporting passage and cite the file that contains it.'),
+  );
+  assert.ok(!common.includes('document-relative'));
+  assert.ok(!common.includes(FINAL_RESPONSE));
+});
+
+test('omni-init and omni-converge carry the link rule and the final-response rule', () => {
+  for (const name of ['omni-init', 'omni-converge']) {
+    const workflow = OMNI_SKILLS.find(s => s.name === name).instructions.split('## Workflow\n')[1];
+    assert.ok(workflow.includes(LINK_RULE), name);
+    assert.ok(workflow.includes(FINAL_RESPONSE), name);
+  }
+});
+
+test('host rules pin npx to the generated version and no adapter emits an unpinned npx', () => {
+  const rules = ['AGENTS.md', '.cursor/rules/omni-spec.mdc', '.github/copilot-instructions.md'];
+  const seen = new Set();
+  for (const agent of Object.keys(AGENTS)) {
+    for (const entry of integrationEntries({ version: '1.2.3' }, { agent })) {
+      assert.doesNotMatch(entry.content, /npx omni-spec(?!@)/, `${agent}: ${entry.path}`);
+      if (!rules.includes(entry.path)) continue;
+      seen.add(entry.path);
+      assert.ok(entry.content.includes('npx omni-spec@1.2.3'), `${agent}: ${entry.path}`);
+    }
+  }
+  assert.deepEqual([...seen].sort(), [...rules].sort());
 });
 
 test('preserves user instructions outside the managed section across repeated upgrades', async () => {

@@ -8,7 +8,7 @@ import { packageEntries } from './assets.mjs';
 import { syncManagedFiles } from './managed.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
-import { QUESTIONS, TECHNOLOGY, DOCUMENTATION, SETUP, DESIGN } from './protocols.mjs';
+import { QUESTIONS, DOCUMENTATION } from './protocols.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -104,11 +104,11 @@ These profile controls are review prompts; applicability must be established for
 ${DOCUMENTATION}
 
 ### Supported technology decisions
-${TECHNOLOGY}
+Never select or pin a dependency or runtime version from memory: consult current official sources and the package registry, record the dated sources with the approval or delegation (decision-record), and prefer runtime-native APIs when they suffice. Without web access the choice stays provisional.
 
 ### Clarification and setup
 ${QUESTIONS}
-${SETUP}
+Setup, Git, the commit convention and session capabilities follow guide setup.
 
 ---
 
@@ -124,7 +124,7 @@ ${qualityGates}
 
 ## 5. UI Ergonomics & Frontend Craft (Anti-Slop)
 
-${DESIGN}
+Interface work follows guide design: references, direction, applicable states and rendered and interaction evidence. Changes without an interface do not load it.
 `;
 }
 

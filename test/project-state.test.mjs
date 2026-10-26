@@ -13,6 +13,8 @@ import {
   projectStatus,
 } from '../src/project-state.mjs';
 import { verifySpec, completeSpec, projectFingerprint } from '../src/verification.mjs';
+import { auditSpec } from '../src/auditor.mjs';
+import { focusSpec, loadManifest, saveManifest } from '../src/manifest.mjs';
 import { fillSpec } from '../test-support/fixtures.mjs';
 import { runCli } from '../src/cli.mjs';
 
@@ -180,6 +182,234 @@ test('invalid decision IDs cannot poison future state reads', async () => {
   await assert.rejects(recordDecision(root, { id: '   ', status: 'pending' }), /nonempty/);
   assert.equal(await readFile(join(root, 'specs/project-state.json'), 'utf8'), before);
   assert.equal((await projectStatus(root)).progress.decisions[0].id, 'valid');
+});
+
+async function cli(args, cwd = root) {
+  const stdout = [],
+    stderr = [],
+    log = console.log,
+    error = console.error;
+  console.log = line => stdout.push(line);
+  console.error = line => stderr.push(line);
+  try {
+    return { code: await runCli(args, cwd), stdout: stdout.join('\n'), stderr: stderr.join('\n') };
+  } finally {
+    console.log = log;
+    console.error = error;
+  }
+}
+
+const LIGHT_FIT = {
+  schemaVersion: 2,
+  reasoning: 'done',
+  files: 1,
+  modules: 1,
+  crossesContract: false,
+  ambiguity: 'none',
+  existingTests: true,
+  risk: 'low',
+  uncertainty: 'clear',
+  reversibility: 'easy',
+};
+const FITS = {
+  light: LIGHT_FIT,
+  standard: { ...LIGHT_FIT, existingTests: false },
+  full: { ...LIGHT_FIT, crossesContract: true },
+};
+const ROUTE_FILES = {
+  feature: { light: ['spec.md'], standard: ['spec.md', 'plan.md'], full: ['spec.md', 'plan.md', 'tasks.md'] },
+  bugfix: { light: ['bug.md'], standard: ['bug.md', 'rca.md', 'fix.md'], full: ['bug.md', 'rca.md', 'fix.md'] },
+  debt: {
+    light: ['audit.md'],
+    standard: ['audit.md', 'migration-plan.md'],
+    full: ['audit.md', 'migration-plan.md', 'tasks.md'],
+  },
+  rfc: { light: ['rfc.md'], standard: ['rfc.md'], full: ['rfc.md'] },
+};
+const TOOL_PATHS = ['specs/.omni/', 'specs/_templates/', 'specs/project-state.json', 'specs/contracts.json'];
+
+test('readSet lists the route artifacts of each type and auditSpec requires exactly those', async () => {
+  for (const [type, routes] of Object.entries(ROUTE_FILES)) {
+    const spec = await createSpec(root, type, `${type}-reading`);
+    await fillSpec(root, spec);
+    const fit = join(spec.specDir, 'fit.json');
+    const cases = [
+      ...Object.entries(FITS).map(([route, answers]) => [route, JSON.stringify(answers)]),
+      ['full', null],
+      ['full', '{'],
+      ['full', '{"schemaVersion":2}'],
+    ];
+    for (const [route, content] of cases) {
+      if (content === null) await rm(fit, { force: true });
+      else await writeFile(fit, content);
+      const label = `${type}, ${route}, fit.json ${content}`;
+      assert.deepEqual(
+        (await projectStatus(root)).progress.readSet.files,
+        [...routes[route], 'acceptance.json', 'verification.md'].map(name => `specs/${spec.slug}/${name}`),
+        label,
+      );
+      for (const name of routes.full) {
+        const path = join(spec.specDir, name);
+        const text = await readFile(path, 'utf8');
+        await rm(path);
+        const { errors } = await auditSpec(root, spec.id);
+        await writeFile(path, text);
+        const missing = errors.some(item => item.startsWith('Missing mandatory') && item.endsWith(`: ${name}`));
+        assert.equal(missing, routes[route].includes(name), `${label}: ${name}`);
+      }
+    }
+  }
+});
+
+test('readSet avoids other specs, the verification record and tool state, never a listed file', async () => {
+  assert.deepEqual((await projectStatus(root)).progress.readSet, { files: [], avoid: TOOL_PATHS });
+  const first = await createSpec(root, 'feature', 'first');
+  await fillSpec(root, first);
+  await verifySpec(root, first.id);
+  await completeSpec(root, first.id);
+  assert.deepEqual((await projectStatus(root)).progress.readSet, {
+    files: [],
+    avoid: [`specs/${first.slug}/`, ...TOOL_PATHS],
+  });
+  const second = await createSpec(root, 'bugfix', 'second');
+  await fillSpec(root, second);
+  const { files, avoid } = (await projectStatus(root)).progress.readSet;
+  assert.deepEqual(avoid, [`specs/${first.slug}/`, `specs/${second.slug}/verification.json`, ...TOOL_PATHS]);
+  assert.equal(files.length, 5);
+  for (const path of files)
+    for (const entry of avoid)
+      assert.ok(entry.endsWith('/') ? !path.startsWith(entry) : path !== entry, `${path} is under ${entry}`);
+});
+
+test('an unreadable fit.json or unknown type empties readSet with one assessment error, open or closed', async () => {
+  const spec = await createSpec(root, 'feature', 'unreadable-fit');
+  await fillSpec(root, spec);
+  const fit = join(spec.specDir, 'fit.json');
+  const assessment = async () => {
+    const { code, stdout } = await cli(['status', '--json']);
+    assert.equal(code, 0);
+    const status = JSON.parse(stdout);
+    assert.deepEqual(status.progress.readSet.files, []);
+    const errors = status.progress.blockers.filter(item => item.code === 'ASSESSMENT_ERROR');
+    assert.equal(errors.length, 1, JSON.stringify(status.progress.blockers));
+    return { status, error: errors[0] };
+  };
+  await mkdir(fit);
+  assert.match((await assessment()).error.message, /EISDIR/);
+  await rm(fit, { recursive: true });
+  const manifest = await loadManifest(root);
+  manifest.specs[0].type = 'mystery';
+  await saveManifest(root, manifest);
+  assert.match((await assessment()).error.message, /Unknown spec type: mystery/);
+  manifest.specs[0].type = 'feature';
+  await saveManifest(root, manifest);
+  await verifySpec(root, spec.id);
+  await completeSpec(root, spec.id);
+  await focusSpec(root, spec.id);
+  await mkdir(fit);
+  const closed = await assessment();
+  assert.match(closed.error.message, /EISDIR/);
+  assert.equal(closed.status.progress.delivery, 'COMPLETED');
+  assert.equal(closed.status.progress.nextAction, closed.error.action);
+});
+
+async function closedSpec(name) {
+  const spec = await createSpec(root, 'feature', name);
+  await fillSpec(root, spec);
+  await verifySpec(root, spec.id);
+  await completeSpec(root, spec.id);
+  return spec;
+}
+
+test('status --json omits closed work it does not need, counts it and --all returns it; files stay intact', async () => {
+  const first = await closedSpec('first');
+  const second = await closedSpec('second');
+  const open = await createSpec(root, 'feature', 'open');
+  const active = await createSpec(root, 'feature', 'active');
+  await fillSpec(root, active);
+  const decisions = [
+    { id: 'global', status: 'approved' },
+    { id: 'active', status: 'approved', appliesTo: [active.id] },
+    { id: 'first-only', status: 'approved', appliesTo: [first.slug] },
+    { id: 'both-closed', status: 'approved', appliesTo: [first.id, second.slug] },
+    { id: 'second-only', status: 'approved', appliesTo: [second.id] },
+    { id: 'mixed', status: 'approved', appliesTo: [second.id, open.id] },
+    { id: 'open', status: 'approved', appliesTo: [open.slug] },
+    { id: 'missing', status: 'approved', appliesTo: ['999'] },
+    { id: 'pending', status: 'pending', required: true, appliesTo: [active.slug] },
+  ];
+  for (const decision of decisions)
+    await recordDecision(root, { topic: 'scope', basis: 'Fixture decision for status output.', ...decision });
+  const manifestPath = join(root, 'specs', 'manifest.json');
+  const statePath = join(root, 'specs', 'project-state.json');
+  const before = [await readFile(manifestPath), await readFile(statePath)];
+  const manifest = JSON.parse(before[0]);
+  const state = JSON.parse(before[1]);
+
+  const compact = await projectStatus(root);
+  const full = await projectStatus(root, { all: true });
+  for (const closed of [first, second]) {
+    const { acceptance, ...rest } = manifest.specs.find(item => item.id === closed.id).verification;
+    assert.ok(acceptance.criteria.length);
+    assert.deepEqual(compact.specs.find(item => item.id === closed.id).verification, rest);
+    assert.deepEqual(Object.keys(rest), ['mode', 'verifiedAt', 'fingerprint']);
+  }
+  assert.deepEqual(
+    compact.progress.decisions.map(item => item.id),
+    ['global', 'active', 'mixed', 'open', 'missing', 'pending'],
+  );
+  assert.deepEqual(compact.progress.omitted, { acceptance: 2, decisions: 3, command: 'status --json --all' });
+  assert.deepEqual(full.specs, manifest.specs);
+  assert.deepEqual(full.progress.decisions, state.decisions);
+  assert.deepEqual(full.progress.omitted, { acceptance: 0, decisions: 0, command: 'status --json --all' });
+  for (const key of ['blockers', 'nextAction', 'delivery'])
+    assert.deepEqual(compact.progress[key], full.progress[key], key);
+  assert.ok(compact.progress.blockers.some(item => item.code === 'DECISION_REQUIRED' && item.id === 'pending'));
+
+  await focusSpec(root, first.id);
+  const refocused = await projectStatus(root);
+  const manifestNow = await loadManifest(root);
+  assert.deepEqual(refocused.specs.find(item => item.id === first.id).verification, manifestNow.specs[0].verification);
+  assert.equal(refocused.specs.find(item => item.id === second.id).verification.acceptance, undefined);
+  assert.deepEqual(
+    refocused.progress.decisions.map(item => item.id),
+    ['global', 'active', 'first-only', 'both-closed', 'mixed', 'open', 'missing', 'pending'],
+  );
+  assert.deepEqual(refocused.progress.omitted, { acceptance: 1, decisions: 1, command: 'status --json --all' });
+  await focusSpec(root, active.id);
+
+  const { code, stdout } = await cli(['status', '--json']);
+  assert.equal(code, 0);
+  assert.deepEqual(JSON.parse(stdout).progress.omitted, compact.progress.omitted);
+  const all = await cli(['status', '--json', '--all']);
+  assert.equal(all.code, 0);
+  assert.deepEqual(JSON.parse(all.stdout).specs, manifest.specs);
+  assert.deepEqual(JSON.parse(all.stdout).progress.omitted.decisions, 0);
+  assert.deepEqual(await readFile(manifestPath), before[0]);
+  assert.deepEqual(await readFile(statePath), before[1]);
+});
+
+test('--all is accepted only by status, inside or outside a project, and help still answers', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'omni-outside-'));
+  const manifestPath = join(root, 'specs', 'manifest.json');
+  const before = await readFile(manifestPath);
+  try {
+    for (const cwd of [root, outside])
+      for (const args of [
+        ['list', '--all'],
+        ['verify', '--all'],
+        ['contracts', '--all', '--json'],
+      ]) {
+        const result = await cli(args, cwd);
+        assert.equal(result.code, 1, args.join(' '));
+        assert.match(result.stderr, /--all is supported only by status/, args.join(' '));
+      }
+    assert.deepEqual(await readdir(outside), []);
+    assert.deepEqual(await readFile(manifestPath), before);
+    assert.equal((await cli(['help', '--all'])).code, 0);
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
 });
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');

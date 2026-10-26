@@ -76,7 +76,7 @@ export function integrationEntries(manifest, options = {}) {
   const targets = normalizeAgents(options.agent || options.ai || manifest?.agent || 'antigravity');
   const entries = [];
   const version = manifest?.version || 'unknown';
-  const rule = `<!-- OMNI-SPEC-START -->\n## OmniSpec ${version}\n${HOST_RULE}\nRun the OmniSpec CLI with \`node specs/.omni/runtime/bin/omni-spec.mjs\` (or global plugin CLI \`omni-spec\` / \`npx omni-spec\`).\n<!-- OMNI-SPEC-END -->`;
+  const rule = `<!-- OMNI-SPEC-START -->\n## OmniSpec ${version}\n${HOST_RULE}\nRun the OmniSpec CLI with \`node specs/.omni/runtime/bin/omni-spec.mjs\` (or global plugin CLI \`omni-spec\` / \`npx omni-spec@${version}\`).\n<!-- OMNI-SPEC-END -->`;
   for (const target of targets) {
     const adapter = AGENTS[target];
     if (!adapter.skills && !adapter.commands) {

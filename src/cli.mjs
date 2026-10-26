@@ -15,7 +15,7 @@ import { projectStatus, recordContext, recordSession, recordDecision } from './p
 import { loadChecks, validateChecks } from './checks.mjs';
 import { safePath } from './managed.mjs';
 import { writeFileAtomic } from './fs-retry.mjs';
-import { listContracts, readContract, updateContract } from './contracts.mjs';
+import { listContracts, readContract, updateContract, contractEffectiveSnapshot } from './contracts.mjs';
 import { fileURLToPath } from 'node:url';
 import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
 import { installationProgress } from './terminal-ui.mjs';
@@ -55,7 +55,17 @@ const valueFlags = new Set([
   'from',
   'lang',
 ]);
-const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade', 'plain']);
+const booleanFlags = new Set([
+  'yes',
+  'force',
+  'dry-run',
+  'json',
+  'accept-updates',
+  'allow-downgrade',
+  'plain',
+  'all',
+  'active',
+]);
 
 function acceptanceSummary(acceptance) {
   if (acceptance.error) return `Acceptance review failed: ${acceptance.error}`;
@@ -148,9 +158,11 @@ omni-spec <command> [arguments] [options]
   checks [--from <file|->]        List/configure reviewed checks with IDs and module cwd
     --from accepts a JSON file anywhere (relative paths resolve from the project root) or - for stdin
   contracts [id]                Inspect proposed and effective capability contracts
+    --active                    Effective active contracts only, without history
   contract-record <id> --from <file|->  Record revision with decision and expectedRevision
   create <type> <name>           feature, bugfix (bug/fix), debt, rfc (idea)
   status | list [--json]         Resume active work or list specifications
+    --all                       status --json: keep closed specs' acceptance and decisions
   focus <id|slug>                Select active work without creating duplicates
   audit [id] [--json]            Structural document checks, not code verification
   fit [id] [--json]              Read the ceremony route for a change and its questionnaire
@@ -211,6 +223,9 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
     if (flags.lang !== undefined && command !== 'init') throw new Error('--lang is supported only by init.');
     if (flags.plain && command !== 'init') throw new Error('--plain is supported only by init.');
+    if (flags.all && command !== 'status') throw new Error('--all is supported only by status.');
+    if (flags.active && (command !== 'contracts' || positionals.length))
+      throw new Error('--active is supported only by contracts without an ID.');
     const maxPositionals =
       {
         create: 2,
@@ -323,7 +338,16 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       }
       case 'contracts': {
         if (!root) throw new Error('No OmniSpec project found. Run init first.');
-        emit(positionals[0] ? await readContract(workingDir, positionals[0]) : await listContracts(workingDir));
+        if (flags.active)
+          emit(
+            (await listContracts(workingDir, { status: 'active' })).map(contract => ({
+              id: contract.id,
+              revision: contract.revision,
+              effectiveRevision: contract.effectiveRevision,
+              ...contractEffectiveSnapshot(contract),
+            })),
+          );
+        else emit(positionals[0] ? await readContract(workingDir, positionals[0]) : await listContracts(workingDir));
         return 0;
       }
       case 'create': {
@@ -341,7 +365,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const manifest = await loadManifest(workingDir);
         if (!manifest) throw new Error('No OmniSpec manifest found. Run init first.');
         if (command === 'status') {
-          const status = await projectStatus(workingDir);
+          const status = await projectStatus(workingDir, { all: flags.all });
           emit(
             status,
             `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n[DELIVERY] ${status.progress.delivery}\n[CONTEXT] ${status.progress.context.status}\n[NEXT] ${status.progress.nextAction}\n${status.progress.blockers.map(item => `[BLOCKED] ${item.code}: ${item.message || item.action}`).join('\n')}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`,
