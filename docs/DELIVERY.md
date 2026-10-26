@@ -79,6 +79,6 @@ Los checks corren bajo `specs/.omni/verify.lock`, separado del bloqueo del manif
 
 ## Git y estado local
 
-`init` y `update` mantienen una sección administrada en `specs/.gitignore` para el estado local: `specs/.omni/verification-logs/`, `backups/`, `inputs/`, bloqueos y temporales. Las especificaciones, `acceptance.json`, `verification.json`, el contexto, las decisiones, los contratos y el runtime portable siguen versionados. Las reglas propias del archivo se conservan.
+`init` y `update` mantienen una sección administrada en `specs/.gitignore` para el estado local y el runtime portable: `specs/.omni/verification-logs/`, `backups/`, `inputs/`, `runtime/`, bloqueos y temporales. `update` restaura el runtime con la versión del manifiesto. Las especificaciones, `acceptance.json`, `verification.json`, el contexto, las decisiones y los contratos siguen versionados. Las reglas propias del archivo se conservan.
 
 `clean` (modo plugin de Antigravity) elimina solo copias administradas sin modificar del runtime, las skills `omni-*` y `.agents/agents/omni-auditor.md`. Actualiza la entrada de onboarding para apuntar al plugin. Conserva agentes/skills propios y archivos no registrados; las personalizaciones bloquean el reemplazo salvo aceptación explícita con respaldo.

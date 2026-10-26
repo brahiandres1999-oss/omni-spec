@@ -72,6 +72,8 @@ La integración de Antigravity instala `.agents/agents/omni-auditor.md`, además
 
 `specs/manifest.lock/` vacío es normal: solo contiene tickets temporales mientras un comando modifica el estado y vuelve a quedar vacío al terminar. No es un archivo de configuración ni algo que deba rellenar el usuario. La exclusión de Git y el mecanismo de concurrencia se conservan; ver [locking](locking.md). `clean` retira únicamente la definición administrada del auditor junto a las skills/runtime de OmniSpec y actualiza la entrada al plugin; conserva agentes propios y archivos personalizados.
 
+`specs/.omni/runtime/` tampoco se versiona: la sección administrada de `specs/.gitignore` lo excluye, y en un clon se restaura con `npx omni-spec@<versión de specs/manifest.json> update` (no con `init`). Restaurar requiere el paquete de esa versión: normalmente del registro npm, aunque también sirven la caché de npm o un tarball local. Mientras falte, el agente puede usar `npx omni-spec@<versión>`. Una CI que ejecute `node specs/.omni/runtime/bin/omni-spec.mjs` debe restaurarlo en un paso previo. Ver [compatibilidad](COMPATIBILITY.md#actualizaciones).
+
 El siguiente bloque es el onboarding conversacional: comprender el objetivo, revisar decisiones y registrar contexto. Init no crea una aplicación, ejecuta sus scripts, comprueba su comportamiento ni publica contenido.
 
 ## Carpetas y reinstalación

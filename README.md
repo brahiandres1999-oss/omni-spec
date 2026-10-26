@@ -241,7 +241,7 @@ OmniSpec guarda el estado y los contratos en `specs/`, la constitución en la ra
     ├── checks.json             # Catálogo de checks aprobados (ID, cwd, timeout, tipo)
     ├── commands/omni-init.md    # Entrada breve a la skill; prompts completos en generic
     ├── manifest.lock/          # Tickets temporales de escritura; vacío en reposo
-    ├── .gitignore              # Sección administrada para estado local (logs, backups, inputs)
+    ├── .gitignore              # Sección administrada: estado local (logs, backups, inputs) y runtime
     ├── _templates/             # Plantillas editables por arquetipo
     ├── 001-nombre-del-trabajo/ # Espacio de trabajo de la spec activa
     │   ├── spec.md             # Requerimientos y criterios de aceptación
@@ -251,7 +251,7 @@ OmniSpec guarda el estado y los contratos en `specs/`, la constitución en la ra
     │   ├── acceptance.json     # Criterios vinculados a evidencia verificable
     │   └── verification.json   # Huella, logs y resultados ejecutados de checks
     └── .omni/
-        ├── runtime/            # Motor CLI portable independiente
+        ├── runtime/            # Motor CLI portable; no se versiona, lo restaura update
         └── inputs/             # JSON de entrada para --from (ignorado por Git)
 ```
 
@@ -269,7 +269,15 @@ npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- o
 npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec update
 ```
 
-> **Garantía de Preservación:** `update` nunca sobreescribe tu `CONSTITUTION.md`, tus especificaciones activas ni `specs/project-context.md`. Las personalizaciones en archivos gestionados bloquean la actualización hasta revisarlas; con `--accept-updates` se respaldan en `specs/.omni/backups/`. Si tu constitución difiere de la guía actual, `update` deja `specs/.omni/reference/CONSTITUTION.md` para compararla.
+`specs/.omni/runtime/` no se versiona: la sección administrada de `specs/.gitignore` lo excluye de Git. En un clon, restáuralo con la versión de `specs/manifest.json` usando `update`, no `init`:
+
+```sh
+npx omni-spec@<versión del manifiesto> update
+```
+
+Restaurar requiere el paquete de esa versión: normalmente se descarga del registro npm, pero también sirven la caché de npm o un tarball local con `npm exec --offline` como en el bloque anterior. Si tu repositorio ya versionaba el runtime, sus archivos siguen en el índice de Git hasta que ejecutes `git rm -r --cached specs/.omni/runtime` y confirmes el cambio. Ver [compatibilidad](docs/COMPATIBILITY.md#actualizaciones).
+
+> **Garantía de Preservación:** `update` nunca sobreescribe tu `CONSTITUTION.md`, tus especificaciones activas ni `specs/project-context.md`. Las personalizaciones en archivos gestionados bloquean la actualización hasta revisarlas; con `--accept-updates` se respaldan en `specs/.omni/backups/`. La excepción es un runtime local que no es de la versión del proyecto (sin `package.json` legible o con otra versión): se sustituye sin conflicto ni copia. Si tu constitución difiere de la guía actual, `update` deja `specs/.omni/reference/CONSTITUTION.md` para compararla.
 
 ---
 

@@ -2,10 +2,11 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Machine-local OmniSpec state. Specifications, acceptance/verification records, context,
-// decisions, contracts and the portable runtime stay versioned.
+// Machine-local OmniSpec state and the portable runtime, which update restores with the
+// manifest's version. Specifications, acceptance/verification records, context, decisions
+// and contracts stay versioned.
 export const SPECS_GITIGNORE = `# OMNI-SPEC-START
-# OmniSpec local state (managed section). Specs and their records remain versioned.
+# OmniSpec local state and restorable runtime (managed section). Specs and their records remain versioned.
 manifest.lock/
 *.tmp
 manifest.json.tmp.*
@@ -13,6 +14,7 @@ manifest.json.tmp.*
 .omni/verification-logs/
 .omni/backups/
 .omni/inputs/
+.omni/runtime/
 # OMNI-SPEC-END`;
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));

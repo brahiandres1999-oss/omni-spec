@@ -7,6 +7,7 @@ import { loadManifest, withManifestLock } from './manifest.mjs';
 import { auditProjectContext, citedProjectFiles } from './context-auditor.mjs';
 import { hashProjectFiles } from './snapshot.mjs';
 import { specRoute } from './fit.mjs';
+import { compareVersions, isVersion } from './versions.mjs';
 
 const file = 'specs/project-state.json';
 const capabilities = ['questions', 'web', 'terminal', 'render', 'delegation'];
@@ -486,6 +487,39 @@ export async function recordDecision(root, decision) {
 }
 
 /**
+ * Describe a CLI whose version differs from the project's (009-d4; 009-d6, cases 3 and 4).
+ * Outside plugin mode the action restores the project's version; a newer, comparable CLI also
+ * gets the upgrade path. In plugin mode update is never proposed: an older plugin gets plugin
+ * update; a newer one, one of equal precedence or a non-SemVer pair gets no command, because the
+ * global plugin is shared by every project on the machine.
+ * @param {string} cliVersion Version of the running CLI.
+ * @param {{version: string, agent?: string}} manifest Project manifest.
+ * @returns {{code: string, cliVersion: string, projectVersion: string, message: string,
+ *   action?: string, upgrade?: string}} message names both versions and the action, if any.
+ */
+function cliVersionWarning(cliVersion, manifest) {
+  const projectVersion = manifest.version;
+  const order = isVersion(cliVersion) && isVersion(projectVersion) ? compareVersions(cliVersion, projectVersion) : null;
+  const warning = { code: 'CLI_VERSION_MISMATCH', cliVersion, projectVersion };
+  let message = `CLI ${cliVersion} differs from project version ${projectVersion}.`;
+  if (manifest.agent === 'plugin') {
+    if (order === -1) {
+      warning.action = `npx omni-spec@${projectVersion} plugin update`;
+      message += ` Update the global plugin to the project's version: ${warning.action}.`;
+    } else
+      message += ` The global plugin is shared by every project on this machine; ${order === 1 ? 'downgrading' : 'changing'} it would affect all of them, so no command is proposed.`;
+  } else {
+    warning.action = `npx omni-spec@${projectVersion} update`;
+    message += ` Restore the project's version: ${warning.action}.`;
+    if (order === 1) {
+      warning.upgrade = 'update --dry-run';
+      message += ` Running update with this CLI upgrades the project to ${cliVersion}; if that is intended, review ${warning.upgrade} first.`;
+    }
+  }
+  return { ...warning, message };
+}
+
+/**
  * Derive resumable delivery state using the same closure validator as complete.
  * Blockers, nextAction and delivery always use every decision. Unless options.all is set, the
  * returned copy omits verification.acceptance from specs other than the active one, and the
@@ -493,8 +527,9 @@ export async function recordDecision(root, decision) {
  * counts both. specs/manifest.json and specs/project-state.json are never written.
  * @param {string} root Project root.
  * @param {{all?: boolean}} [options] all keeps every acceptance record and decision.
- * @returns {Promise<object>} Manifest copy plus progress: delivery, blockers, nextAction, readSet
- *   (files to read for the active spec and paths to avoid), omitted and decisions.
+ * @returns {Promise<object>} Manifest copy plus progress: delivery, blockers, nextAction, warnings
+ *   (CLI_VERSION_MISMATCH when the running CLI's version differs from the manifest's; never a
+ *   blocker), readSet (files to read for the active spec and paths to avoid), omitted and decisions.
  * @throws {Error} No project, invalid project state, or context freshness cannot be computed.
  */
 export async function projectStatus(root, { all = false } = {}) {
@@ -609,6 +644,8 @@ export async function projectStatus(root, { all = false } = {}) {
     ],
   };
   if (blockers.length) nextAction = blockers[0].action;
+  const { getCliVersion } = await import('./updater.mjs');
+  const cliVersion = await getCliVersion();
   let specs = manifest.specs,
     decisions = state.decisions;
   if (!all) {
@@ -634,6 +671,7 @@ export async function projectStatus(root, { all = false } = {}) {
       context: freshness,
       blockers,
       nextAction,
+      warnings: cliVersion === manifest.version ? [] : [cliVersionWarning(cliVersion, manifest)],
       readSet,
       capabilities:
         state.session?.capabilities || Object.fromEntries(capabilities.map(name => [name, { status: 'unknown' }])),

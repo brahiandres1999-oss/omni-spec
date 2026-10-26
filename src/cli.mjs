@@ -368,7 +368,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           const status = await projectStatus(workingDir, { all: flags.all });
           emit(
             status,
-            `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n[DELIVERY] ${status.progress.delivery}\n[CONTEXT] ${status.progress.context.status}\n[NEXT] ${status.progress.nextAction}\n${status.progress.blockers.map(item => `[BLOCKED] ${item.code}: ${item.message || item.action}`).join('\n')}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`,
+            `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n[DELIVERY] ${status.progress.delivery}\n[CONTEXT] ${status.progress.context.status}\n[NEXT] ${status.progress.nextAction}\n${status.progress.warnings.map(item => `[WARN] ${item.code}: ${item.message}\n`).join('')}${status.progress.blockers.map(item => `[BLOCKED] ${item.code}: ${item.message || item.action}`).join('\n')}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`,
           );
         } else {
           const listing = await listSpecs(workingDir);
@@ -483,18 +483,23 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'check':
       case 'doctor': {
         const check = await checkProjectVersion(workingDir);
+        const runtime =
+          check.runtime &&
+          (check.runtime.status === 'MISSING'
+            ? `[RUNTIME MISSING] specs/.omni/runtime/ is missing. Restore it: ${check.runtime.restore}`
+            : `[RUNTIME VERSION] Local runtime ${check.runtime.version ?? 'unknown'} differs from project ${check.projectVersion}. Restore it: ${check.runtime.restore}`);
         emit(
           check,
-          `[${!check.isInstalled ? 'NOT INITIALIZED' : check.healthy ? 'FILES SYNCHRONIZED' : 'NEEDS REVIEW'}] ${check.message}\n${check.integrity?.changed.join('\n') || ''}`,
+          `[${!check.isInstalled ? 'NOT INITIALIZED' : check.healthy ? 'FILES SYNCHRONIZED' : 'NEEDS REVIEW'}] ${check.message}\n${[runtime, ...(check.integrity?.changed || [])].filter(Boolean).join('\n')}`,
         );
         return check.healthy ? 0 : 1;
       }
       case 'update': {
         const result = await updateProject(workingDir, flags);
-        const { created, updated, conflicts, backups } = result.assets;
+        const { created, updated, removed, conflicts, backups } = result.assets;
         emit(
           result,
-          `[${result.dryRun ? 'DRY RUN' : 'UPDATED'}] ${result.project}: ${result.fromVersion} -> ${result.toVersion}\nFiles: ${created.length} new, ${updated.length} changed, ${conflicts.length} conflicts. Specs preserved: ${result.specsPreserved}.\n${result.dryRun ? [...created.map(p => 'CREATE ' + p), ...updated.map(p => 'UPDATE ' + p)].join('\n') : ''}\n${conflicts.map(p => 'CONFLICT ' + p).join('\n')}\n${backups.map(p => 'BACKUP ' + p).join('\n')}${result.constitution?.status === 'PRESERVED_REVIEW_RECOMMENDED' ? `\nCONSTITUTION.md preserved. Compare it with ${result.constitution.reference} to adopt current guidance.` : ''}`,
+          `[${result.dryRun ? 'DRY RUN' : 'UPDATED'}] ${result.project}: ${result.fromVersion} -> ${result.toVersion}\nFiles: ${created.length} new, ${updated.length} changed, ${removed.length} removed, ${conflicts.length} conflicts. Specs preserved: ${result.specsPreserved}.\n${result.dryRun ? [...created.map(p => 'CREATE ' + p), ...updated.map(p => 'UPDATE ' + p), ...removed.map(p => 'REMOVE ' + p)].join('\n') : ''}\n${conflicts.map(p => 'CONFLICT ' + p).join('\n')}\n${backups.map(p => 'BACKUP ' + p).join('\n')}${result.constitution?.status === 'PRESERVED_REVIEW_RECOMMENDED' ? `\nCONSTITUTION.md preserved. Compare it with ${result.constitution.reference} to adopt current guidance.` : ''}${result.notices.map(notice => `\n[NOTICE] ${notice}`).join('')}`,
         );
         return conflicts.length ? 1 : 0;
       }
