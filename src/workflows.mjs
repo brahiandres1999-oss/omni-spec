@@ -112,6 +112,7 @@ feature: author plan.md. bugfix: investigate rca.md with reproducible evidence (
 ${TECHNOLOGY}
 For interface work run guide design from the selected OmniSpec CLI to load the bundled procedure; it does not require an external skill.
 Document affected files, interfaces/data contracts or justified N/A, failure modes, verification and rollback/recovery or justified N/A. Do not impose five whys or a strangler migration when inappropriate.
+Fill Observability in plan.md or fix.md: failure signals (structured log event, error code or metric), where they are read and which acceptance criterion checks them, or N/A with reason.
 Strictly avoid speculative architecture or unrequested abstraction layers (services, repositories, DTOs, factories) when direct functions or modules fit the repository. Keep design proportional to the approved change.
 Use official documentation for new external API assumptions. Keep existing conventions unless a change is explicitly justified. Continue with tasks for implementation work; an RFC can proceed to decision review.`,
   ],

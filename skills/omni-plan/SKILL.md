@@ -46,6 +46,7 @@ Revalidate on setup, upgrades, compatibility conflicts or support expiry. Reuse 
 Use targeted primary-source research. A research subagent is optional only when supported, authorized and useful for an independent question; require exact sources, applicability and unresolved conflicts, and review its findings. Never require multiple agents or silently install a browsing service.
 For interface work run guide design from the selected OmniSpec CLI to load the bundled procedure; it does not require an external skill.
 Document affected files, interfaces/data contracts or justified N/A, failure modes, verification and rollback/recovery or justified N/A. Do not impose five whys or a strangler migration when inappropriate.
+Fill Observability in plan.md or fix.md: failure signals (structured log event, error code or metric), where they are read and which acceptance criterion checks them, or N/A with reason.
 Strictly avoid speculative architecture or unrequested abstraction layers (services, repositories, DTOs, factories) when direct functions or modules fit the repository. Keep design proportional to the approved change.
 Use official documentation for new external API assumptions. Keep existing conventions unless a change is explicitly justified. Continue with tasks for implementation work; an RFC can proceed to decision review.
 
