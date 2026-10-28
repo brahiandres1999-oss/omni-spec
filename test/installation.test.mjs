@@ -28,7 +28,13 @@ function run(args, input = '', cwd = root) {
     encoding: 'utf8',
     timeout: 15000,
     windowsHide: true,
-    env: { ...process.env, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' },
+    env: {
+      ...process.env,
+      LANG: 'en_US.UTF-8',
+      LC_ALL: 'en_US.UTF-8',
+      HOME: join(root, 'isolated-home'),
+      USERPROFILE: join(root, 'isolated-home'),
+    },
   });
   assert.ifError(result.error);
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };

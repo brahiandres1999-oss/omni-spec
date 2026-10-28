@@ -7,6 +7,7 @@ import { listProfiles } from './profiles/index.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { loadManifest } from './manifest.mjs';
 import { normalizeAgents } from './integrations.mjs';
+import { getPluginStatus } from './plugin-manager.mjs';
 import { initText } from './installation.mjs';
 import { supportsTerminalUI, TerminalInstaller } from './terminal-ui.mjs';
 
@@ -124,8 +125,18 @@ export async function promptChoice(rl, question, choices, defaultIndex = 0) {
   }
 }
 
-/** Prepare installation configuration without deciding the product or adopting candidate checks. */
-export async function runWizard(baseDir, cliOptions = {}) {
+/**
+ * Prepare installation configuration without writing project files or adopting candidate checks.
+ * @param {string} baseDir Project directory.
+ * @param {object} [cliOptions] Installer flags; yes bypasses questions, pluginDir selects the inspected plugin.
+ * @param {{input?: import('node:stream').Readable, output?: import('node:stream').Writable, env?: object}} [streams]
+ *   Interactive streams; defaults to process stdin/stdout.
+ * @returns {Promise<object|null>} Configuration, or null on explicit cancellation.
+ * @throws {Error} Invalid destination/options or input ending before confirmation.
+ */
+export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
+  const wizardInput = streams.input || input;
+  const wizardOutput = streams.output || output;
   const directory = resolve(baseDir);
   if (directory === parse(directory).root || directory === resolve(homedir()))
     throw new Error(
@@ -170,8 +181,9 @@ export async function runWizard(baseDir, cliOptions = {}) {
   // --yes here is an OmniSpec option. npx --yes is consumed before this CLI starts.
   if (cliOptions.yes) return config;
 
-  if (supportsTerminalUI(input, output, process.env, cliOptions.plain)) {
-    const ui = new TerminalInstaller(input, output, { version: cliOptions.cliVersion });
+  const terminalEnv = streams.env || process.env;
+  if (supportsTerminalUI(wizardInput, wizardOutput, terminalEnv, cliOptions.plain)) {
+    const ui = new TerminalInstaller(wizardInput, wizardOutput, { version: cliOptions.cliVersion, env: terminalEnv });
     let cancelled = false;
     try {
       if (!cliOptions.lang && !existing?.language)
@@ -212,9 +224,55 @@ export async function runWizard(baseDir, cliOptions = {}) {
         });
         agent = normalizeAgents(selected).join(',');
       }
+      const norm = normalizeAgents(agent);
+      const isNewProject = !existing;
+      if (isNewProject && norm.length === 1 && norm[0] === 'antigravity') {
+        const pluginStatus = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+        if (pluginStatus.installed) {
+          const mode = await ui.choose({
+            language,
+            step: 2,
+            title: es
+              ? 'Detectado plugin global de Antigravity. ¿Cómo deseas configurarlo?'
+              : 'Antigravity global plugin detected. How will you configure it?',
+            details: [
+              es
+                ? 'El plugin global ya está instalado en tu máquina.'
+                : 'The global plugin is already installed on your machine.',
+            ],
+            options: [
+              {
+                value: 'antigravity',
+                label: es
+                  ? 'Modo Proyecto: Instalar skills locales en .agents/skills (Recomendado para equipos)'
+                  : 'Project mode: Local skills in .agents/skills (Recommended for teams)',
+              },
+              {
+                value: 'plugin',
+                label: es
+                  ? 'Modo Plugin: Usar plugin instalado (sin generar nuevas skills locales)'
+                  : 'Plugin mode: Use installed plugin (no new local skills)',
+              },
+            ],
+            defaultValue: 'antigravity',
+          });
+          agent = mode;
+        } else {
+          agent = 'antigravity';
+        }
+      }
       const declarations = ['name', 'stack', 'doc', 'profile', 'gates']
         .filter(key => cliOptions[key] !== undefined)
         .map(key => `--${key}: ${cliOptions[key]}`);
+      if (!existing && norm.includes('antigravity') && norm.length > 1) {
+        const status = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+        if (status.installed)
+          details.push(
+            es
+              ? 'Plugin de Antigravity instalado: se conservarán las skills locales para compatibilidad con las demás herramientas.'
+              : 'Antigravity plugin installed: local skills will be kept for compatibility with other tools.',
+          );
+      }
       const warnings = (detected.warnings || []).filter(
         warning => !warning.startsWith('No quality-gate commands detected.'),
       );
@@ -246,7 +304,7 @@ export async function runWizard(baseDir, cliOptions = {}) {
     return null;
   }
 
-  const rl = createLineReader(input, output, { terminal: false });
+  const rl = createLineReader(wizardInput, wizardOutput, { terminal: false });
   try {
     if (!cliOptions.lang && !existing?.language) {
       const choice = await promptChoice(rl, 'Language / Idioma', ['English', 'Español'], language === 'es' ? 1 : 0);
@@ -268,6 +326,47 @@ export async function runWizard(baseDir, cliOptions = {}) {
         } catch (error) {
           console.log(error.message);
         }
+      }
+    }
+    const norm = normalizeAgents(agent);
+    const isNewProject = !existing;
+    if (isNewProject && norm.length === 1 && norm[0] === 'antigravity') {
+      const pluginStatus = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+      if (pluginStatus.installed) {
+        const choices = [
+          {
+            value: 'antigravity',
+            label:
+              language === 'es'
+                ? 'Modo Proyecto (skills locales en .agents/skills)'
+                : 'Project mode (local skills in .agents/skills)',
+          },
+          {
+            value: 'plugin',
+            label:
+              language === 'es'
+                ? 'Modo Plugin (sin generar nuevas skills locales)'
+                : 'Plugin mode (no new local skills)',
+          },
+        ];
+        agent = (
+          await promptChoice(
+            rl,
+            language === 'es'
+              ? 'Detectado plugin global de Antigravity. Elige modo de instalación'
+              : 'Antigravity global plugin detected. Choose installation mode',
+            choices,
+          )
+        ).value;
+      }
+    } else if (!existing && norm.includes('antigravity') && norm.length > 1) {
+      const pluginStatus = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+      if (pluginStatus.installed) {
+        console.log(
+          language === 'es'
+            ? '[INFO] Plugin de Antigravity instalado: se conservarán las skills locales para compatibilidad con las demás herramientas.'
+            : '[INFO] Antigravity plugin installed: local skills will be kept for compatibility with other tools.',
+        );
       }
     }
     console.log(`\n${t.selected}: ${agent}\n${t.pending}`);

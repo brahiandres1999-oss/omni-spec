@@ -1,18 +1,18 @@
 # Publicación e instalación de OmniSpec
 
-Versión preparada: **0.7.0-preview.2 — 0.7.0 Preview**, canal npm `preview`, prerelease en GitHub. Está pendiente de publicación. Las [notas](releases/0.7.0-preview.2.md) describen cambios, comprobaciones y límites. Publicar una Preview permite distribuirla para pruebas sin mover `latest`; guardar un commit o una rama no publica el paquete.
+Versión preparada: **0.8.0-preview.1 — 0.8.0 Preview**, canal npm `preview`, prerelease en GitHub. Está pendiente de publicación. Las [notas](releases/0.8.0-preview.1.md) describen cambios, comprobaciones y límites. Publicar una Preview permite distribuirla para pruebas sin mover `latest`; guardar un commit o una rama no publica el paquete.
 
 Comprobar cuentas, permisos y estado del registro antes de publicar. Los pasos de esta guía se ejecutan para la versión autorizada por el mantenedor. Un paquete público npm distribuye las fuentes incluidas en su tarball; la visibilidad del repositorio se administra por separado.
 
 ## Promoción posterior a versión normal
 
-La publicación Preview no cierra la validación. Para una futura `0.7.0` sin sufijo: aceptar el alcance y resultados, cambiar paquete y lockfile, usar `latest`, finalizar las notas con fecha real y generar un tarball nuevo. Una nueva Preview incrementa el sufijo (`preview.3`, `preview.4`, etc.). El tag `v0.7.0-preview.1` se conserva como intento anterior cuya CI falló; no llegó a publicar paquete npm ni GitHub prerelease.; no se reemplaza una versión ya publicada.
+La publicación Preview no cierra la validación. Para una futura `0.8.0` sin sufijo: aceptar el alcance y resultados, cambiar paquete y lockfile, usar `latest`, finalizar las notas con fecha real y generar un tarball nuevo. Una nueva Preview incrementa el sufijo (`preview.2`, `preview.3`, etc.). El tag `v0.7.0-preview.1` se conserva como intento anterior cuya CI falló; no llegó a publicar paquete npm ni GitHub prerelease.; no se reemplaza una versión ya publicada.
 
 ## Release en GitHub
 
 1. Ejecutar `npm test`, `npm run test:package`, `npm run release:check` y `git diff --check`.
 2. Revisar y crear el commit con código, pruebas, workflows y documentación. Las salidas locales (`artifacts/`, `coverage/`, tarballs) están en `.gitignore` y no se versionan.
-3. Crear la etiqueta anotada correspondiente a package.json y enviarla solo después de autorización expresa. Para esta candidata sería `v0.7.0-preview.2`; no se ha creado ni enviado. No mover una etiqueta publicada para cambiar sus bytes.
+3. Crear la etiqueta anotada correspondiente a package.json y enviarla solo después de autorización expresa. Para esta candidata sería `v0.8.0-preview.1`; no se ha creado ni enviado. No mover una etiqueta publicada para cambiar sus bytes.
 4. El workflow `release.yml` tiene configurada validación Ubuntu/Windows con Node 22.19, 22, 24 y 26, comprueba versión/etiqueta/notas y distingue prerelease mediante sufijo. La configuración no demuestra una ejecución remota.
 5. La release adjunta el tarball y su SHA256 con el nombre derivado de la versión. Comprobar el resultado del workflow, no solo que exista la etiqueta.
 
@@ -20,15 +20,15 @@ La publicación Preview no cierra la validación. Para una futura `0.7.0` sin su
 
 ## Publicación manual en npm
 
-`npx` ejecuta paquetes de npm. Antes de publicar, probar el tarball local de [PILOT](PILOT.md). Después, `npx --yes omni-spec@preview init` selecciona la Preview y `@0.7.0-preview.2` fija sus bytes por versión. `@latest` sigue seleccionando la publicación normal. No poner tokens ni credenciales en URLs.
+`npx` ejecuta paquetes de npm. Antes de publicar, probar el tarball local de [PILOT](PILOT.md). Después, `npx --yes omni-spec@preview init` selecciona la Preview y `@0.8.0-preview.1` fija sus bytes por versión. `@latest` sigue seleccionando la publicación normal. No poner tokens ni credenciales en URLs.
 
 1. Crear una cuenta en [npm](https://www.npmjs.com/signup), verificar el correo y configurar la autenticación que solicite npm para publicar. No compartir contraseña, códigos de un solo uso ni tokens con el agente.
 2. En una terminal propia ejecutar `npm login --auth-type=web --registry=https://registry.npmjs.org/` y completar el navegador. `npm whoami --registry=https://registry.npmjs.org/` confirma la identidad.
-3. Seleccionar el tarball y checksum de la versión autorizada y comprobar SHA-256. En PowerShell: `Get-FileHash ./omni-spec-0.7.0-preview.2.tgz -Algorithm SHA256`; comparar con el archivo `.sha256`.
+3. Seleccionar el tarball y checksum de la versión autorizada y comprobar SHA-256. En PowerShell: `Get-FileHash ./omni-spec-0.8.0-preview.1.tgz -Algorithm SHA256`; comparar con el archivo `.sha256`.
 4. Publicar ese archivo:
 
 ```sh
-npm publish ./omni-spec-0.7.0-preview.2.tgz --tag preview --access public --registry=https://registry.npmjs.org/
+npm publish ./omni-spec-0.8.0-preview.1.tgz --tag preview --access public --registry=https://registry.npmjs.org/
 ```
 
 5. Completar la autenticación adicional que npm solicite. Comprobar versión e integridad exactas con npm view y probar el comando por nombre en un proyecto desechable.
@@ -47,13 +47,13 @@ El workflow existe pero no se ejecuta al crear una release: se inicia manualment
 
 La generación automática de provenance de npm tiene requisitos propios, entre ellos la visibilidad del repositorio; comprobarlos para la publicación concreta. Publicación, checksum y provenance son comprobaciones distintas.
 
-Mantener versión y canal alineados: `0.7.0-preview.N` → `preview`; otras prereleases → `next`; versiones normales → `latest`. Para cada versión actualizar paquete, lockfile, README/banner, changelog y `docs/releases/<version>.md`. `release:check` rechaza inconsistencias. Las publicaciones npm no permiten reutilizar nombre/versión.
+Mantener versión y canal alineados: `0.8.0-preview.N` → `preview`; otras prereleases → `next`; versiones normales → `latest`. Para cada versión actualizar paquete, lockfile, README/banner, changelog y `docs/releases/<version>.md`. `release:check` rechaza inconsistencias. Las publicaciones npm no permiten reutilizar nombre/versión.
 
 ## Uso desde npm una vez publicado
 
 ```sh
 # Sin instalación global
-npx --yes omni-spec@0.7.0-preview.2 init --yes --agent antigravity
+npx --yes omni-spec@0.8.0-preview.1 init --yes --agent antigravity
 
 # CLI global opcional; no inicializa todos los proyectos automáticamente
 npm install --global omni-spec@preview
@@ -67,14 +67,14 @@ Cada `init` copia el runtime al proyecto. La instalación global solo facilita e
 Abrir la raíz del proyecto destino. Una vez disponible la versión en npm:
 
 ```sh
-npx --yes omni-spec@0.7.0-preview.2 update --dry-run
-npx --yes omni-spec@0.7.0-preview.2 update
+npx --yes omni-spec@0.8.0-preview.1 update --dry-run
+npx --yes omni-spec@0.8.0-preview.1 update
 ```
 
 Antes de publicar en npm, utilizar una copia del código o su tarball local:
 
 ```sh
-npx --yes --package="/ruta/al/omni-spec-0.7.0-preview.2.tgz" omni-spec update --dry-run
+npx --yes --package="/ruta/al/omni-spec-0.8.0-preview.1.tgz" omni-spec update --dry-run
 ```
 
 Después de revisar, repetir sin `--dry-run`. Se conservan contexto, constitución, especificaciones y selección de agente. Archivos administrados personalizados bloquean la operación; `--accept-updates` acepta su reemplazo con copia de respaldo después de revisar conflictos. Recargar el agente después de actualizar skills/comandos.
@@ -83,13 +83,13 @@ Actualizar el CLI global (`npm install -g omni-spec@preview`) no actualiza las c
 
 ### Copias locales de 0.7.0-rc.1 o rc.2
 
-SemVer ordena `preview.2` antes que `rc.1`/`rc.2` dentro de 0.7.0. Por eso pasar de esas candidatas locales a la Preview actual se informa como downgrade de versión, aunque la Preview incluya cambios posteriores. No reinicializar ni desactivar esa comprobación silenciosamente. Con el CLI de la Preview, revisar explícitamente:
+SemVer ordena `0.8.0-preview.1` después de `0.7.0-rc.1` y `rc.2`: pasar de esas candidatas locales a la Preview actual es una subida de versión y no requiere `--allow-downgrade`. Con el CLI de la Preview, revisar:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec update --allow-downgrade --dry-run
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- omni-spec update --dry-run
 ```
 
-Si la revisión es correcta, repetir con `--allow-downgrade` y sin `--dry-run`. Se conservan contexto, configuración y especificaciones; las personalizaciones administradas siguen sujetas a revisión/respaldo. Desde 0.6.1 no hace falta esa opción.
+Si la revisión es correcta, repetir sin `--dry-run`. Se conservan contexto, configuración y especificaciones; las personalizaciones administradas siguen sujetas a revisión/respaldo. Desde 0.6.1 tampoco hace falta `--allow-downgrade`.
 
 ### Copias de desarrollo que ya dicen 0.5.0
 

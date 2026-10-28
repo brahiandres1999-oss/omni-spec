@@ -488,9 +488,12 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           (check.runtime.status === 'MISSING'
             ? `[RUNTIME MISSING] specs/.omni/runtime/ is missing. Restore it: ${check.runtime.restore}`
             : `[RUNTIME VERSION] Local runtime ${check.runtime.version ?? 'unknown'} differs from project ${check.projectVersion}. Restore it: ${check.runtime.restore}`);
+        const coexistence = check.pluginCoexistence
+          ? `[WARN] Coexistencia de plugin: ${check.pluginCoexistence.message}`
+          : null;
         emit(
           check,
-          `[${!check.isInstalled ? 'NOT INITIALIZED' : check.healthy ? 'FILES SYNCHRONIZED' : 'NEEDS REVIEW'}] ${check.message}\n${[runtime, ...(check.integrity?.changed || [])].filter(Boolean).join('\n')}`,
+          `[${!check.isInstalled ? 'NOT INITIALIZED' : check.healthy ? 'FILES SYNCHRONIZED' : 'NEEDS REVIEW'}] ${check.message}\n${[runtime, coexistence, ...(check.integrity?.changed || [])].filter(Boolean).join('\n')}`,
         );
         return check.healthy ? 0 : 1;
       }
@@ -521,17 +524,23 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'plugin': {
         const sub = positionals[0] || 'status';
         if (sub === 'install') {
-          const res = await installPlugin(flags);
+          const res = await installPlugin({ ...flags, projectDir: root || undefined });
+          const coexistence = res.pluginCoexistence
+            ? `\n[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`
+            : '';
           emit(
             res,
-            `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nReload the host if needed and confirm skill discovery; file installation does not establish host behavior.`,
+            `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nReload the host if needed and confirm skill discovery; file installation does not establish host behavior.${coexistence}`,
           );
           return 0;
         } else if (sub === 'update' || sub === 'upgrade') {
-          const res = await updatePlugin(flags);
+          const res = await updatePlugin({ ...flags, projectDir: root || undefined });
+          const coexistence = res.pluginCoexistence
+            ? `\n[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`
+            : '';
           emit(
             res,
-            `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at:\n${res.targetDir}\nFiles updated: ${res.copied.join(', ')}`,
+            `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at:\n${res.targetDir}\nFiles updated: ${res.copied.join(', ')}${coexistence}`,
           );
           return 0;
         } else if (sub === 'status') {

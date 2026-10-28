@@ -1,13 +1,13 @@
 # Instalación y primera entrega al agente
 
-Este contrato corresponde a [0.7.0 Preview](releases/0.7.0-preview.2.md), versión `0.7.0-preview.2`, en preparación para publicación. Se distribuirá mediante el canal npm `preview`; no sustituye a la versión normal en `latest`. Para probar los bytes actuales utiliza el tarball de [PILOT](PILOT.md); `latest` todavía corresponde a 0.6.1 (consultado el 2026-10-23).
+Este contrato corresponde a [0.8.0 Preview](releases/0.8.0-preview.1.md), versión `0.8.0-preview.1`, en preparación para publicación. Se distribuirá mediante el canal npm `preview`; no sustituye a la versión normal en `latest`. Para probar los bytes actuales utiliza el tarball de [PILOT](PILOT.md); `latest` todavía corresponde a 0.6.1 (consultado el 2026-10-28).
 
 ## Punto de entrada
 
 Para el candidato actual, desde la carpeta destino:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec init
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- omni-spec init
 ```
 
 Con Node.js >=22.19.0, abre una terminal en la carpeta del proyecto y, cuando la Preview esté publicada, ejecuta:

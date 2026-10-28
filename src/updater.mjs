@@ -5,6 +5,7 @@ import { packageEntries } from './assets.mjs';
 import { syncManagedFiles, checkManagedFiles, loadRegistry, managedSection, safePath } from './managed.mjs';
 import { ensureProjectContext, buildConstitutionContent } from './generator.mjs';
 import { join } from 'node:path';
+import { detectPluginCoexistence } from './plugin-manager.mjs';
 
 const CONSTITUTION_REFERENCE = 'specs/.omni/reference/CONSTITUTION.md';
 const RUNTIME = 'specs/.omni/runtime/';
@@ -68,12 +69,13 @@ async function runtimeIgnoreAdded(baseDir) {
  * summarizes the state with its restore command (009-d3). An incomplete runtime of the manifest's
  * version keeps its paths listed. healthy uses the complete integrity, so it does not change.
  * @param {string} baseDir Project root.
+ * @param {{targetDir?: string}} [options] Optional plugin directory for isolated diagnosis.
  * @returns {Promise<object>} isInstalled, cliVersion, projectVersion, isOutdated, healthy and
  *   message; once initialized also project, integrity {tracked, changed, missing} and, when
- *   applicable, runtime {status, version, restore}.
+ *   applicable, runtime {status, version, restore} and pluginCoexistence diagnosis.
  * @throws {Error} Invalid manifest or registry, unsafe or symlinked path, or an unreadable file.
  */
-export async function checkProjectVersion(baseDir) {
+export async function checkProjectVersion(baseDir, options = {}) {
   const manifest = await loadManifest(baseDir);
   const cliVersion = await getCliVersion();
   if (!manifest)
@@ -98,6 +100,7 @@ export async function checkProjectVersion(baseDir) {
     if (version !== manifest.version) runtime = { status: 'VERSION_MISMATCH', version };
   }
   const reported = name => !runtime || !name.startsWith(RUNTIME);
+  const pluginCoexistence = await detectPluginCoexistence(baseDir, options);
   return {
     isInstalled: true,
     project: manifest.project,
@@ -111,6 +114,7 @@ export async function checkProjectVersion(baseDir) {
       missing: integrity.missing.filter(reported),
     },
     ...(runtime && !isPlugin ? { runtime: { ...runtime, restore: `npx omni-spec@${manifest.version} update` } } : {}),
+    ...(pluginCoexistence ? { pluginCoexistence } : {}),
     message: isOutdated
       ? 'Version differs. Review update --dry-run.'
       : healthy
