@@ -276,6 +276,7 @@ export async function _initManifestUnlocked(baseDir, options = {}) {
     active_archetype: existing?.active_archetype || null,
     specs: existing && Array.isArray(existing.specs) ? existing.specs : [],
   };
+  if (options.ui !== undefined) manifest.ui = options.ui;
 
   return saveManifest(baseDir, manifest);
 }

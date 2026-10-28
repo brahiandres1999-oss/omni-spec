@@ -88,6 +88,7 @@ export async function installPlugin(options = {}) {
     'bin',
     'src',
     'schema',
+    'companions',
     'LICENSE',
   ];
 

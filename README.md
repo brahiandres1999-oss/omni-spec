@@ -63,7 +63,9 @@ npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- o
 # También admite --agent cursor,claude o --agent all.
 ```
 
-Los argumentos `--name`, `--stack`, `--doc`, `--profile` y `--gates` permiten conservar decisiones explícitas sin repetir preguntas. Sin una integración declarada en modo automático se utiliza `generic`, con prompts de lectura explícita. [Todas las variantes de instalación y recuperación](docs/INSTALLATION.md).
+Los argumentos `--name`, `--stack`, `--doc`, `--profile`, `--gates`, `--ui-companion` y `--ui-components` permiten conservar decisiones explícitas sin repetir preguntas. Sin una integración declarada en modo automático se utiliza `generic`, con prompts de lectura explícita. [Todas las variantes de instalación y recuperación](docs/INSTALLATION.md).
+
+Los companions `better` y `frontend-design` aportan guías de diseño empaquetadas. Los archivos del companion activo se administran con OmniSpec; al cambiar de companion se conservan las personalizaciones anteriores como archivos propios. Consulta la [selección, actualización y conservación de companions](docs/INSTALLATION.md#companions-de-interfaz).
 
 ### 2. Reconoce el proyecto desde el chat
 
@@ -292,6 +294,7 @@ La próxima publicación es **0.8.0 Preview** (`0.8.0-preview.1`, canal `preview
 ## Documentación
 
 - [0.8.0 Preview: estado, cambios y límites](docs/releases/0.8.0-preview.1.md)
+- [Próximas entregas: presets y avisos de actualización pendientes](docs/ROADMAP.md)
 - [Publicada: 0.7.0-preview.2](docs/releases/0.7.0-preview.2.md) · [Historial de candidatas: 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [Publicada: 0.6.1](docs/releases/0.6.1.md)
 - [Piloto local con el paquete exacto](docs/PILOT.md)
 - [Instalación, automatización y recuperación](docs/INSTALLATION.md)
@@ -308,3 +311,5 @@ La próxima publicación es **0.8.0 Preview** (`0.8.0-preview.1`, canal `preview
 ## Licencia
 
 MIT © [OmniSpec Authors](LICENSE)
+
+El catálogo de companions de interfaz incluye material de terceros distribuido bajo sus licencias originales: guías `better-*` de Jakub Krehel (MIT) y `frontend-design` de Anthropic (Apache-2.0). Consulta `LICENSE` en `specs/.omni/companions/better/`, `LICENSE.txt` en `specs/.omni/companions/frontend-design/` y el `ATTRIBUTION.md` de cada companion para detalles de atribución y sumas de verificación SHA-256.

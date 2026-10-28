@@ -302,6 +302,7 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
     assert.deepEqual(design.match(/^## .+$/gm), [
       '## Antes de dibujar',
       '## Contrato de diseño proporcional',
+      '## UI companion',
       '## Contrato de dirección de arte (antes de programar)',
       '## De la pantalla al recorrido',
       '## Evidencia de aceptación v2',

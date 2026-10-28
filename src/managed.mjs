@@ -87,8 +87,8 @@ export async function saveRegistry(root, registry) {
  * @param {Array<{path: string, content: string, section?: 'hash'|boolean, replace?: boolean}>} entries
  *   Files to install. section manages only the marked part of a user-owned file; replace overwrites
  *   a differing file without treating it as a local edit (no conflict, no backup).
- * @param {{dryRun?: boolean, acceptUpdates?: boolean, prune?: string}} [options] prune is a path
- *   prefix: registry entries under it that are not in entries are removed. Their files are deleted
+ * @param {{dryRun?: boolean, acceptUpdates?: boolean, prune?: string|string[]}} [options] prune is a path
+ *   prefix or list of prefixes: registry entries under any prefix that are not in entries are removed. Their files are deleted
  *   when they still match the registered fingerprint and kept when edited. A key that differs from
  *   an entry only in letter case loses its registry entry but never its file, which a
  *   case-insensitive file system shares with that entry. Keys with backslashes, empty segments or
@@ -134,11 +134,12 @@ export async function syncManagedFiles(root, entries, options = {}) {
   }
   const orphans = [];
   if (options.prune) {
+    const prefixes = [].concat(options.prune);
     const installed = new Set(actions.map(action => action.name));
     // On case-insensitive file systems a key that differs only in case names an installed file.
     const shipped = new Set(actions.map(action => action.name.toLowerCase()));
     for (const [name, digest] of Object.entries(registry.files)) {
-      if (!name.startsWith(options.prune) || installed.has(name) || !plainKey(name)) continue;
+      if (!prefixes.some(p => name.startsWith(p)) || installed.has(name) || !plainKey(name)) continue;
       const path = await safePath(root, name);
       const content = shipped.has(name.toLowerCase()) ? null : await optionalRead(path);
       orphans.push({

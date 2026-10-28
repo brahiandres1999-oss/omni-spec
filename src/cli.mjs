@@ -54,6 +54,8 @@ const valueFlags = new Set([
   'timeout',
   'from',
   'lang',
+  'ui-companion',
+  'ui-components',
 ]);
 const booleanFlags = new Set([
   'yes',
@@ -102,6 +104,8 @@ function parse(args) {
   flags.dryRun = flags['dry-run'];
   flags.acceptUpdates = flags['accept-updates'];
   flags.allowDowngrade = flags['allow-downgrade'];
+  flags.uiCompanion = flags['ui-companion'];
+  flags.uiComponents = flags['ui-components'];
   if (flags.timeout !== undefined) {
     flags.timeout = Number(flags.timeout);
     if (!Number.isSafeInteger(flags.timeout) || flags.timeout < 100 || flags.timeout > 3600000)
@@ -181,11 +185,11 @@ omni-spec <command> [arguments] [options]
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
   help | version
 
-init options: --name --stack --doc --profile --gates --agent (alias --ai)
+init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-companion --ui-components
   --lang en|es sets the installation language; one workflow for every experience level.
   --plain disables terminal UI; pipes, TERM=dumb, CI and JSON retain plain output.
   Interactive UI: arrows to move, Space to select tools, Ctrl+A for all, Enter to continue, Esc/Ctrl+C to cancel.
-  init asks only language, AI tool and destination confirmation; engineering decisions follow in chat.
+  init asks language, AI tool, UI choices when detected, and destination confirmation; engineering decisions follow in chat.
   For automation: init --yes --agent <name> --lang en (generic when no tool is selected).
   npx --yes omni-spec@latest init still opens OmniSpec's installer; npx owns that --yes.
   --force explicitly replaces constitution/templates; existing specs are preserved.
@@ -223,6 +227,10 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
     if (flags.lang !== undefined && command !== 'init') throw new Error('--lang is supported only by init.');
     if (flags.plain && command !== 'init') throw new Error('--plain is supported only by init.');
+    if (flags.uiCompanion !== undefined && command !== 'init')
+      throw new Error('--ui-companion is supported only by init.');
+    if (flags.uiComponents !== undefined && command !== 'init')
+      throw new Error('--ui-components is supported only by init.');
     if (flags.all && command !== 'status') throw new Error('--all is supported only by status.');
     if (flags.active && (command !== 'contracts' || positionals.length))
       throw new Error('--active is supported only by contracts without an ID.');

@@ -10,6 +10,20 @@ La publicación Preview no cierra la validación. Para una futura `0.8.0` sin su
 
 ## Release en GitHub
 
+### Ruta de integración de 0.8.0-preview.1
+
+1. Revisar el diff de la candidata en `next/0.8`, actualizar notas y roadmap y ejecutar los controles locales. Los trabajos 015/016 permanecen para otra entrega del mismo paquete.
+2. Crear un commit con Conventional Commits y enviarlo a `origin/next/0.8`. Abrir un PR con base `main` y comparar el contenido completo de la rama; el PR conserva los límites de aceptación pendientes.
+3. Comprobar la CI del último commit del PR antes de integrarlo. Un PR en borrador permite dejar preparado el cambio mientras falten revisiones o autenticación. Conservar `next/0.8` para continuar el desarrollo.
+4. Después de integrar, comprobar el commit exacto de `main` y su CI. Crear `v0.8.0-preview.1` sobre ese commit validado; no etiquetar una copia local distinta.
+5. Comprobar que el workflow `Release` termina correctamente y publica la prerelease de GitHub con tarball y SHA-256.
+6. Ejecutar manualmente `Publish npm (configured trusted publisher required)` desde Actions con esa etiqueta. npm debe tener configurado el Trusted Publisher del repositorio y `publish-npm.yml`. Como alternativa, el mantenedor puede publicar el mismo tarball mediante el flujo manual descrito abajo.
+7. Verificar la versión, integridad y canal en npm y probar una instalación desechable por versión exacta. La publicación en `preview` conserva `latest`; promover a estable es una decisión posterior.
+
+La observación de interacción de coexistencia y los recorridos en hosts reales se registran separadamente de la CI. Publicar una Preview no permite declararlos aprobados ni cerrar criterios pendientes sin evidencia.
+
+### Procedimiento y artefactos
+
 1. Ejecutar `npm test`, `npm run test:package`, `npm run release:check` y `git diff --check`.
 2. Revisar y crear el commit con código, pruebas, workflows y documentación. Las salidas locales (`artifacts/`, `coverage/`, tarballs) están en `.gitignore` y no se versionan.
 3. Crear la etiqueta anotada correspondiente a package.json y enviarla solo después de autorización expresa. Para esta candidata sería `v0.8.0-preview.1`; no se ha creado ni enviado. No mover una etiqueta publicada para cambiar sus bytes.

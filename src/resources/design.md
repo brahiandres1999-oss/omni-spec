@@ -14,6 +14,10 @@ Registra tarea, contenido/muestra permitida, jerarquía de información, densida
 
 En una interfaz sustancial e incierta, implementa primero una pantalla o recorrido representativo con contenido largo y un estado exigente. Enséñalo para resolver preferencias materiales pendientes; conserva decisiones previas o delegación, sin pedir aprobación repetida. Un ajuste pequeño puede seguir directamente a implementación y comprobación.
 
+## UI companion
+
+Si `specs/manifest.json` declara un `ui.companion` distinto de `none`, consulta `specs/.omni/companions/<ui.companion>/INDEX.md` antes de definir la dirección de arte y lee únicamente los archivos que señale para la superficie de trabajo. Registra en el plan los archivos consultados. La constitución del proyecto y esta guía prevalecen sobre cualquier heurística del companion: no inducen código defensivo, enmascaramiento de errores ni estados artificiales. El consejo de un companion orienta el diseño, pero no sustituye la comprobación ni la evidencia de aceptación exigida por el criterio.
+
 ## Contrato de dirección de arte (antes de programar)
 
 Registra estas decisiones en el plan antes de escribir la interfaz. Los ejemplos usan términos web; en otras plataformas aplica sus equivalentes nativos (estados de interacción, curvas de animación, ajustes de accesibilidad del sistema).
