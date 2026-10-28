@@ -1,9 +1,10 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, symlink, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { initManifest, addSpec, loadManifest, saveManifest } from '../src/manifest.mjs';
+import { runCli } from '../src/cli.mjs';
 import {
   readContracts,
   readContract,
@@ -213,6 +214,75 @@ test('tampered history is rejected rather than reset or silently overwritten', a
     /history delta/,
   );
   assert.equal(await readFile(join(root, 'specs/contracts.json'), 'utf8'), bytes);
+});
+
+async function cli(args, cwd = root) {
+  const stdout = [],
+    stderr = [],
+    log = console.log,
+    error = console.error;
+  console.log = line => stdout.push(line);
+  console.error = line => stderr.push(line);
+  try {
+    return { code: await runCli(args, cwd), stdout: stdout.join('\n'), stderr: stderr.join('\n') };
+  } finally {
+    console.log = log;
+    console.error = error;
+  }
+}
+
+test('contracts --active lists effective active snapshots, not pending proposals or history', async () => {
+  await markSourceComplete();
+  const accepted = proposal({ status: 'active', evidence: ['AC-01'] });
+  await updateContract(root, 'account.preferences', accepted, { expectedRevision: 0 });
+  const pending = await addSpec(root, {
+    id: '002',
+    type: 'feature',
+    title: 'Proposed revision',
+    slug: '002-revision',
+    status: 'IN_PROGRESS',
+  });
+  await updateContract(
+    root,
+    'account.preferences',
+    {
+      status: 'proposed',
+      sourceSpec: pending.id,
+      scope: 'Proposed support access.',
+      decision: 'Explore it.',
+      evidence: [],
+    },
+    { expectedRevision: 1 },
+  );
+  await updateContract(root, 'billing.export', proposal({ capability: 'Export invoices' }), { expectedRevision: 0 });
+  await updateContract(root, 'legacy.import', proposal({ status: 'active', evidence: ['AC-02'] }), {
+    expectedRevision: 0,
+  });
+  await updateContract(root, 'legacy.import', { status: 'retired', decision: 'Replaced.' }, { expectedRevision: 1 });
+  const { code, stdout } = await cli(['contracts', '--active', '--json']);
+  assert.equal(code, 0);
+  assert.deepEqual(JSON.parse(stdout), [{ id: 'account.preferences', revision: 2, effectiveRevision: 1, ...accepted }]);
+});
+
+test('--active is accepted only by contracts without an ID, inside or outside a project', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'omni-outside-'));
+  const manifest = join(root, 'specs', 'manifest.json');
+  const before = await readFile(manifest);
+  try {
+    for (const cwd of [root, outside])
+      for (const args of [
+        ['status', '--active', '--json'],
+        ['contracts', 'account.preferences', '--active'],
+      ]) {
+        const result = await cli(args, cwd);
+        assert.equal(result.code, 1, args.join(' '));
+        assert.match(result.stderr, /--active is supported only by contracts without an ID/, args.join(' '));
+      }
+    assert.deepEqual(await readdir(outside), []);
+    assert.deepEqual(await readFile(manifest), before);
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
 });
 
 test('symlinked registry is refused without reading or overwriting its target', async t => {

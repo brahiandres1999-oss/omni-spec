@@ -4,9 +4,11 @@ import { basename, resolve, parse } from 'node:path';
 import { homedir } from 'node:os';
 import { lstat } from 'node:fs/promises';
 import { listProfiles } from './profiles/index.mjs';
-import { detectProjectEnvironment } from './detector.mjs';
+import { detectProjectEnvironment, UI_COMPONENT_KITS } from './detector.mjs';
+import { UI_COMPANIONS } from './assets.mjs';
 import { loadManifest } from './manifest.mjs';
 import { normalizeAgents } from './integrations.mjs';
+import { getPluginStatus } from './plugin-manager.mjs';
 import { initText } from './installation.mjs';
 import { supportsTerminalUI, TerminalInstaller } from './terminal-ui.mjs';
 
@@ -124,8 +126,21 @@ export async function promptChoice(rl, question, choices, defaultIndex = 0) {
   }
 }
 
-/** Prepare installation configuration without deciding the product or adopting candidate checks. */
-export async function runWizard(baseDir, cliOptions = {}) {
+/**
+ * Prepare installation configuration without writing project files or adopting candidate checks.
+ * @param {string} baseDir Project directory.
+ * @param {object} [cliOptions] Installer flags; yes bypasses questions, pluginDir selects the inspected plugin.
+ *   uiCompanion and uiComponents override the corresponding saved UI selections; without flags,
+ *   saved selections are preserved. New UI questions require a detected UI signal.
+ * @param {{input?: import('node:stream').Readable, output?: import('node:stream').Writable, env?: object}} [streams]
+ *   Interactive streams; defaults to process stdin/stdout.
+ * @returns {Promise<object|null>} Configuration including ui: {companion, components} when selected
+ *   by flags, saved configuration or interactive answers; null on explicit cancellation.
+ * @throws {Error} Invalid destination/options or input ending before confirmation.
+ */
+export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
+  const wizardInput = streams.input || input;
+  const wizardOutput = streams.output || output;
   const directory = resolve(baseDir);
   if (directory === parse(directory).root || directory === resolve(homedir()))
     throw new Error(
@@ -138,6 +153,27 @@ export async function runWizard(baseDir, cliOptions = {}) {
   const validProfiles = listProfiles().map(p => p.id);
   if (cliOptions.profile && !validProfiles.includes(cliOptions.profile))
     throw new Error(`Invalid profile "${cliOptions.profile}". Valid profiles: ${validProfiles.join(', ')}`);
+
+  const validComponents = [...UI_COMPONENT_KITS, 'none'];
+  if (cliOptions.uiCompanion !== undefined && !UI_COMPANIONS.includes(cliOptions.uiCompanion))
+    throw new Error(`Invalid --ui-companion "${cliOptions.uiCompanion}". Valid values: ${UI_COMPANIONS.join(', ')}`);
+  if (cliOptions.uiComponents !== undefined && !validComponents.includes(cliOptions.uiComponents))
+    throw new Error(
+      `Invalid --ui-components "${cliOptions.uiComponents}". Valid values: ${validComponents.join(', ')}`,
+    );
+
+  const defaultKit = detected.ui?.declaredComponents?.[0] || 'none';
+  const defaultCompanion = 'none';
+  let uiConfig = null;
+  const hasUiFlags = cliOptions.uiCompanion !== undefined || cliOptions.uiComponents !== undefined;
+  if (hasUiFlags) {
+    uiConfig = {
+      companion: cliOptions.uiCompanion ?? existing?.ui?.companion ?? defaultCompanion,
+      components: cliOptions.uiComponents ?? existing?.ui?.components ?? defaultKit,
+    };
+  } else if (existing?.ui) {
+    uiConfig = existing.ui;
+  }
 
   const locale =
     process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || Intl.DateTimeFormat().resolvedOptions().locale;
@@ -168,10 +204,11 @@ export async function runWizard(baseDir, cliOptions = {}) {
     explicitGates: cliOptions.gates !== undefined,
   };
   // --yes here is an OmniSpec option. npx --yes is consumed before this CLI starts.
-  if (cliOptions.yes) return config;
+  if (cliOptions.yes) return { ...config, ...(uiConfig ? { ui: uiConfig } : {}) };
 
-  if (supportsTerminalUI(input, output, process.env, cliOptions.plain)) {
-    const ui = new TerminalInstaller(input, output, { version: cliOptions.cliVersion });
+  const terminalEnv = streams.env || process.env;
+  if (supportsTerminalUI(wizardInput, wizardOutput, terminalEnv, cliOptions.plain)) {
+    const ui = new TerminalInstaller(wizardInput, wizardOutput, { version: cliOptions.cliVersion, env: terminalEnv });
     let cancelled = false;
     try {
       if (!cliOptions.lang && !existing?.language)
@@ -212,9 +249,146 @@ export async function runWizard(baseDir, cliOptions = {}) {
         });
         agent = normalizeAgents(selected).join(',');
       }
+      const norm = normalizeAgents(agent);
+      const isNewProject = !existing;
+      if (isNewProject && norm.length === 1 && norm[0] === 'antigravity') {
+        const pluginStatus = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+        if (pluginStatus.installed) {
+          const mode = await ui.choose({
+            language,
+            step: 2,
+            title: es
+              ? 'Detectado plugin global de Antigravity. ¿Cómo deseas configurarlo?'
+              : 'Antigravity global plugin detected. How will you configure it?',
+            details: [
+              es
+                ? 'El plugin global ya está instalado en tu máquina.'
+                : 'The global plugin is already installed on your machine.',
+            ],
+            options: [
+              {
+                value: 'antigravity',
+                label: es
+                  ? 'Modo Proyecto: Instalar skills locales en .agents/skills (Recomendado para equipos)'
+                  : 'Project mode: Local skills in .agents/skills (Recommended for teams)',
+              },
+              {
+                value: 'plugin',
+                label: es
+                  ? 'Modo Plugin: Usar plugin instalado (sin generar nuevas skills locales)'
+                  : 'Plugin mode: Use installed plugin (no new local skills)',
+              },
+            ],
+            defaultValue: 'antigravity',
+          });
+          agent = mode;
+        } else {
+          agent = 'antigravity';
+        }
+      }
       const declarations = ['name', 'stack', 'doc', 'profile', 'gates']
         .filter(key => cliOptions[key] !== undefined)
         .map(key => `--${key}: ${cliOptions[key]}`);
+      if (!existing && norm.includes('antigravity') && norm.length > 1) {
+        const status = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+        if (status.installed)
+          details.push(
+            es
+              ? 'Plugin de Antigravity instalado: se conservarán las skills locales para compatibilidad con las demás herramientas.'
+              : 'Antigravity plugin installed: local skills will be kept for compatibility with other tools.',
+          );
+      }
+      if (detected.ui?.signal && !hasUiFlags && !existing?.ui) {
+        const selectedComponents = await ui.choose({
+          language,
+          step: 2,
+          title: es ? 'Sistema de componentes y estilos de UI' : 'UI component kit and styling system',
+          details: [
+            es
+              ? `Señal de UI detectada en: ${detected.ui.modules.join(', ')}`
+              : `UI signal detected in: ${detected.ui.modules.join(', ')}`,
+          ],
+          options: [
+            {
+              value: 'shadcn',
+              label:
+                language === 'es'
+                  ? 'Shadcn/UI (Primitivas Radix y tokens Tailwind)'
+                  : 'Shadcn/UI (Radix primitives & Tailwind tokens)',
+            },
+            {
+              value: 'radix',
+              label:
+                language === 'es'
+                  ? 'Radix UI (Primitivas accesibles sin estilos)'
+                  : 'Radix UI (Unstyled accessible primitives)',
+            },
+            {
+              value: 'headlessui',
+              label:
+                language === 'es'
+                  ? 'Headless UI (Primitivas sin estilos para Tailwind)'
+                  : 'Headless UI (Tailwind unstyled primitives)',
+            },
+            {
+              value: 'preline',
+              label:
+                language === 'es'
+                  ? 'Preline UI (Componentes prediseñados para Tailwind)'
+                  : 'Preline UI (Tailwind pre-built components)',
+            },
+            {
+              value: 'flyonui',
+              label:
+                language === 'es'
+                  ? 'FlyonUI (Clases semánticas de componentes)'
+                  : 'FlyonUI (Semantic component classes)',
+            },
+            { value: 'none', label: es ? 'Ninguno / Aún sin elegir' : 'None / Undecided' },
+          ],
+          defaultValue: defaultKit,
+        });
+
+        const selectedCompanion = await ui.choose({
+          language,
+          step: 2,
+          title: es ? 'Compañero de diseño (UI Companion)' : 'Design companion (UI Companion)',
+          details: [
+            es
+              ? 'Guías de diseño curadas en specs/.omni/companions/ sin comandos de host.'
+              : 'Curated design guidelines in specs/.omni/companions/ without host commands.',
+          ],
+          options: [
+            {
+              value: 'none',
+              label: es ? 'Ninguno (Aplicar guide design de OmniSpec)' : 'None (Apply OmniSpec guide design)',
+            },
+            {
+              value: 'better',
+              label: es
+                ? 'Better Skills (Jakub Krehel: microinteracciones, contraste, accesibilidad)'
+                : 'Better Skills (Jakub Krehel: microinteractions, contrast, accessibility)',
+            },
+            {
+              value: 'frontend-design',
+              label: es
+                ? 'Frontend Design (Anthropic: dirección de arte y prevención de clichés)'
+                : 'Frontend Design (Anthropic: art direction and anti-cliché guidance)',
+            },
+          ],
+          defaultValue: defaultCompanion,
+        });
+        uiConfig = { components: selectedComponents, companion: selectedCompanion };
+      }
+      if (uiConfig) {
+        details.push(`UI: ${uiConfig.components} · ${uiConfig.companion}`);
+        if (detected.ui?.signal)
+          details.push(
+            es
+              ? `Señal de UI detectada en: ${detected.ui.modules.join(', ')}`
+              : `UI signal detected in: ${detected.ui.modules.join(', ')}`,
+          );
+      }
       const warnings = (detected.warnings || []).filter(
         warning => !warning.startsWith('No quality-gate commands detected.'),
       );
@@ -235,7 +409,7 @@ export async function runWizard(baseDir, cliOptions = {}) {
         ],
       });
       if (confirmed === 'no') cancelled = true;
-      else return { ...config, agent, language };
+      else return { ...config, agent, language, ...(uiConfig ? { ui: uiConfig } : {}) };
     } catch (error) {
       if (error.code !== 'OMNI_INIT_CANCELLED') throw error;
       cancelled = true;
@@ -246,7 +420,7 @@ export async function runWizard(baseDir, cliOptions = {}) {
     return null;
   }
 
-  const rl = createLineReader(input, output, { terminal: false });
+  const rl = createLineReader(wizardInput, wizardOutput, { terminal: false });
   try {
     if (!cliOptions.lang && !existing?.language) {
       const choice = await promptChoice(rl, 'Language / Idioma', ['English', 'Español'], language === 'es' ? 1 : 0);
@@ -270,7 +444,134 @@ export async function runWizard(baseDir, cliOptions = {}) {
         }
       }
     }
+    const norm = normalizeAgents(agent);
+    const isNewProject = !existing;
+    if (isNewProject && norm.length === 1 && norm[0] === 'antigravity') {
+      const pluginStatus = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+      if (pluginStatus.installed) {
+        const choices = [
+          {
+            value: 'antigravity',
+            label:
+              language === 'es'
+                ? 'Modo Proyecto (skills locales en .agents/skills)'
+                : 'Project mode (local skills in .agents/skills)',
+          },
+          {
+            value: 'plugin',
+            label:
+              language === 'es'
+                ? 'Modo Plugin (sin generar nuevas skills locales)'
+                : 'Plugin mode (no new local skills)',
+          },
+        ];
+        agent = (
+          await promptChoice(
+            rl,
+            language === 'es'
+              ? 'Detectado plugin global de Antigravity. Elige modo de instalación'
+              : 'Antigravity global plugin detected. Choose installation mode',
+            choices,
+          )
+        ).value;
+      }
+    } else if (!existing && norm.includes('antigravity') && norm.length > 1) {
+      const pluginStatus = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+      if (pluginStatus.installed) {
+        console.log(
+          language === 'es'
+            ? '[INFO] Plugin de Antigravity instalado: se conservarán las skills locales para compatibilidad con las demás herramientas.'
+            : '[INFO] Antigravity plugin installed: local skills will be kept for compatibility with other tools.',
+        );
+      }
+    }
+    if (detected.ui?.signal && !hasUiFlags && !existing?.ui) {
+      console.log(
+        language === 'es'
+          ? `\n[INFO] Señal de UI detectada en: ${detected.ui.modules.join(', ')}`
+          : `\n[INFO] UI signal detected in: ${detected.ui.modules.join(', ')}`,
+      );
+      const componentChoices = [
+        {
+          value: 'shadcn',
+          label:
+            language === 'es'
+              ? 'Shadcn/UI (Primitivas Radix y tokens Tailwind)'
+              : 'Shadcn/UI (Radix primitives & Tailwind tokens)',
+        },
+        {
+          value: 'radix',
+          label:
+            language === 'es'
+              ? 'Radix UI (Primitivas accesibles sin estilos)'
+              : 'Radix UI (Unstyled accessible primitives)',
+        },
+        {
+          value: 'headlessui',
+          label:
+            language === 'es'
+              ? 'Headless UI (Primitivas sin estilos para Tailwind)'
+              : 'Headless UI (Tailwind unstyled primitives)',
+        },
+        {
+          value: 'preline',
+          label:
+            language === 'es'
+              ? 'Preline UI (Componentes prediseñados para Tailwind)'
+              : 'Preline UI (Tailwind pre-built components)',
+        },
+        {
+          value: 'flyonui',
+          label:
+            language === 'es' ? 'FlyonUI (Clases semánticas de componentes)' : 'FlyonUI (Semantic component classes)',
+        },
+        { value: 'none', label: language === 'es' ? 'Ninguno / Aún sin elegir' : 'None / Undecided' },
+      ];
+      const selectedComponents = (
+        await promptChoice(
+          rl,
+          language === 'es' ? 'Sistema de componentes y estilos de UI' : 'UI component kit and styling system',
+          componentChoices,
+          Math.max(
+            0,
+            componentChoices.findIndex(c => c.value === defaultKit),
+          ),
+        )
+      ).value;
+
+      const companionChoices = [
+        {
+          value: 'none',
+          label:
+            language === 'es' ? 'Ninguno (Aplicar guide design de OmniSpec)' : 'None (Apply OmniSpec guide design)',
+        },
+        {
+          value: 'better',
+          label:
+            language === 'es'
+              ? 'Better Skills (Jakub Krehel: microinteracciones, contraste, accesibilidad)'
+              : 'Better Skills (Jakub Krehel: microinteractions, contrast, accessibility)',
+        },
+        {
+          value: 'frontend-design',
+          label:
+            language === 'es'
+              ? 'Frontend Design (Anthropic: dirección de arte y prevención de clichés)'
+              : 'Frontend Design (Anthropic: art direction and anti-cliché guidance)',
+        },
+      ];
+      const selectedCompanion = (
+        await promptChoice(
+          rl,
+          language === 'es' ? 'Compañero de diseño (UI Companion)' : 'Design companion (UI Companion)',
+          companionChoices,
+          0,
+        )
+      ).value;
+      uiConfig = { components: selectedComponents, companion: selectedCompanion };
+    }
     console.log(`\n${t.selected}: ${agent}\n${t.pending}`);
+    if (uiConfig) console.log(`  UI: ${uiConfig.components} · ${uiConfig.companion}`);
     // Explicit engineering declarations are reviewed here, not requested from every user.
     for (const key of ['name', 'stack', 'doc', 'profile', 'gates'])
       if (cliOptions[key] !== undefined) console.log(`  --${key}: ${cliOptions[key]}`);
@@ -284,7 +585,7 @@ export async function runWizard(baseDir, cliOptions = {}) {
       if (['', 's', 'si', 'sí', 'y', 'yes'].includes(answer)) break;
       console.log(t.invalidConfirm);
     }
-    return { ...config, agent, language };
+    return { ...config, agent, language, ...(uiConfig ? { ui: uiConfig } : {}) };
   } finally {
     rl.close();
   }

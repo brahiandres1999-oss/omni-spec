@@ -1,17 +1,17 @@
-# Piloto de OmniSpec 0.7.0 Preview — 0.7.0-preview.2
+# Piloto de OmniSpec 0.8.0 Preview — 0.8.0-preview.1
 
-Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. El [estado de la próxima versión](releases/0.7.0-preview.2.md) describe la Preview que se prueba aquí y las validaciones pendientes.
+Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. El [estado de la próxima versión](releases/0.8.0-preview.1.md) describe la Preview que se prueba aquí y las validaciones pendientes.
 
 ## Preparar el paquete exacto
 
 En PowerShell, comprueba `node --version`; el mínimo es 22.19.0. Ese requisito es del CLI y no elige el stack de la aplicación: el agente debe investigarlo con fuentes oficiales, explicarte las opciones y registrar tu aprobación o delegación.
 
-Genera el tarball desde el repositorio de OmniSpec, fuera de él, y anota su SHA256:
+Genera el tarball desde el repositorio de OmniSpec, fuera de él, y anota su SHA256. `pack:dev` añade a la versión el sufijo `+dev.<fecha y hora UTC>`, así que cada paquete local se distingue del publicado y de los anteriores:
 
 ```powershell
 $repo = 'C:\dev\omni-spec' # Cambia esta ruta por tu copia del repositorio candidato
-npm pack $repo --pack-destination $env:TEMP
-$paqueteOmniSpec = Join-Path $env:TEMP 'omni-spec-0.7.0-preview.2.tgz'
+$paquete = npm --prefix $repo run --silent pack:dev $env:TEMP | ConvertFrom-Json
+$paqueteOmniSpec = $paquete.package
 Get-FileHash -LiteralPath $paqueteOmniSpec -Algorithm SHA256
 ```
 
@@ -23,7 +23,7 @@ npm exec --offline --yes --package "$paqueteOmniSpec" -- omni-spec init --agent 
 node specs/.omni/runtime/bin/omni-spec.mjs version
 ```
 
-Las dos comprobaciones de versión deben indicar `0.7.0-preview.2`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
+Las dos comprobaciones de versión deben indicar `$paquete.version`, con su sufijo: por ejemplo, `0.8.0-preview.1+dev.20261024T235356Z`. Cambia `--agent claude` por el host que uses (`antigravity`, `cursor`, `copilot`, `codex`, `kilo`, `opencode`, `gemini`). `--yes` en npm solo acepta ejecutar el paquete local; no aprueba decisiones de tecnología ni de producto.
 
 El asistente de `init` pregunta idioma y confirmación de la carpeta. Si omites `--agent`, también pregunta qué herramienta usarás. En una terminal interactiva, usa flechas, Espacio para marcar una o varias integraciones y Enter para continuar; Ctrl+A marca todas las integraciones concretas. La opción genérica es exclusiva. `--plain` usa preguntas por líneas, con nombres separados por comas o `generic` si aún no elegiste. Stack, documentación, perfil y checks ya no se solicitan en el instalador: se revisan con el agente cuando se conoce el objetivo. Una decisión ya tomada puede declararse con argumentos, por ejemplo `--profile healthtech`; es un conjunto de controles a revisar, no una certificación.
 
@@ -33,7 +33,7 @@ Abre la carpeta en el agente y comprueba que descubre las nueve skills locales. 
 
 ## Recorrido
 
-Si la carpeta ya tiene `0.7.0-rc.1` o `rc.2`, utilizar el [procedimiento de migración a Preview](RELEASING.md#copias-locales-de-070-rc1-o-rc2); el cambio de sufijo requiere revisar `update --allow-downgrade --dry-run`. El recorrido siguiente parte de una instalación nueva o ya actualizada.
+Si la carpeta ya tiene `0.7.0-rc.1` o `rc.2`, utilizar el [procedimiento de migración a Preview](RELEASING.md#copias-locales-de-070-rc1-o-rc2); con `0.8.0-preview.1` es una subida de versión: basta `update --dry-run` y `update`. El recorrido siguiente parte de una instalación nueva o ya actualizada.
 
 1. Invoca `omni-init` sin añadir un prompt de auditoría. Debe reconocer la carpeta, explicar qué falta, registrar la sesión (`session-record`) y preguntar solo por decisiones materiales, sin implementar la aplicación.
 2. Explica el objetivo real de tu proyecto y sus restricciones. Revisa las preguntas, el stack y las versiones con fuentes oficiales actuales; acepta una opción o delega una decisión con alcance. Si falta una herramienta (navegador, web), debe quedar registrado y la validación que depende de ella, pendiente.

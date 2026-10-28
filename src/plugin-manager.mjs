@@ -3,6 +3,7 @@ import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { loadRegistry, saveRegistry, safePath, managedHash, syncManagedFiles } from './managed.mjs';
 import { normalizeAgents, integrationEntries } from './integrations.mjs';
+import { OMNI_SKILLS } from './workflows.mjs';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -40,8 +41,27 @@ function validatePluginBundle(targetDir) {
   };
 }
 
+/**
+ * Install the OmniSpec plugin bundle for Antigravity, replacing the directory at the target.
+ * Copies the plugin components and the files the bundled CLI reads from its package root, then runs
+ * `agy plugin validate --strict --json` when the Antigravity CLI is on PATH. The existing target
+ * directory is deleted before copying; errors from that deletion are ignored.
+ * @param {{targetDir?: string, projectDir?: string|null}} [options] Plugin destination and project root.
+ *   Defaults to getPluginDir() and cwd; null projectDir skips project diagnosis. Diagnosis errors
+ *   occur before replacing the plugin. Other CLI flags are ignored.
+ * @returns {Promise<{success: true, targetDir: string, version: string, copied: string[], validation: object, pluginCoexistence?: object}>}
+ *   `copied` lists every bundle item in copy order; `validation.ran` is false without the Antigravity CLI.
+ * @throws {Error} When an item cannot be copied. The incomplete target is removed first and the message says
+ *   so; if that removal fails, the message names both failures and the directory to delete. `cause` is the
+ *   copy error.
+ * @throws {Error} When the Antigravity validator rejects the bundle, which stays at the target for diagnosis.
+ */
 export async function installPlugin(options = {}) {
   const targetDir = options.targetDir || getPluginDir();
+  const projectDir = options.projectDir === undefined ? process.cwd() : options.projectDir;
+  const pluginCoexistence = projectDir
+    ? await detectPluginCoexistence(projectDir, { targetDir, assumeInstalled: true })
+    : null;
   const pluginsParent = join(targetDir, '..');
   const cliVersion = await getCliVersion();
 
@@ -56,8 +76,21 @@ export async function installPlugin(options = {}) {
 
   await mkdir(targetDir, { recursive: true });
 
-  // Clean items required for full Antigravity Plugin and lightweight CLI execution
-  const itemsToCopy = ['plugin.json', 'README.md', 'package.json', 'rules', 'skills', 'agents', 'assets', 'bin', 'src'];
+  // Plugin components plus everything the bundled CLI reads from its package root (packageEntries in assets.mjs).
+  const itemsToCopy = [
+    'plugin.json',
+    'README.md',
+    'package.json',
+    'rules',
+    'skills',
+    'agents',
+    'assets',
+    'bin',
+    'src',
+    'schema',
+    'companions',
+    'LICENSE',
+  ];
 
   const copied = [];
   for (const item of itemsToCopy) {
@@ -66,8 +99,15 @@ export async function installPlugin(options = {}) {
     try {
       await cp(srcPath, destPath, { recursive: true });
       copied.push(item);
-    } catch (_e) {
-      // Ignore optional missing asset
+    } catch (error) {
+      // A partial bundle would still look installed to plugin status and to the Antigravity validator.
+      let next = `Removed the incomplete plugin at ${targetDir}; fix the cause and run plugin install again.`;
+      try {
+        await rm(targetDir, { recursive: true, force: true });
+      } catch (removal) {
+        next = `Could not remove the incomplete plugin at ${targetDir} (${removal.message}); delete that directory and run plugin install again.`;
+      }
+      throw new Error(`Cannot copy ${item} into the Antigravity plugin: ${error.message}. ${next}`, { cause: error });
     }
   }
 
@@ -83,9 +123,11 @@ export async function installPlugin(options = {}) {
     version: cliVersion,
     copied,
     validation,
+    ...(pluginCoexistence ? { pluginCoexistence } : {}),
   };
 }
 
+/** Reinstall the plugin bundle; same options, result and errors as {@link installPlugin}. */
 export async function updatePlugin(options = {}) {
   return installPlugin(options);
 }
@@ -122,6 +164,63 @@ export async function getPluginStatus(options = {}) {
 }
 
 const PLUGIN_COMPATIBLE = new Set(['antigravity', 'plugin']);
+
+/**
+ * Detect whether the Antigravity global plugin and local OmniSpec skills coexist in a project.
+ * Returns null if no project exists at baseDir, if the project does not declare antigravity or plugin,
+ * if the plugin is not installed, or if no registered local OmniSpec skills are present on disk.
+ * @param {string} baseDir Project root.
+ * @param {{targetDir?: string, assumeInstalled?: boolean}} [options] assumeInstalled is used internally
+ *   to inspect project inputs before installing the plugin; normal diagnosis requires presence.
+ * @throws {Error} Invalid/unreadable project metadata or unsafe/unreadable skill paths.
+ * @returns {Promise<{detected: boolean, pluginDir: string, localSkills: string[], canClean: boolean, actions: string[], message: string}|null>}
+ */
+export async function detectPluginCoexistence(baseDir, options = {}) {
+  if (!baseDir) return null;
+  const manifest = await loadManifest(baseDir);
+  if (!manifest?.agent) return null;
+  const rawAgent = typeof manifest.agent === 'string' ? manifest.agent.trim() : manifest.agent;
+  if (!rawAgent) return null;
+
+  const agents = normalizeAgents(rawAgent);
+  if (!agents.some(agent => agent === 'antigravity' || agent === 'plugin')) {
+    return null;
+  }
+
+  const status = await getPluginStatus({ targetDir: options.targetDir });
+  if (!status.installed && !options.assumeInstalled) return null;
+
+  const registry = await loadRegistry(baseDir);
+  const presentSkills = [];
+  for (const skill of OMNI_SKILLS) {
+    const skillPath = `.agents/skills/${skill.name}/SKILL.md`;
+    if (Object.hasOwn(registry.files, skillPath)) {
+      const fullPath = await safePath(baseDir, skillPath);
+      try {
+        if ((await stat(fullPath)).isFile()) presentSkills.push(skillPath);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+    }
+  }
+
+  if (presentSkills.length === 0) return null;
+
+  const canClean = agents.every(agent => PLUGIN_COMPATIBLE.has(agent));
+  const actions = canClean ? ['keep-local', 'review-clean'] : ['keep-local'];
+  const message = canClean
+    ? 'Posible duplicación de comandos en Antigravity. Puedes conservar las skills locales; para migrar a uso exclusivo del plugin, revisa omni-spec clean --dry-run y ejecuta clean por separado.'
+    : 'Posible duplicación de comandos en Antigravity. Este proyecto declara adaptadores para otras herramientas; conserva las skills locales para no afectar a los demás agentes.';
+
+  return {
+    detected: true,
+    pluginDir: status.targetDir,
+    localSkills: presentSkills,
+    canClean,
+    actions,
+    message,
+  };
+}
 
 // Registry keys are versioned data, so a crafted key must never reach outside these trees.
 function cleanable(name) {

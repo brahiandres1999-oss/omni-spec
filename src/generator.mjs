@@ -4,11 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { getProfile } from './profiles/index.mjs';
 import { _initManifestUnlocked, loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
-import { packageEntries } from './assets.mjs';
+import { packageEntries, companionCatalogAvailable, companionEntries, COMPANIONS_PREFIX } from './assets.mjs';
 import { syncManagedFiles } from './managed.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
-import { QUESTIONS, TECHNOLOGY, DOCUMENTATION, SETUP, DESIGN } from './protocols.mjs';
+import { QUESTIONS, DOCUMENTATION } from './protocols.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -104,11 +104,11 @@ These profile controls are review prompts; applicability must be established for
 ${DOCUMENTATION}
 
 ### Supported technology decisions
-${TECHNOLOGY}
+Never select or pin a dependency or runtime version from memory: consult current official sources and the package registry, record the dated sources with the approval or delegation (decision-record), and prefer runtime-native APIs when they suffice. Without web access the choice stays provisional.
 
 ### Clarification and setup
 ${QUESTIONS}
-${SETUP}
+Setup, Git, the commit convention and session capabilities follow guide setup.
 
 ---
 
@@ -124,7 +124,7 @@ ${qualityGates}
 
 ## 5. UI Ergonomics & Frontend Craft (Anti-Slop)
 
-${DESIGN}
+Interface work follows guide design: references, direction, applicable states and rendered and interaction evidence. Changes without an interface do not load it.
 `;
 }
 
@@ -153,6 +153,17 @@ This workspace organizes changes into four archetypes with explicit scope and ev
 `;
 }
 
+/**
+ * Prepare or reinitialize OmniSpec under the manifest lock, preserving specifications.
+ * @param {string} baseDir Project root.
+ * @param {object} [options] Installation configuration from runWizard. ui contains companion and
+ *   components; without ui the saved selection is preserved. force replaces managed local edits.
+ * @returns {Promise<object>} Constitution, specifications and manifest paths plus managed-file changes.
+ * @throws {Error} Invalid configuration, unsafe paths, edited managed files without force, missing
+ *   catalog when changing companions, or filesystem failure. Validation precedes managed-file writes.
+ * @description Writes configuration, runtime, templates, host integrations and active companion files;
+ *   prunes unedited files of the previous companion and preserves edited ones. Does not run Git.
+ */
 export async function scaffoldProject(baseDir, options = {}) {
   options = {
     ...options,
@@ -205,10 +216,33 @@ async function scaffoldUnlocked(baseDir, options) {
     }
     entries = preserved;
   }
+  const targetCompanion = options.ui?.companion !== undefined ? options.ui.companion : existingManifest?.ui?.companion;
+  const previousCompanion = existingManifest?.ui?.companion || 'none';
+  const companionChanged = targetCompanion !== undefined && targetCompanion !== previousCompanion;
+  const catalogAvailable = await companionCatalogAvailable();
+
+  let companionFiles = [];
+  let companionPrune;
+
+  if (!catalogAvailable) {
+    if (companionChanged) {
+      throw new Error(
+        `Companion catalog is not available; cannot change companion to "${targetCompanion}". Run npx omni-spec@${version} init --ui-companion ${targetCompanion}.`,
+      );
+    } else if (targetCompanion && targetCompanion !== 'none') {
+      console.warn(
+        `[NOTICE] Companion catalog not available; skipping companion synchronization. Run npx omni-spec@${version} init to synchronize companions.`,
+      );
+    }
+  } else {
+    companionFiles = await companionEntries(targetCompanion);
+    companionPrune = COMPANIONS_PREFIX;
+  }
+
   const assets = await syncManagedFiles(
     baseDir,
-    [...entries, ...integrationEntries({ ...existingManifest, ...options, version })],
-    { acceptUpdates: force },
+    [...entries, ...integrationEntries({ ...existingManifest, ...options, version }), ...companionFiles],
+    { acceptUpdates: force, prune: companionPrune },
   );
 
   if (!constitutionExists || force) {

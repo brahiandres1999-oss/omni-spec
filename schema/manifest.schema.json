@@ -48,6 +48,24 @@
       "enum": ["en", "es"],
       "description": "Installation UI language; does not classify user experience or select application technologies."
     },
+    "ui": {
+      "type": "object",
+      "description": "Configured UI component kit and design companion for frontend tasks.",
+      "required": ["companion", "components"],
+      "properties": {
+        "companion": {
+          "type": "string",
+          "enum": ["better", "frontend-design", "none"],
+          "description": "Design companion installed under specs/.omni/companions/."
+        },
+        "components": {
+          "type": "string",
+          "enum": ["shadcn", "radix", "headlessui", "preline", "flyonui", "none"],
+          "description": "Primary UI component kit detected or selected for frontend composition."
+        }
+      },
+      "additionalProperties": false
+    },
     "active_spec": {
       "type": ["string", "null"],
       "description": "Slug of the currently focused specification, or null when none is active."

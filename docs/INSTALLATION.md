@@ -1,13 +1,13 @@
 # Instalación y primera entrega al agente
 
-Este contrato corresponde a [0.7.0 Preview](releases/0.7.0-preview.2.md), versión `0.7.0-preview.2`, en preparación para publicación. Se distribuirá mediante el canal npm `preview`; no sustituye a la versión normal en `latest`. Para probar los bytes actuales utiliza el tarball de [PILOT](PILOT.md); `latest` todavía corresponde a 0.6.1 (consultado el 2026-10-23).
+Este contrato corresponde a [0.8.0 Preview](releases/0.8.0-preview.1.md), versión `0.8.0-preview.1`, en preparación para publicación. Se distribuirá mediante el canal npm `preview`; no sustituye a la versión normal en `latest`. Para probar los bytes actuales utiliza el tarball de [PILOT](PILOT.md); `latest` todavía corresponde a 0.6.1 (consultado el 2026-10-28).
 
 ## Punto de entrada
 
 Para el candidato actual, desde la carpeta destino:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec init
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- omni-spec init
 ```
 
 Con Node.js >=22.19.0, abre una terminal en la carpeta del proyecto y, cuando la Preview esté publicada, ejecuta:
@@ -23,11 +23,24 @@ El mismo recorrido sirve para cualquier nivel de experiencia:
 1. Elegir inglés o español, salvo que ya se haya indicado `--lang en|es` o exista un idioma guardado.
 2. Leer la carpeta de destino y el estado detectado: carpeta nueva, archivos existentes o instalación previa.
 3. Elegir la herramienta con IA, salvo argumento `--agent` o selección existente. En la interfaz visual, usar flechas y Espacio para marcar una o varias; Enter confirma y Ctrl+A selecciona las integraciones concretas. La opción genérica es exclusiva. En modo de texto se aceptan nombres separados por comas, `all` o `generic`. `plugin` se declara explícitamente para usuarios del plugin global de Antigravity; init no instala ese plugin global.
-4. Confirmar la preparación de esa carpeta. Las respuestas inválidas se vuelven a preguntar; cancelar o cerrar la entrada antes de confirmar no escribe archivos de instalación.
-5. Instalar runtime, plantillas, contexto inicial e integración; comprobar los archivos administrados y la versión local.
-6. Abrir la misma carpeta en la herramienta elegida y utilizar la invocación mostrada por el instalador.
+4. Si un módulo del proyecto presenta señal de interfaz de usuario (Tailwind CSS, un framework de UI, `components.json` o un kit reconocido), no hay una selección de UI guardada y no se indicaron flags de UI, elegir el kit de componentes y el companion de diseño (`better`, `frontend-design` o `none`). Sin señal, o al reinicializar con una selección guardada, este paso se omite. Los flags sustituyen el campo indicado y conservan el otro valor guardado; sin valor guardado, se usa el primer kit detectado o `none` y el companion parte de `none`.
+5. Confirmar la preparación de esa carpeta. Las respuestas inválidas se vuelven a preguntar; cancelar o cerrar la entrada antes de confirmar no escribe archivos de instalación.
+6. Instalar runtime, plantillas, contexto inicial e integración; comprobar los archivos administrados y la versión local.
+7. Abrir la misma carpeta en la herramienta elegida y utilizar la invocación mostrada por el instalador.
 
-No se pregunta stack, estándar de documentación, perfil regulatorio ni quality gates durante este recorrido. Esas decisiones requieren conocer el proyecto y se discuten con el agente. El nombre inicial se deriva de la carpeta; puede declararse con `--name`. Las declaraciones `--stack`, `--doc`, `--profile` y `--gates` siguen disponibles y se muestran antes de confirmar. No se ejecuta el texto de esos checks durante la instalación.
+No se pregunta stack, estándar de documentación, perfil regulatorio ni quality gates durante este recorrido. Esas decisiones requieren conocer el proyecto y se discuten con el agente. El nombre inicial se deriva de la carpeta; puede declararse con `--name`. Las declaraciones `--stack`, `--doc`, `--profile`, `--gates`, `--ui-companion` (`better`, `frontend-design`, `none`) y `--ui-components` (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui`, `none`) siguen disponibles y se muestran antes de confirmar. No se ejecuta el texto de esos checks durante la instalación.
+
+## Companions de interfaz
+
+`--ui-companion` acepta `better`, `frontend-design` o `none`; `--ui-components` declara el kit elegido. Ambos flags funcionan con `init --yes` aunque el proyecto todavía no tenga dependencias de UI. La selección queda en `manifest.ui` y se conserva al repetir `init` sin nuevos flags.
+
+El companion activo se instala en `specs/.omni/companions/<nombre>/` como archivos administrados, con su índice, licencia y atribución. Estos archivos se pueden versionar con el proyecto. El catálogo no añade comandos al host.
+
+Al cambiar de companion, OmniSpec elimina los archivos anteriores que no se editaron y conserva las ediciones como archivos propios, fuera del registro administrado. Esas copias no se actualizan automáticamente. Elegir `none` deja de administrar el companion anterior y conserva esas personalizaciones.
+
+`update --dry-run` permite revisar la actualización del companion activo. Las ediciones administradas bloquean su reemplazo; `update --accept-updates` acepta reemplazarlas y guarda sus bytes en un backup. Cuando el comando se ejecuta desde el runtime local aislado y falta el catálogo, conserva los companions y muestra cómo actualizar con la distribución completa de la misma versión.
+
+Los presets y los avisos de versiones remotas están [pendientes para otra entrega](ROADMAP.md); no hay que configurarlos para usar los companions actuales.
 
 ## Terminales, agentes y automatización
 
@@ -71,6 +84,8 @@ El agente debe poder leer la carpeta y disponer de las herramientas necesarias; 
 La integración de Antigravity instala `.agents/agents/omni-auditor.md`, además de las nueve skills. El auditor utiliza el sandbox del host. El plugin mantiene su definición en `agents/omni-auditor.md`; los demás hosts conservan el rol en `specs/.omni/runtime/agents/omni-auditor.md` para revisión en la sesión actual si no hay un subagente disponible. Una definición instalada no prueba descubrimiento ni concede permiso para delegar. `/omni-audit` distingue ambas rutas y no afirma que corrió un auditor separado si no fue así.
 
 `specs/manifest.lock/` vacío es normal: solo contiene tickets temporales mientras un comando modifica el estado y vuelve a quedar vacío al terminar. No es un archivo de configuración ni algo que deba rellenar el usuario. La exclusión de Git y el mecanismo de concurrencia se conservan; ver [locking](locking.md). `clean` retira únicamente la definición administrada del auditor junto a las skills/runtime de OmniSpec y actualiza la entrada al plugin; conserva agentes propios y archivos personalizados.
+
+`specs/.omni/runtime/` tampoco se versiona: la sección administrada de `specs/.gitignore` lo excluye, y en un clon se restaura con `npx omni-spec@<versión de specs/manifest.json> update` (no con `init`). Restaurar requiere el paquete de esa versión: normalmente del registro npm, aunque también sirven la caché de npm o un tarball local. Mientras falte, el agente puede usar `npx omni-spec@<versión>`. Una CI que ejecute `node specs/.omni/runtime/bin/omni-spec.mjs` debe restaurarlo en un paso previo. Ver [compatibilidad](COMPATIBILITY.md#actualizaciones).
 
 El siguiente bloque es el onboarding conversacional: comprender el objetivo, revisar decisiones y registrar contexto. Init no crea una aplicación, ejecuta sus scripts, comprueba su comportamiento ni publica contenido.
 

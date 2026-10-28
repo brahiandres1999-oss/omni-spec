@@ -18,11 +18,26 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
-async function change(edit) {
-  const path = join(spec.specDir, 'acceptance.json');
+async function change(edit, target = spec) {
+  const path = join(target.specDir, 'acceptance.json');
   const report = JSON.parse(await readFile(path, 'utf8'));
   edit(report);
   await writeFile(path, JSON.stringify(report));
+}
+async function filledSpec(type) {
+  const created = { ...(await createSpec(root, type, `${type}-case`)), type };
+  await fillSpec(root, created);
+  return created;
+}
+async function rfcWithCriterion() {
+  const rfc = await filledSpec('rfc');
+  await appendFile(join(rfc.specDir, 'rfc.md'), '\nAC-01 [decision]: the local greeting stays the default.\n');
+  await change(r => {
+    r.schemaVersion = 2;
+    r.criteria[0].kind = 'decision';
+    r.criteria.push({ ...r.criteria[0], id: 'AC-01' });
+  }, rfc);
+  return rfc;
 }
 
 test('automated evidence without an executed-check mapping requires migration', async () => {
@@ -94,9 +109,47 @@ test('missing, duplicate and invented acceptance IDs cannot satisfy coverage', a
   await appendFile(join(spec.specDir, 'spec.md'), '\nAC-02: specific second outcome.\n');
   await assert.rejects(verifySpec(root, spec.id), /Missing acceptance evidence for AC-02/);
   await change(r => r.criteria.push({ ...r.criteria[0] }));
-  await assert.rejects(verifySpec(root, spec.id), /unique and match/);
+  await assert.rejects(verifySpec(root, spec.id), /Acceptance ID AC-01 is duplicated/);
   await change(r => (r.criteria[1].id = 'AC-99'));
-  await assert.rejects(verifySpec(root, spec.id), /unique and match/);
+  await assert.rejects(verifySpec(root, spec.id), /Acceptance ID AC-99 is not a criterion in spec\.md/);
+  await change(r => (r.criteria[1].id = 2));
+  await assert.rejects(verifySpec(root, spec.id), /Acceptance row 2 needs a string id from spec\.md/);
+});
+test('features, bugfixes and debts reject a DECISION row by name', async () => {
+  for (const [type, file] of Object.entries({ feature: 'spec.md', bugfix: 'bug.md', debt: 'audit.md' })) {
+    const target = await filledSpec(type);
+    await change(r => r.criteria.push({ ...r.criteria[0], id: 'DECISION' }), target);
+    await assert.rejects(
+      verifySpec(root, target.id),
+      new RegExp(`Acceptance ID DECISION is not a criterion in ${file}`),
+    );
+  }
+});
+test('an RFC with AC-n criteria verifies with or without its passed DECISION row', async () => {
+  const rfc = await rfcWithCriterion();
+  const record = await verifySpec(root, rfc.id);
+  assert.equal(record.passed, true);
+  assert.deepEqual(
+    record.acceptance.criteria.map(item => item.id),
+    ['DECISION', 'AC-01'],
+  );
+  await change(r => r.criteria.shift(), rfc);
+  assert.equal((await verifySpec(root, rfc.id)).passed, true);
+});
+test('a DECISION row beside AC-n criteria is validated like the other rows', async () => {
+  const rfc = await rfcWithCriterion();
+  await change(r => (r.criteria[0].status = 'pending'), rfc);
+  await assert.rejects(verifySpec(root, rfc.id), /Acceptance criterion DECISION remains pending/);
+  await change(r => Object.assign(r.criteria[0], { status: 'passed', method: 'manual' }), rfc);
+  await assert.rejects(verifySpec(root, rfc.id), /RFC acceptance evidence must record decision review/);
+  await change(r => Object.assign(r.criteria[0], { method: 'decision', evidence: 'Reviewed.' }), rfc);
+  await assert.rejects(verifySpec(root, rfc.id), /Record specific evidence and its limits for DECISION/);
+});
+test('an RFC without AC-n criteria still requires its DECISION row', async () => {
+  const rfc = await filledSpec('rfc');
+  assert.equal((await verifySpec(root, rfc.id)).passed, true);
+  await change(r => (r.criteria = []), rfc);
+  await assert.rejects(verifySpec(root, rfc.id), /Missing acceptance evidence for DECISION/);
 });
 test('accepted manual or inspection evidence stays separate from automated gates', async () => {
   const record = await verifySpec(root, spec.id);

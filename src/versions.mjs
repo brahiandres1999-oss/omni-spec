@@ -1,12 +1,21 @@
 const pattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
-export function parseVersion(value) {
+/**
+ * Whether a value is a SemVer 2.0.0 version, as parseVersion and compareVersions require.
+ * @param {unknown} value Candidate version.
+ * @returns {boolean} false for non-strings, malformed versions and numeric pre-release
+ *   identifiers with leading zeros.
+ */
+export function isVersion(value) {
   const match = typeof value === 'string' && value.match(pattern);
-  if (!match) throw new Error(`Invalid semantic version: ${value}`);
-  const pre = match[4]?.split('.') || [];
-  if (pre.some(id => /^\d+$/.test(id) && id.length > 1 && id.startsWith('0')))
-    throw new Error(`Invalid semantic version: ${value}`);
-  return { core: match.slice(1, 4), pre };
+  return (
+    Boolean(match) && !(match[4]?.split('.') || []).some(id => /^\d+$/.test(id) && id.length > 1 && id.startsWith('0'))
+  );
+}
+export function parseVersion(value) {
+  if (!isVersion(value)) throw new Error(`Invalid semantic version: ${value}`);
+  const match = value.match(pattern);
+  return { core: match.slice(1, 4), pre: match[4]?.split('.') || [] };
 }
 export function compareVersions(left, right) {
   const a = parseVersion(left),

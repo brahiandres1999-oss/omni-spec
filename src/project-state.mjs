@@ -6,11 +6,26 @@ import { writeFileAtomic } from './fs-retry.mjs';
 import { loadManifest, withManifestLock } from './manifest.mjs';
 import { auditProjectContext, citedProjectFiles } from './context-auditor.mjs';
 import { hashProjectFiles } from './snapshot.mjs';
+import { specRoute } from './fit.mjs';
+import { compareVersions, isVersion } from './versions.mjs';
 
 const file = 'specs/project-state.json';
 const capabilities = ['questions', 'web', 'terminal', 'render', 'delegation'];
-export const CONTEXT_SCOPE = 'CONTEXT_INPUTS_V2';
+export const CONTEXT_SCOPE = 'CONTEXT_INPUTS_V3';
+// Baselines written before CONTEXT_INPUTS_V3 hashed raw bytes. Remove this scope and its comparison
+// in contextFreshness when that compatibility is retired.
+const RAW_CONTEXT_SCOPE = 'CONTEXT_INPUTS_V2';
 const MAX_SESSION_HISTORY = 100;
+const CLOSED = ['COMPLETED', 'CLOSED', 'SUPERSEDED'];
+// Artifacts each archetype's route requires, in reading order; mirrors auditSpec.
+const ROUTE_ARTIFACTS = {
+  feature: { primary: ['spec.md'], plan: ['plan.md'], tasks: ['tasks.md'] },
+  bugfix: { primary: ['bug.md'], plan: ['rca.md', 'fix.md'], tasks: [] },
+  debt: { primary: ['audit.md'], plan: ['migration-plan.md'], tasks: ['tasks.md'] },
+  rfc: { primary: ['rfc.md'], plan: [], tasks: [] },
+};
+// Tooling and state files status replaces: status --json --all and contracts --active.
+const AVOID_ALWAYS = ['specs/.omni/', 'specs/_templates/', 'specs/project-state.json', 'specs/contracts.json'];
 // Files that usually carry facts recorded in project-context.md: build/dependency
 // declarations, runtime pins, containers, CI and agent instructions. Source code is not a
 // context input unless the context cites it, so implementing a change does not stale context.
@@ -196,15 +211,24 @@ async function save(root, state) {
   await writeFileAtomic(path, JSON.stringify(state, null, 2) + '\n');
 }
 
+const withNewline = (bytes, newline) => Buffer.from(bytes.toString('latin1').replace(/\r?\n/g, newline), 'latin1');
+
 /**
- * Hash the inputs that project-context.md describes: the context itself, files it cites,
- * build/dependency/runtime declarations, CI and agent instructions. Ignored paths
- * (.gitignore, .omnispecignore and defaults) and symlinks are skipped. The OmniSpec-managed
- * section of AGENTS.md is excluded so adapter updates do not stale user context.
- * @param {string} root Project root.
- * @returns {Promise<Object<string,string>>} Relative paths and SHA-256 values.
+ * Hashes one context input can match. Git rewrites line endings of text files on checkout
+ * (core.autocrlf, .gitattributes eol), so text is recorded in its LF form; the conversion runs on
+ * latin1, which maps each byte to one character, and never decodes UTF-8. A NUL byte marks a binary
+ * file, which Git does not convert: its three forms are its raw hash.
+ * @param {Buffer} bytes Input content.
+ * @returns {{recorded: string, raw: string, crlf: string}} SHA-256 of the form context-record stores,
+ *   of the raw bytes and of the CRLF form; the last two only matter for CONTEXT_INPUTS_V2 baselines.
  */
-export async function contextSnapshot(root) {
+function inputDigests(bytes) {
+  const raw = hash(bytes);
+  if (bytes.includes(0)) return { recorded: raw, raw, crlf: raw };
+  return { recorded: hash(withNewline(bytes, '\n')), raw, crlf: hash(withNewline(bytes, '\r\n')) };
+}
+
+async function contextDigests(root) {
   const contextText = await readFile(await safePath(root, 'specs/project-context.md'), 'utf8');
   const citations = citedProjectFiles(contextText).filter(name => !generatedState(name));
   const cited = new Set(citations.filter(name => !name.startsWith('specs/')));
@@ -214,24 +238,44 @@ export async function contextSnapshot(root) {
       select: name => isContextInput(name, cited),
       symlinks: 'reject-selected',
       label: 'Context snapshot',
+      digest: inputDigests,
     }),
   );
   // hashProjectFiles has already confirmed AGENTS.md is a regular file or an in-project link.
+  // Buffer.from encodes UTF-8, the bytes that preview.2 hashed from the same text.
   if (files['AGENTS.md'])
-    files['AGENTS.md'] = hash((await readFile(join(root, 'AGENTS.md'), 'utf8')).replace(managedSection, ''));
+    files['AGENTS.md'] = inputDigests(
+      Buffer.from((await readFile(join(root, 'AGENTS.md'), 'utf8')).replace(managedSection, '')),
+    );
   for (const name of citations.filter(item => item.startsWith('specs/'))) {
     try {
-      files[name] = hash(await readFile(await safePath(root, name)));
+      files[name] = inputDigests(await readFile(await safePath(root, name)));
     } catch (error) {
       if (!['ENOENT', 'EISDIR'].includes(error.code)) throw error;
     }
   }
-  files['specs/project-context.md'] = hash(contextText);
+  files['specs/project-context.md'] = inputDigests(Buffer.from(contextText));
   return files;
 }
 
 /**
- * Save a reconciled baseline under the manifest lock and archive its predecessor.
+ * Hash the inputs that project-context.md describes: the context itself, files it cites,
+ * build/dependency/runtime declarations, CI and agent instructions. Ignored paths
+ * (.gitignore, .omnispecignore and defaults) and symlinks are skipped. The OmniSpec-managed
+ * section of AGENTS.md is excluded so adapter updates do not stale user context. Text inputs are
+ * hashed with CRLF converted to LF, so checkouts with other line endings give the same values;
+ * inputs containing a NUL byte are hashed as raw bytes.
+ * @param {string} root Project root.
+ * @returns {Promise<Object<string,string>>} Relative paths and the SHA-256 values context-record stores.
+ * @throws {Error} Missing project-context.md, unsafe paths, symlinked inputs or snapshot limits.
+ */
+export async function contextSnapshot(root) {
+  return Object.fromEntries(Object.entries(await contextDigests(root)).map(([name, { recorded }]) => [name, recorded]));
+}
+
+/**
+ * Save a reconciled baseline under the manifest lock and archive its predecessor. The baseline uses
+ * CONTEXT_SCOPE and the values of contextSnapshot.
  * @param {string} root Project root with a structurally valid context.
  * @returns {Promise<object>} Timestamped baseline; semantic truth remains reviewable.
  */
@@ -251,7 +295,7 @@ export async function recordContext(root) {
       recordedAt: new Date().toISOString(),
       scope: CONTEXT_SCOPE,
       inputs,
-      reviewScope: 'BYTE_BASELINE_AND_STRUCTURAL_LINKS_ONLY',
+      reviewScope: 'EOL_NORMALIZED_BASELINE_AND_STRUCTURAL_LINKS_ONLY',
       semanticReview: 'AGENT_OR_HUMAN_REQUIRED',
     };
     await save(root, state);
@@ -260,20 +304,32 @@ export async function recordContext(root) {
 }
 
 /**
+ * Compare the current context inputs with the recorded baseline. A CONTEXT_SCOPE baseline matches
+ * the form contextSnapshot records. A CONTEXT_INPUTS_V2 baseline, which hashed raw bytes, also
+ * matches the raw or CRLF form of a text input, so a checkout with other line endings stays current.
+ * Any other scope is a legacy full-tree baseline compared on raw bytes.
  * @param {string} root Project root.
  * @param {object|null} state Optional already validated state.
- * @returns {Promise<object>} NOT_RECORDED, CURRENT or STALE and changed paths.
+ * @returns {Promise<object>} NOT_RECORDED, CURRENT or STALE, changed paths and the baseline scope.
+ * @throws {Error} A baseline without inputs, or a failed context snapshot.
  */
 export async function contextFreshness(root, state = null) {
   state ||= await readProjectState(root);
   if (!state.context) return { status: 'NOT_RECORDED', changed: [] };
   if (!state.context.inputs || typeof state.context.inputs !== 'object')
     throw new Error('Invalid context baseline. Reconcile and run context-record.');
-  const current = await contextSnapshot(root);
+  const current = await contextDigests(root);
   const baseline = state.context.inputs;
+  const { scope } = state.context;
   // Baselines recorded before 0.7.0-rc.2 hashed every source file; compare only the
   // inputs selected today so ordinary code changes do not report stale context.
-  const legacy = state.context.scope !== CONTEXT_SCOPE;
+  const legacy = scope !== CONTEXT_SCOPE && scope !== RAW_CONTEXT_SCOPE;
+  const matches =
+    scope === CONTEXT_SCOPE
+      ? (digest, recorded) => digest.recorded === recorded
+      : scope === RAW_CONTEXT_SCOPE
+        ? (digest, recorded) => [digest.recorded, digest.raw, digest.crlf].includes(recorded)
+        : (digest, recorded) => digest.raw === recorded;
   // A legacy baseline also detects deleted inputs, but never hashed files under specs/ other
   // than project-context.md, and hashed AGENTS.md including the managed section.
   const comparable = name =>
@@ -291,7 +347,7 @@ export async function contextFreshness(root, state = null) {
     : [...new Set([...Object.keys(current), ...Object.keys(baseline)])];
   const changed = [];
   for (const name of names.sort()) {
-    if (current[name] === baseline[name]) continue;
+    if (current[name] && matches(current[name], baseline[name])) continue;
     // A legacy full-tree baseline also hashed files that are ignored today (vendor/, .gradle/).
     // Such a file only counts as changed when it was actually deleted.
     if (legacy && current[name] === undefined && (await exists(root, name))) continue;
@@ -301,7 +357,7 @@ export async function contextFreshness(root, state = null) {
     status: changed.length ? 'STALE' : 'CURRENT',
     changed,
     recordedAt: state.context.recordedAt,
-    scope: legacy ? 'LEGACY_FULL_SNAPSHOT' : CONTEXT_SCOPE,
+    scope: legacy ? 'LEGACY_FULL_SNAPSHOT' : scope,
     ...(legacy
       ? { recommendation: 'Run context-record after reviewing context to adopt the input-based baseline.' }
       : {}),
@@ -431,11 +487,52 @@ export async function recordDecision(root, decision) {
 }
 
 /**
- * Derive resumable delivery state using the same closure validator as complete.
- * @param {string} root Project root.
- * @returns {Promise<object>} Manifest plus progress, blockers and next action.
+ * Describe a CLI whose version differs from the project's (009-d4; 009-d6, cases 3 and 4).
+ * Outside plugin mode the action restores the project's version; a newer, comparable CLI also
+ * gets the upgrade path. In plugin mode update is never proposed: an older plugin gets plugin
+ * update; a newer one, one of equal precedence or a non-SemVer pair gets no command, because the
+ * global plugin is shared by every project on the machine.
+ * @param {string} cliVersion Version of the running CLI.
+ * @param {{version: string, agent?: string}} manifest Project manifest.
+ * @returns {{code: string, cliVersion: string, projectVersion: string, message: string,
+ *   action?: string, upgrade?: string}} message names both versions and the action, if any.
  */
-export async function projectStatus(root) {
+function cliVersionWarning(cliVersion, manifest) {
+  const projectVersion = manifest.version;
+  const order = isVersion(cliVersion) && isVersion(projectVersion) ? compareVersions(cliVersion, projectVersion) : null;
+  const warning = { code: 'CLI_VERSION_MISMATCH', cliVersion, projectVersion };
+  let message = `CLI ${cliVersion} differs from project version ${projectVersion}.`;
+  if (manifest.agent === 'plugin') {
+    if (order === -1) {
+      warning.action = `npx omni-spec@${projectVersion} plugin update`;
+      message += ` Update the global plugin to the project's version: ${warning.action}.`;
+    } else
+      message += ` The global plugin is shared by every project on this machine; ${order === 1 ? 'downgrading' : 'changing'} it would affect all of them, so no command is proposed.`;
+  } else {
+    warning.action = `npx omni-spec@${projectVersion} update`;
+    message += ` Restore the project's version: ${warning.action}.`;
+    if (order === 1) {
+      warning.upgrade = 'update --dry-run';
+      message += ` Running update with this CLI upgrades the project to ${cliVersion}; if that is intended, review ${warning.upgrade} first.`;
+    }
+  }
+  return { ...warning, message };
+}
+
+/**
+ * Derive resumable delivery state using the same closure validator as complete.
+ * Blockers, nextAction and delivery always use every decision. Unless options.all is set, the
+ * returned copy omits verification.acceptance from specs other than the active one, and the
+ * decisions whose appliesTo names only closed specs other than the active one; progress.omitted
+ * counts both. specs/manifest.json and specs/project-state.json are never written.
+ * @param {string} root Project root.
+ * @param {{all?: boolean}} [options] all keeps every acceptance record and decision.
+ * @returns {Promise<object>} Manifest copy plus progress: delivery, blockers, nextAction, warnings
+ *   (CLI_VERSION_MISMATCH when the running CLI's version differs from the manifest's; never a
+ *   blocker), readSet (files to read for the active spec and paths to avoid), omitted and decisions.
+ * @throws {Error} No project, invalid project state, or context freshness cannot be computed.
+ */
+export async function projectStatus(root, { all = false } = {}) {
   const manifest = await loadManifest(root);
   if (!manifest) throw new Error('No OmniSpec project found. Run init first.');
   const state = await readProjectState(root);
@@ -462,7 +559,7 @@ export async function projectStatus(root) {
       });
   let delivery = 'NO_ACTIVE_WORK',
     nextAction = freshness.status === 'NOT_RECORDED' ? 'omni-init' : 'omni-discuss';
-  if (spec && ['COMPLETED', 'CLOSED', 'SUPERSEDED'].includes(spec.status)) delivery = spec.status;
+  if (spec && CLOSED.includes(spec.status)) delivery = spec.status;
   else if (spec) {
     delivery = spec.status;
     nextAction = 'omni-audit';
@@ -529,21 +626,87 @@ export async function projectStatus(root) {
       blockers.push({ code: 'ASSESSMENT_ERROR', message: error.message, action: 'Resolve the reported error' });
     }
   }
+  let files = [];
+  if (spec)
+    try {
+      files = await readSetFiles(root, spec);
+    } catch (error) {
+      // auditSpec already reports an unreadable fit.json with the same message.
+      if (!blockers.some(item => item.code === 'ASSESSMENT_ERROR' && item.message === error.message))
+        blockers.push({ code: 'ASSESSMENT_ERROR', message: error.message, action: 'Resolve the reported error' });
+    }
+  const readSet = {
+    files,
+    avoid: [
+      ...manifest.specs.filter(item => item.slug !== manifest.active_spec).map(item => `specs/${item.slug}/`),
+      ...(spec ? [`specs/${spec.slug}/verification.json`] : []),
+      ...AVOID_ALWAYS,
+    ],
+  };
   if (blockers.length) nextAction = blockers[0].action;
+  const { getCliVersion } = await import('./updater.mjs');
+  const cliVersion = await getCliVersion();
+  let specs = manifest.specs,
+    decisions = state.decisions;
+  if (!all) {
+    specs = manifest.specs.map(item => {
+      if (item.slug === manifest.active_spec || !item.verification?.acceptance) return item;
+      const { acceptance: _acceptance, ...verification } = item.verification;
+      return { ...item, verification };
+    });
+    const closed = new Set(
+      manifest.specs
+        .filter(item => item.slug !== manifest.active_spec && CLOSED.includes(item.status))
+        .flatMap(item => [item.id, item.slug]),
+    );
+    decisions = state.decisions.filter(
+      item => !item.appliesTo?.length || !item.appliesTo.every(ref => closed.has(ref)),
+    );
+  }
   return {
     ...manifest,
+    specs,
     progress: {
       delivery,
       context: freshness,
       blockers,
       nextAction,
+      warnings: cliVersion === manifest.version ? [] : [cliVersionWarning(cliVersion, manifest)],
+      readSet,
       capabilities:
         state.session?.capabilities || Object.fromEntries(capabilities.map(name => [name, { status: 'unknown' }])),
-      decisions: state.decisions,
+      omitted: {
+        acceptance: specs.filter((item, index) => item !== manifest.specs[index]).length,
+        decisions: state.decisions.length - decisions.length,
+        command: 'status --json --all',
+      },
+      decisions,
       semanticReview: 'REQUIRED',
       publication: 'NOT_AUTHORIZED_BY_STATUS',
     },
   };
+}
+
+/**
+ * List the files an agent reads for a spec: the artifacts its fit route requires, then
+ * acceptance.json and verification.md. Without fit.json, or with an invalid one, the full route
+ * applies, as in auditSpec.
+ * @param {string} root Project root.
+ * @param {object} spec Manifest entry of the active spec.
+ * @returns {Promise<string[]>} Project-relative paths under specs/<slug>/.
+ * @throws {Error} The spec type is unknown, or fit.json cannot be read (for example, a directory).
+ */
+async function readSetFiles(root, spec) {
+  if (!Object.hasOwn(ROUTE_ARTIFACTS, spec.type)) throw new Error(`Unknown spec type: ${spec.type}`);
+  const artifacts = ROUTE_ARTIFACTS[spec.type];
+  const route = await specRoute(root, spec);
+  return [
+    ...artifacts.primary,
+    ...(!route || route.artifacts.plan ? artifacts.plan : []),
+    ...(!route || route.artifacts.tasks ? artifacts.tasks : []),
+    'acceptance.json',
+    'verification.md',
+  ].map(name => `specs/${spec.slug}/${name}`);
 }
 
 async function exists(root, name) {

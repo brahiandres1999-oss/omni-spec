@@ -1,6 +1,6 @@
-# Contrato de onboarding — 0.7.0 Preview
+# Contrato de onboarding — 0.8.0 Preview
 
-Contrato distribuido en `0.7.0-preview.2`. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [estado y alcance de la Preview](releases/0.7.0-preview.2.md).
+Contrato distribuido en `0.8.0-preview.1`. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [estado y alcance de la Preview](releases/0.8.0-preview.1.md).
 
 ## Preparación y decisiones pendientes
 

@@ -72,6 +72,42 @@ test('requires explicit states and source-conflict review without requiring Engl
   assert.equal((await auditProjectContext(root)).valid, true);
 });
 
+async function contextCheck() {
+  const lines = [],
+    log = console.log;
+  console.log = line => lines.push(line);
+  try {
+    return { code: await runCli(['context-check', '--json'], root), report: JSON.parse(lines.join('\n')) };
+  } finally {
+    console.log = log;
+  }
+}
+
+test('context-check warns above 24000 characters, counted without BOM and with CRLF as one break', async () => {
+  await scaffoldProject(root);
+  const base = report('[Policy](../CONSTITUTION.md)');
+  const sized = length => base + 'x'.repeat(length - base.length - 1) + '\n';
+  const size = /specs\/project-context\.md has (\d+) characters, above the 24000 \(about 6,000 tokens\)/;
+  for (const [length, warned] of [
+    [24000, false],
+    [24001, true],
+  ]) {
+    const lf = sized(length);
+    assert.equal(lf.length, length);
+    for (const text of [lf, lf.replace(/\n/g, '\r\n'), `\uFEFF${lf}`]) {
+      await writeFile(join(root, 'specs/project-context.md'), text);
+      const checked = await auditProjectContext(root);
+      assert.equal(checked.valid, true);
+      const warning = checked.warnings.find(item => size.test(item));
+      assert.equal(Boolean(warning), warned, JSON.stringify({ length, crlf: text.includes('\r'), warning }));
+      if (warned) assert.equal(size.exec(warning)[1], String(length));
+      const { code, report: cli } = await contextCheck();
+      assert.equal(code, 0);
+      assert.deepEqual(cli.warnings, checked.warnings);
+    }
+  }
+});
+
 test('existing citation is never treated as proof of a source claim', async () => {
   await scaffoldProject(root);
   await writeFile(

@@ -19,7 +19,7 @@ Review relevant controls only; justify N/A. Domain profiles are not compliance c
 | **Does it access or process sensitive data?** | [TODO] | If yes: specify protection in transit/at rest and least-privilege access. |
 
 ## 4. Experience and limits
-[TODO] Record relevant error/empty/access states or explain why no user interface applies.
+[TODO] With a user interface, review Loading, Empty, Error, Partial/Overflow and Ideal for each affected surface (guide design) and record the states that apply, with N/A and a reason for the rest. Without a user interface: N/A with reason.
 
 ## 5. Traceability
 [TODO] Link acceptance criteria to plan sections, task IDs and intended verification. Refine this mapping during planning.

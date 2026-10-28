@@ -54,7 +54,17 @@ export function citedProjectFiles(text) {
   return [...result];
 }
 
-// A deliberately structural check: existence of a citation is not proof of its meaning.
+// Every workflow reads specs/project-context.md; about 6,000 tokens at four characters per token.
+export const CONTEXT_CHARACTER_LIMIT = 24000;
+
+/**
+ * Check the structure and local links of specs/project-context.md. The check is deliberately
+ * structural: the existence of a citation is not proof of its meaning. A context longer than
+ * CONTEXT_CHARACTER_LIMIT, counted without BOM and with each CRLF as one line break, adds a
+ * warning that changes neither `valid` nor the exit code of context-check.
+ * @param {string} root Project root.
+ * @returns {Promise<object>} valid, errors, warnings, linksChecked and the review scope.
+ */
 export async function auditProjectContext(root) {
   const errors = [],
     warnings = [];
@@ -111,6 +121,11 @@ export async function auditProjectContext(root) {
   }
   if (!linksChecked)
     warnings.push('No local Markdown citations checked. Backtick paths and prose citations require manual review.');
+  const characters = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').length;
+  if (characters > CONTEXT_CHARACTER_LIMIT)
+    warnings.push(
+      `specs/project-context.md has ${characters} characters, above the ${CONTEXT_CHARACTER_LIMIT} (about 6,000 tokens) that every workflow reads. Distill it: keep current state, decisions, open risks and next action; summarize completed work.`,
+    );
   warnings.push(
     'A pass does not prove claim attribution, conflict reconciliation, security, compatibility or application behavior. Review source passages and the final response manually.',
   );

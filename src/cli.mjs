@@ -15,7 +15,7 @@ import { projectStatus, recordContext, recordSession, recordDecision } from './p
 import { loadChecks, validateChecks } from './checks.mjs';
 import { safePath } from './managed.mjs';
 import { writeFileAtomic } from './fs-retry.mjs';
-import { listContracts, readContract, updateContract } from './contracts.mjs';
+import { listContracts, readContract, updateContract, contractEffectiveSnapshot } from './contracts.mjs';
 import { fileURLToPath } from 'node:url';
 import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
 import { installationProgress } from './terminal-ui.mjs';
@@ -54,8 +54,20 @@ const valueFlags = new Set([
   'timeout',
   'from',
   'lang',
+  'ui-companion',
+  'ui-components',
 ]);
-const booleanFlags = new Set(['yes', 'force', 'dry-run', 'json', 'accept-updates', 'allow-downgrade', 'plain']);
+const booleanFlags = new Set([
+  'yes',
+  'force',
+  'dry-run',
+  'json',
+  'accept-updates',
+  'allow-downgrade',
+  'plain',
+  'all',
+  'active',
+]);
 
 function acceptanceSummary(acceptance) {
   if (acceptance.error) return `Acceptance review failed: ${acceptance.error}`;
@@ -92,6 +104,8 @@ function parse(args) {
   flags.dryRun = flags['dry-run'];
   flags.acceptUpdates = flags['accept-updates'];
   flags.allowDowngrade = flags['allow-downgrade'];
+  flags.uiCompanion = flags['ui-companion'];
+  flags.uiComponents = flags['ui-components'];
   if (flags.timeout !== undefined) {
     flags.timeout = Number(flags.timeout);
     if (!Number.isSafeInteger(flags.timeout) || flags.timeout < 100 || flags.timeout > 3600000)
@@ -148,9 +162,11 @@ omni-spec <command> [arguments] [options]
   checks [--from <file|->]        List/configure reviewed checks with IDs and module cwd
     --from accepts a JSON file anywhere (relative paths resolve from the project root) or - for stdin
   contracts [id]                Inspect proposed and effective capability contracts
+    --active                    Effective active contracts only, without history
   contract-record <id> --from <file|->  Record revision with decision and expectedRevision
   create <type> <name>           feature, bugfix (bug/fix), debt, rfc (idea)
   status | list [--json]         Resume active work or list specifications
+    --all                       status --json: keep closed specs' acceptance and decisions
   focus <id|slug>                Select active work without creating duplicates
   audit [id] [--json]            Structural document checks, not code verification
   fit [id] [--json]              Read the ceremony route for a change and its questionnaire
@@ -169,11 +185,11 @@ omni-spec <command> [arguments] [options]
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
   help | version
 
-init options: --name --stack --doc --profile --gates --agent (alias --ai)
+init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-companion --ui-components
   --lang en|es sets the installation language; one workflow for every experience level.
   --plain disables terminal UI; pipes, TERM=dumb, CI and JSON retain plain output.
   Interactive UI: arrows to move, Space to select tools, Ctrl+A for all, Enter to continue, Esc/Ctrl+C to cancel.
-  init asks only language, AI tool and destination confirmation; engineering decisions follow in chat.
+  init asks language, AI tool, UI choices when detected, and destination confirmation; engineering decisions follow in chat.
   For automation: init --yes --agent <name> --lang en (generic when no tool is selected).
   npx --yes omni-spec@latest init still opens OmniSpec's installer; npx owns that --yes.
   --force explicitly replaces constitution/templates; existing specs are preserved.
@@ -211,6 +227,13 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
     if (flags.lang !== undefined && command !== 'init') throw new Error('--lang is supported only by init.');
     if (flags.plain && command !== 'init') throw new Error('--plain is supported only by init.');
+    if (flags.uiCompanion !== undefined && command !== 'init')
+      throw new Error('--ui-companion is supported only by init.');
+    if (flags.uiComponents !== undefined && command !== 'init')
+      throw new Error('--ui-components is supported only by init.');
+    if (flags.all && command !== 'status') throw new Error('--all is supported only by status.');
+    if (flags.active && (command !== 'contracts' || positionals.length))
+      throw new Error('--active is supported only by contracts without an ID.');
     const maxPositionals =
       {
         create: 2,
@@ -323,7 +346,16 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       }
       case 'contracts': {
         if (!root) throw new Error('No OmniSpec project found. Run init first.');
-        emit(positionals[0] ? await readContract(workingDir, positionals[0]) : await listContracts(workingDir));
+        if (flags.active)
+          emit(
+            (await listContracts(workingDir, { status: 'active' })).map(contract => ({
+              id: contract.id,
+              revision: contract.revision,
+              effectiveRevision: contract.effectiveRevision,
+              ...contractEffectiveSnapshot(contract),
+            })),
+          );
+        else emit(positionals[0] ? await readContract(workingDir, positionals[0]) : await listContracts(workingDir));
         return 0;
       }
       case 'create': {
@@ -341,10 +373,10 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const manifest = await loadManifest(workingDir);
         if (!manifest) throw new Error('No OmniSpec manifest found. Run init first.');
         if (command === 'status') {
-          const status = await projectStatus(workingDir);
+          const status = await projectStatus(workingDir, { all: flags.all });
           emit(
             status,
-            `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n[DELIVERY] ${status.progress.delivery}\n[CONTEXT] ${status.progress.context.status}\n[NEXT] ${status.progress.nextAction}\n${status.progress.blockers.map(item => `[BLOCKED] ${item.code}: ${item.message || item.action}`).join('\n')}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`,
+            `[PROJECT] ${manifest.project} | v${manifest.version}\n[AGENTS] ${manifest.agent}\n[ACTIVE] ${manifest.active_spec || 'None — use omni-discuss or create'}\n[DELIVERY] ${status.progress.delivery}\n[CONTEXT] ${status.progress.context.status}\n[NEXT] ${status.progress.nextAction}\n${status.progress.warnings.map(item => `[WARN] ${item.code}: ${item.message}\n`).join('')}${status.progress.blockers.map(item => `[BLOCKED] ${item.code}: ${item.message || item.action}`).join('\n')}\n${manifest.specs.map(s => `[${s.id}] ${s.slug} (${s.type}) ${s.status}`).join('\n')}`,
           );
         } else {
           const listing = await listSpecs(workingDir);
@@ -459,18 +491,26 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'check':
       case 'doctor': {
         const check = await checkProjectVersion(workingDir);
+        const runtime =
+          check.runtime &&
+          (check.runtime.status === 'MISSING'
+            ? `[RUNTIME MISSING] specs/.omni/runtime/ is missing. Restore it: ${check.runtime.restore}`
+            : `[RUNTIME VERSION] Local runtime ${check.runtime.version ?? 'unknown'} differs from project ${check.projectVersion}. Restore it: ${check.runtime.restore}`);
+        const coexistence = check.pluginCoexistence
+          ? `[WARN] Coexistencia de plugin: ${check.pluginCoexistence.message}`
+          : null;
         emit(
           check,
-          `[${!check.isInstalled ? 'NOT INITIALIZED' : check.healthy ? 'FILES SYNCHRONIZED' : 'NEEDS REVIEW'}] ${check.message}\n${check.integrity?.changed.join('\n') || ''}`,
+          `[${!check.isInstalled ? 'NOT INITIALIZED' : check.healthy ? 'FILES SYNCHRONIZED' : 'NEEDS REVIEW'}] ${check.message}\n${[runtime, coexistence, ...(check.integrity?.changed || [])].filter(Boolean).join('\n')}`,
         );
         return check.healthy ? 0 : 1;
       }
       case 'update': {
         const result = await updateProject(workingDir, flags);
-        const { created, updated, conflicts, backups } = result.assets;
+        const { created, updated, removed, conflicts, backups } = result.assets;
         emit(
           result,
-          `[${result.dryRun ? 'DRY RUN' : 'UPDATED'}] ${result.project}: ${result.fromVersion} -> ${result.toVersion}\nFiles: ${created.length} new, ${updated.length} changed, ${conflicts.length} conflicts. Specs preserved: ${result.specsPreserved}.\n${result.dryRun ? [...created.map(p => 'CREATE ' + p), ...updated.map(p => 'UPDATE ' + p)].join('\n') : ''}\n${conflicts.map(p => 'CONFLICT ' + p).join('\n')}\n${backups.map(p => 'BACKUP ' + p).join('\n')}${result.constitution?.status === 'PRESERVED_REVIEW_RECOMMENDED' ? `\nCONSTITUTION.md preserved. Compare it with ${result.constitution.reference} to adopt current guidance.` : ''}`,
+          `[${result.dryRun ? 'DRY RUN' : 'UPDATED'}] ${result.project}: ${result.fromVersion} -> ${result.toVersion}\nFiles: ${created.length} new, ${updated.length} changed, ${removed.length} removed, ${conflicts.length} conflicts. Specs preserved: ${result.specsPreserved}.\n${result.dryRun ? [...created.map(p => 'CREATE ' + p), ...updated.map(p => 'UPDATE ' + p), ...removed.map(p => 'REMOVE ' + p)].join('\n') : ''}\n${conflicts.map(p => 'CONFLICT ' + p).join('\n')}\n${backups.map(p => 'BACKUP ' + p).join('\n')}${result.constitution?.status === 'PRESERVED_REVIEW_RECOMMENDED' ? `\nCONSTITUTION.md preserved. Compare it with ${result.constitution.reference} to adopt current guidance.` : ''}${result.notices.map(notice => `\n[NOTICE] ${notice}`).join('')}`,
         );
         return conflicts.length ? 1 : 0;
       }
@@ -492,17 +532,23 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'plugin': {
         const sub = positionals[0] || 'status';
         if (sub === 'install') {
-          const res = await installPlugin(flags);
+          const res = await installPlugin({ ...flags, projectDir: root || undefined });
+          const coexistence = res.pluginCoexistence
+            ? `\n[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`
+            : '';
           emit(
             res,
-            `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nReload the host if needed and confirm skill discovery; file installation does not establish host behavior.`,
+            `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nReload the host if needed and confirm skill discovery; file installation does not establish host behavior.${coexistence}`,
           );
           return 0;
         } else if (sub === 'update' || sub === 'upgrade') {
-          const res = await updatePlugin(flags);
+          const res = await updatePlugin({ ...flags, projectDir: root || undefined });
+          const coexistence = res.pluginCoexistence
+            ? `\n[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`
+            : '';
           emit(
             res,
-            `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at:\n${res.targetDir}\nFiles updated: ${res.copied.join(', ')}`,
+            `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at:\n${res.targetDir}\nFiles updated: ${res.copied.join(', ')}${coexistence}`,
           );
           return 0;
         } else if (sub === 'status') {

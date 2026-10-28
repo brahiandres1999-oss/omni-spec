@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.7.0--preview.2-blue.svg" alt="Version 0.7.0-preview.2"></a>
-  <a href="docs/releases/0.7.0-preview.2.md"><img src="https://img.shields.io/badge/canal-preview-amber.svg" alt="0.7.0 Preview, pendiente de publicación"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.0--preview.1-blue.svg" alt="Version 0.8.0-preview.1"></a>
+  <a href="docs/releases/0.8.0-preview.1.md"><img src="https://img.shields.io/badge/canal-preview-amber.svg" alt="0.8.0 Preview, pendiente de publicación"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -13,7 +13,7 @@
 
 ---
 
-# OmniSpec 0.7.0-preview.2
+# OmniSpec 0.8.0-preview.1
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
@@ -22,7 +22,7 @@ Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un frame
 
 ---
 
-> **0.7.0 Preview — lanzamiento en preparación.** Esta rama prepara `0.7.0-preview.2` para distribución pública en el canal npm `preview` y como prerelease en GitHub. Es una versión para probar y recibir feedback, con validaciones pendientes. `0.6.1` sigue en npm `latest` (consultado el 2026-10-23). Consulta las [notas de la Preview](docs/releases/0.7.0-preview.2.md) y el [piloto local](docs/PILOT.md).
+> **0.8.0 Preview — lanzamiento en preparación.** Esta rama prepara `0.8.0-preview.1` para distribución pública en el canal npm `preview` y como prerelease en GitHub. Es una versión para probar y recibir feedback, con validaciones pendientes. `0.6.1` sigue en npm `latest` (consultado el 2026-10-28). Consulta las [notas de la Preview](docs/releases/0.8.0-preview.1.md) y el [piloto local](docs/PILOT.md).
 
 ## ¿Por qué OmniSpec?
 
@@ -38,7 +38,7 @@ OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
 ---
 
-## Empezar con 0.7.0 Preview
+## Empezar con 0.8.0 Preview
 
 ### 1. Prepara la carpeta donde vas a trabajar
 
@@ -47,10 +47,10 @@ Necesitas Node.js >=22.19.0 y una herramienta con agente de IA. OmniSpec prepara
 Abre una terminal en la carpeta del proyecto. Para uno nuevo, crea una carpeta y entra en ella; para uno existente, usa su raíz. Genera el tarball como explica el [piloto](docs/PILOT.md) y utiliza la ruta de ese archivo:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec init
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- omni-spec init
 ```
 
-Una vez publicada la Preview, el punto de entrada será `npx --yes omni-spec@preview init`; también podrá fijarse `@0.7.0-preview.2`. `@latest` seguirá ejecutando 0.6.1 mientras no se promueva una versión normal. Antes de publicar, utiliza el tarball local. La instalación global es opcional.
+Una vez publicada la Preview, el punto de entrada será `npx --yes omni-spec@preview init`; también podrá fijarse `@0.8.0-preview.1`. `@latest` seguirá ejecutando 0.6.1 mientras no se promueva una versión normal. Antes de publicar, utiliza el tarball local. La instalación global es opcional.
 
 En la candidata 0.7.0, el asistente pregunta idioma, herramienta con IA y confirmación de la carpeta. Permite varias herramientas o `generic` si aún no elegiste una. No presupone Antigravity ni pregunta tu nivel de experiencia. Producto, stack, documentación y checks se acuerdan después con el agente. `init` conserva el código existente y no ejecuta scripts de aplicación; los comandos detectados quedan como candidatos en `specs/project-context.md`.
 
@@ -59,11 +59,13 @@ En una terminal compatible verás el logo de caracteres y una pregunta activa: f
 El `--yes` **antes** del paquete pertenece a npm: evita su confirmación de descarga, pero el asistente de OmniSpec sigue siendo interactivo. Para automatización, añade el `--yes` de OmniSpec **después** de `init` y declara la integración:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec init --yes --agent codex --lang es
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- omni-spec init --yes --agent codex --lang es
 # También admite --agent cursor,claude o --agent all.
 ```
 
-Los argumentos `--name`, `--stack`, `--doc`, `--profile` y `--gates` permiten conservar decisiones explícitas sin repetir preguntas. Sin una integración declarada en modo automático se utiliza `generic`, con prompts de lectura explícita. [Todas las variantes de instalación y recuperación](docs/INSTALLATION.md).
+Los argumentos `--name`, `--stack`, `--doc`, `--profile`, `--gates`, `--ui-companion` y `--ui-components` permiten conservar decisiones explícitas sin repetir preguntas. Sin una integración declarada en modo automático se utiliza `generic`, con prompts de lectura explícita. [Todas las variantes de instalación y recuperación](docs/INSTALLATION.md).
+
+Los companions `better` y `frontend-design` aportan guías de diseño empaquetadas. Los archivos del companion activo se administran con OmniSpec; al cambiar de companion se conservan las personalizaciones anteriores como archivos propios. Consulta la [selección, actualización y conservación de companions](docs/INSTALLATION.md#companions-de-interfaz).
 
 ### 2. Reconoce el proyecto desde el chat
 
@@ -171,6 +173,7 @@ Usa el runtime instalado (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`
 ```sh
 # Inspección y diagnóstico
 npx omni-spec@preview status                 # Muestra el estado del proyecto y trabajo activo
+npx omni-spec@preview status --json --all    # Incluye la aceptación y las decisiones de specs cerradas
 npx omni-spec@preview doctor                 # Verifica integridad de archivos y adaptadores
 npx omni-spec@preview inspect --json         # Muestra tecnologías, módulos y comandos detectados
 
@@ -196,6 +199,7 @@ npx omni-spec@preview configure --gates "npm test"  # Gates heredados desde la r
 npx omni-spec@preview verify 001             # Ejecuta los checks y liga la evidencia a la huella
 npx omni-spec@preview complete 001           # Cierra el trabajo tras comprobar evidencia
 npx omni-spec@preview contracts              # Contratos de capacidad vigentes y propuestos
+npx omni-spec@preview contracts --active     # Solo los contratos activos, sin historial
 ```
 
 ### Qué atesta `verify`
@@ -239,7 +243,7 @@ OmniSpec guarda el estado y los contratos en `specs/`, la constitución en la ra
     ├── checks.json             # Catálogo de checks aprobados (ID, cwd, timeout, tipo)
     ├── commands/omni-init.md    # Entrada breve a la skill; prompts completos en generic
     ├── manifest.lock/          # Tickets temporales de escritura; vacío en reposo
-    ├── .gitignore              # Sección administrada para estado local (logs, backups, inputs)
+    ├── .gitignore              # Sección administrada: estado local (logs, backups, inputs) y runtime
     ├── _templates/             # Plantillas editables por arquetipo
     ├── 001-nombre-del-trabajo/ # Espacio de trabajo de la spec activa
     │   ├── spec.md             # Requerimientos y criterios de aceptación
@@ -249,7 +253,7 @@ OmniSpec guarda el estado y los contratos en `specs/`, la constitución en la ra
     │   ├── acceptance.json     # Criterios vinculados a evidencia verificable
     │   └── verification.json   # Huella, logs y resultados ejecutados de checks
     └── .omni/
-        ├── runtime/            # Motor CLI portable independiente
+        ├── runtime/            # Motor CLI portable; no se versiona, lo restaura update
         └── inputs/             # JSON de entrada para --from (ignorado por Git)
 ```
 
@@ -261,13 +265,21 @@ Cuando salga una nueva versión de OmniSpec, actualiza tu proyecto sin perder tu
 
 ```sh
 # Previsualiza qué archivos cambiarían (modo seguro):
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec update --dry-run
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- omni-spec update --dry-run
 
 # Aplica la actualización de plantillas y adaptadores:
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- omni-spec update
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- omni-spec update
 ```
 
-> **Garantía de Preservación:** `update` nunca sobreescribe tu `CONSTITUTION.md`, tus especificaciones activas ni `specs/project-context.md`. Las personalizaciones en archivos gestionados bloquean la actualización hasta revisarlas; con `--accept-updates` se respaldan en `specs/.omni/backups/`. Si tu constitución difiere de la guía actual, `update` deja `specs/.omni/reference/CONSTITUTION.md` para compararla.
+`specs/.omni/runtime/` no se versiona: la sección administrada de `specs/.gitignore` lo excluye de Git. En un clon, restáuralo con la versión de `specs/manifest.json` usando `update`, no `init`:
+
+```sh
+npx omni-spec@<versión del manifiesto> update
+```
+
+Restaurar requiere el paquete de esa versión: normalmente se descarga del registro npm, pero también sirven la caché de npm o un tarball local con `npm exec --offline` como en el bloque anterior. Si tu repositorio ya versionaba el runtime, sus archivos siguen en el índice de Git hasta que ejecutes `git rm -r --cached specs/.omni/runtime` y confirmes el cambio. Ver [compatibilidad](docs/COMPATIBILITY.md#actualizaciones).
+
+> **Garantía de Preservación:** `update` nunca sobreescribe tu `CONSTITUTION.md`, tus especificaciones activas ni `specs/project-context.md`. Las personalizaciones en archivos gestionados bloquean la actualización hasta revisarlas; con `--accept-updates` se respaldan en `specs/.omni/backups/`. La excepción es un runtime local que no es de la versión del proyecto (sin `package.json` legible o con otra versión): se sustituye sin conflicto ni copia. Si tu constitución difiere de la guía actual, `update` deja `specs/.omni/reference/CONSTITUTION.md` para compararla.
 
 ---
 
@@ -275,14 +287,15 @@ npm exec --offline --yes --package "/ruta/al/omni-spec-0.7.0-preview.2.tgz" -- o
 
 OmniSpec nace como una iniciativa personal con el propósito de contar con un framework de *Spec-Driven Development* verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, sin ataduras a dependencias externas ni flujos rígidos.
 
-La próxima publicación es **0.7.0 Preview** (`0.7.0-preview.2`, canal `preview`). Se están validando el instalador, las integraciones y el recorrido conversacional; la aprobación de pruebas del motor no demuestra por sí sola mayor estabilidad que 0.6.1. Las [notas de la Preview](docs/releases/0.7.0-preview.2.md) distinguen cambios incluidos, comprobaciones realizadas y pendientes. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
+La próxima publicación es **0.8.0 Preview** (`0.8.0-preview.1`, canal `preview`). Se están validando el instalador, las integraciones y el recorrido conversacional; la aprobación de pruebas del motor no demuestra por sí sola mayor estabilidad que 0.6.1. Las [notas de la Preview](docs/releases/0.8.0-preview.1.md) distinguen cambios incluidos, comprobaciones realizadas y pendientes. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
 
 ---
 
 ## Documentación
 
-- [0.7.0 Preview: estado, cambios y límites](docs/releases/0.7.0-preview.2.md)
-- [Historial de candidatas: 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [Publicada: 0.6.1](docs/releases/0.6.1.md)
+- [0.8.0 Preview: estado, cambios y límites](docs/releases/0.8.0-preview.1.md)
+- [Próximas entregas: presets y avisos de actualización pendientes](docs/ROADMAP.md)
+- [Publicada: 0.7.0-preview.2](docs/releases/0.7.0-preview.2.md) · [Historial de candidatas: 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [Publicada: 0.6.1](docs/releases/0.6.1.md)
 - [Piloto local con el paquete exacto](docs/PILOT.md)
 - [Instalación, automatización y recuperación](docs/INSTALLATION.md)
 - [Evaluación de comportamiento de los agentes](docs/BEHAVIOR-EVALUATION.md)
@@ -298,3 +311,5 @@ La próxima publicación es **0.7.0 Preview** (`0.7.0-preview.2`, canal `preview
 ## Licencia
 
 MIT © [OmniSpec Authors](LICENSE)
+
+El catálogo de companions de interfaz incluye material de terceros distribuido bajo sus licencias originales: guías `better-*` de Jakub Krehel (MIT) y `frontend-design` de Anthropic (Apache-2.0). Consulta `LICENSE` en `specs/.omni/companions/better/`, `LICENSE.txt` en `specs/.omni/companions/frontend-design/` y el `ATTRIBUTION.md` de cada companion para detalles de atribución y sumas de verificación SHA-256.
