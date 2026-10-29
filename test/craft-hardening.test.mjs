@@ -356,4 +356,38 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
     assert.ok(cursorRule.content.includes(HOST_RULE));
     assert.doesNotMatch(cursorRule.content, /Deliver first-pass precision|4 mandatory states/i);
   });
+
+  test('templates and workflows instruct formal EARS syntax and 5 anti-slop rules', async () => {
+    const specTemplate = await source('templates/01-feature/spec.md');
+    assertIncludes(
+      specTemplate,
+      ['formal EARS syntax', 'Ubiquitous', 'Event-driven', 'State-driven', 'Unwanted condition'],
+      'feature spec template EARS',
+    );
+
+    const bugTemplate = await source('templates/02-bugfix/bug.md');
+    assert.ok(bugTemplate.includes('formal EARS syntax'), 'bug template EARS');
+
+    const debtTemplate = await source('templates/03-tech-debt/audit.md');
+    assert.ok(debtTemplate.includes('formal EARS syntax'), 'debt template EARS');
+
+    const specifySkill = OMNI_SKILLS.find(s => s.name === 'omni-specify');
+    assert.ok(specifySkill);
+    assert.match(specifySkill.instructions, /EARS syntax/i);
+
+    const commonSkills = ['omni-plan', 'omni-implement', 'omni-specify'];
+    for (const name of commonSkills) {
+      const skill = OMNI_SKILLS.find(s => s.name === name);
+      assert.ok(skill);
+      assertIncludes(
+        skill.instructions,
+        ['Type-Slop', 'Mock-Slop', 'Visual-Slop', 'Scope-Slop', 'Dependency-Slop'],
+        `${name} anti-slop rules`,
+      );
+    }
+
+    const implementSkill = OMNI_SKILLS.find(s => s.name === 'omni-implement');
+    assert.match(implementSkill.instructions, /minimal touch surgery/i);
+    assert.match(implementSkill.instructions, /Fail fast without hiding exceptions/i);
+  });
 });
