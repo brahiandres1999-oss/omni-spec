@@ -63,9 +63,9 @@ npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.1.tgz" -- o
 # También admite --agent cursor,claude o --agent all.
 ```
 
-Los argumentos `--name`, `--stack`, `--doc`, `--profile`, `--gates`, `--ui-companion` y `--ui-components` permiten conservar decisiones explícitas sin repetir preguntas. Sin una integración declarada en modo automático se utiliza `generic`, con prompts de lectura explícita. [Todas las variantes de instalación y recuperación](docs/INSTALLATION.md).
+Los argumentos `--name`, `--stack`, `--doc`, `--profile`, `--gates` y `--ui-components` permiten conservar decisiones explícitas sin repetir preguntas. Sin una integración declarada en modo automático se utiliza `generic`, con prompts de lectura explícita. [Todas las variantes de instalación y recuperación](docs/INSTALLATION.md).
 
-Los companions `better` y `frontend-design` aportan guías de diseño empaquetadas. Los archivos del companion activo se administran con OmniSpec; al cambiar de companion se conservan las personalizaciones anteriores como archivos propios. Consulta la [selección, actualización y conservación de companions](docs/INSTALLATION.md#companions-de-interfaz).
+Las directrices de diseño y calidad de interfaz están integradas directamente en el motor mediante `guide design` (`node specs/.omni/runtime/bin/omni-spec.mjs guide design`), sin necesidad de instalar skills ni paquetes externos.
 
 ### 2. Reconoce el proyecto desde el chat
 
@@ -208,21 +208,56 @@ npx omni-spec@preview contracts --active     # Solo los contratos activos, sin h
 
 ### Spec Fit: cuánta ceremonia merece un cambio
 
-No todo cambio necesita el ciclo completo. `omni-spec fit` deriva la ruta a partir de un
-cuestionario **que se pregunta, no que se infiere**. La clasificación es una heurística
-explícita; requiere respuestas sustentadas y puede aumentar el rigor según el riesgo:
+No todo cambio necesita el ciclo completo. OmniSpec incorpora **triaje dinámico** y atajos de ceremonia para evitar la burocracia documental innecesaria:
 
-| Ruta | Artefactos | Cuándo |
+```sh
+# Crear directamente una especificación en modo ligero (sin plan.md ni tasks.md):
+omni-spec create feature arreglo-etiqueta --light
+
+# O mutar y escalar la ruta según evoluciona el alcance técnico:
+omni-spec fit --preset light      # Modo ligero: spec.md y acceptance.json únicamente
+omni-spec fit --preset standard   # Modo estándar: añade diseño de arquitectura
+omni-spec fit --preset full       # Modo completo: diseño, desglose de tareas y testing
+```
+
+| Ruta | Artefactos Requeridos | Cuándo Usarla |
 | :--- | :--- | :--- |
-| **light** | primario + criterios de aceptación | Cambio pequeño, local, sin ambigüedad y ya cubierto por tests |
-| **standard** | + diseño | Cambio pequeño **sin** cobertura de tests existente |
-| **full** | + desglose de tareas | ≥3 archivos, varios módulos, cambio de contrato, ambigüedad o razonamiento incompleto |
+| **light** | `spec.md` + `acceptance.json` | Cambio pequeño (1-2 archivos), local, claro y con tests existentes. |
+| **standard** | `spec.md` + diseño (`plan.md` / `migration-plan.md` / `rca.md` + `fix.md`) | Cambio con incertidumbre de diseño o sin cobertura previa de pruebas. |
+| **full** | `spec.md` + diseño + desglose de tareas (`tasks.md`) | ≥3 archivos, múltiples módulos, cambios de contratos públicos o riesgo elevado. |
 
-La ruta se **deriva** de `specs/<slug>/fit.json`; nunca se escribe a mano. Sin `fit.json` se
-mantiene la ruta completa. Fit v1 conserva su comportamiento anterior. En v2 se evalúan
-también riesgo, incertidumbre y reversibilidad: un cambio crítico puede requerir full aunque
-afecte un archivo. Un bugfix light documenta reproducción, causa y regresión en bug.md;
-standard añade rca.md y fix.md; full añade el desglose de tareas en fix.md.
+La ruta se **deriva** de `specs/<slug>/fit.json` (mediante el cuestionario interactivo o los presets canónicos) y se evalúa automáticamente. En v2 se ponderan consecuencia (*risk*), incertidumbre (*uncertainty*) y reversibilidad (*reversibility*).
+
+**Andamiaje dinámico en escalada:** Si un cambio ligero escala en complejidad, ejecutar `omni-spec fit --preset standard` o `--preset full` no solo actualiza las reglas de auditoría, sino que genera automáticamente en disco los artefactos faltantes (`scaffoldMissingRouteArtifacts`) preservando cualquier contenido o decisión previa sin sobreescrituras destructivas.
+
+---
+
+## Estándares de Ingeniería & Zero Slop Guard
+
+OmniSpec actúa como un guardián de calidad (*The Guardian*) que neutraliza los vicios comunes de los modelos de lenguaje:
+
+### Zero Slop Guard (5 Reglas Anti-Código Basura)
+1. **Type-Slop:** Prohibido el uso de `any`, casteos ciegos (`as unknown as T`) o interfaces redundantes innecesarias.
+2. **Mock-Slop:** Prohibidos tests que solo verifiquen que los mocks fueron llamados; se exigen pruebas de integración reales con lógica ejecutable.
+3. **Visual-Slop:** Prohibidos los clichés genéricos de IA (degradados azul/púrpura sin justificación de marca, badges difusos y anidamiento excesivo de tarjetas con sombras o *card-itis*).
+4. **Scope-Slop (YAGNI Estricto):** Prohibidas capas especulativas (factorías, DTOs, wrappers) o funciones auxiliares no solicitadas que no respondan directamente a un criterio de aceptación.
+5. **Dependency-Slop:** Capacidades nativas de la plataforma primero; prohibido añadir dependencias externas para funciones nativas a menos que el usuario lo autorice expresamente.
+
+### Sintaxis Formal EARS para Requisitos
+Las especificaciones formulan sus criterios de aceptación (`AC-01 [kind]`) mediante la sintaxis estandarizada **EARS** (*Easy Approach to Requirements Syntax*):
+- **Ubiquitous:** `<sistema> DEBERÁ <acción>` (ej. `AC-01 [functional]: El sistema DEBERÁ validar tokens al inicio`).
+- **Event-driven:** `CUANDO <evento>, <sistema> DEBERÁ <acción>` (ej. `AC-02 [functional]: CUANDO el token sea inválido, el CLI DEBERÁ terminar con código 1`).
+- **State-driven:** `MIENTRAS <estado>, <sistema> DEBERÁ <acción>` (ej. `AC-03 [interaction]: MIENTRAS los datos cargan, la UI DEBERÁ mostrar skeletons contextuales`).
+- **Unwanted condition:** `SI <error>, ENTONCES <sistema> DEBERÁ <acción>` (ej. `AC-04 [functional]: SI la red falla, ENTONCES el cliente DEBERÁ ofrecer reintento`).
+
+### Árbitro de Calidad UI (`guide design`)
+Para cambios que involucran frontend, `guide design` establece las directivas vinculantes:
+- **4 Estados Obligatorios de Interfaz:** Toda vista interactiva debe definir:
+  1. *Loading*: skeletons contextuales o carga real con Cumulative Layout Shift (CLS) = 0.
+  2. *Empty*: mensaje contextual claro con llamada a la acción inmediata (CTA).
+  3. *Error*: mensaje comprensible (sin códigos crípticos) y mecanismo de reintento o recuperación.
+  4. *Protected / Ideal*: contenido típico completo o vista restringida sin permisos.
+- **Medición Empírica de Contraste:** Se prohíbe cerrar criterios visuales inspeccionando solo código o JSX; se exige comprobación empírica con ratios mínimos de 4.5:1 para texto estándar y 3:1 para componentes de UI o texto grande.
 
 ---
 
@@ -311,5 +346,3 @@ La próxima publicación es **0.8.0 Preview** (`0.8.0-preview.1`, canal `preview
 ## Licencia
 
 MIT © [OmniSpec Authors](LICENSE)
-
-El catálogo de companions de interfaz incluye material de terceros distribuido bajo sus licencias originales: guías `better-*` de Jakub Krehel (MIT) y `frontend-design` de Anthropic (Apache-2.0). Consulta `LICENSE` en `specs/.omni/companions/better/`, `LICENSE.txt` en `specs/.omni/companions/frontend-design/` y el `ATTRIBUTION.md` de cada companion para detalles de atribución y sumas de verificación SHA-256.

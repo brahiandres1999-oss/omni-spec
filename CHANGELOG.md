@@ -13,21 +13,26 @@ Changes after the prepared Preview will be recorded here.
 
 Prepared for the npm `preview` channel and a GitHub prerelease. npm `latest` remains `0.6.1` (checked 2026-10-28). See the [Preview notes](docs/releases/0.8.0-preview.1.md).
 
-Presets/import-export (015) and remote update notices/companion synchronization (016) are deferred to a later version of this package; see the [roadmap](docs/ROADMAP.md).
-
 ### Behavioral Changes
 - **Lean constitution & modular reference guides:** New initializations receive a concise constitution referencing bundled modular procedures (`guide setup`, `guide design`, `guide evidence`). Existing projects preserve their `CONSTITUTION.md` upon `update` and receive `specs/.omni/reference/CONSTITUTION.md` for review.
 - **Git-ignored runtime & non-destructive update restoration:** `specs/.omni/runtime/` is added to the managed section of `specs/.gitignore`. `update` restores or updates local runtime entries to match the manifest version and prunes obsolete entries; existing tracked files stay in the Git index until explicitly untracked with `git rm -r --cached specs/.omni/runtime`.
 - **Compact `status --json` & scoped readSet:** Omit acceptance criteria of non-active specs and closed decisions from default JSON output to preserve agent context budget, reporting count in `progress.omitted`. Use `--all` to retrieve complete structures. `readSet` enumerates active files according to the spec route.
 - **`CONTEXT_INPUTS_V3` baseline:** Platform-independent line ending (CRLF/LF) normalization for watched text context inputs, preventing spurious stale context reports across operating systems. A 0.7.x CLI treats V3 as legacy and can re-record V2; use the same OmniSpec version across the team.
+- **Zero-Slop Protocol & Quality Guard (Spec 016):** Built-in enforcement across templates and agent skills of the 5 engineering craft rules: Minimal Touch (code surgery), Strict YAGNI, No Parrot Comments, Fail-Fast (no swallowed exceptions or silent nulls), and Anti-Cliché UI.
+- **Dynamic Spec Triage & Adaptive Scaffolding (Spec 017):** Dynamic spec initialization via `create --light` or `create --preset <light|standard|full>`. Triage escalates or adapts spec files and tasks based on scope, risk, touched files, contract crossing, and existing test coverage.
+- **Streamlined `omni-init` & UI Design Guardian (Spec 018):** `init` wizard streamlined by removing companion interrogation and focusing strictly on component kit selection (`--ui-components`) when UI signals exist. Visual guidelines in `guide design` mandate the 4 interactive states (Loading, Empty, Error, Protected).
 
 ### Added
-- **UI Companions & Frontend Synergy (Spec 014):** Automated frontend stack and component kit detection in project inspector (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui`, Tailwind CSS). Interactive wizard adapts questions only when UI signal is present, accompanied by `--ui-companion` and `--ui-components` CLI flags. Bundled zero-dependency UI companions (`better` and `frontend-design`) managed quietly under `specs/.omni/companions/<name>/` without polluting host commands or slash commands. Subordination to guide design and project constitution.
+- **EARS Requirements Syntax Standardization (Spec 016):** Formal adoption of the Easy Approach to Requirements Syntax (`[Ubiquitous]`, `[Event-driven]`, `[State-driven]`, `[Unwanted behavior]`, `[Optional feature]`, `[Complex]`) in acceptance criteria across all spec templates.
+- **Dynamic Spec Creation & CLI Presets (Spec 017):** Added `--preset`, `--route`, `--files`, `--risk`, `--crosses-contract`, and `--existing-tests` flags to `omni-spec fit` and `omni-spec create`, enabling one-shot triage evaluation and light spec scaffolding with fail-fast validation.
 - **Antigravity plugin coexistence diagnosis & choice (Spec 012):** Read-only coexistence diagnosis in `doctor` and `plugin install/update`, warning of potential command duplication without altering health or exit codes. The `init` wizard offers informed interactive selection between Project Mode (`antigravity`) and Plugin Mode (`plugin`) when Antigravity is chosen alone; multi-tool configurations preserve local adapters with informational notices.
 - **Context token economy & active contracts (Spec 008):** Add `contracts --active` and enforce character limits on prompts to maintain context economy on compact LLM windows.
-- **Observability & UI art-direction standards (Spec 010):** Mandatory Observability section in `plan.md` and `fix.md` templates; 5-state experience matrix in `spec.md` (§4); art-direction contract and token constraints in `guide design`.
+- **Observability & UI art-direction standards (Spec 010 & 018):** Mandatory Observability section in `plan.md` and `fix.md` templates; 4-state visual experience matrix in `spec.md` (§4); art-direction contract, typography, contrast and token constraints in `guide design`.
 - **Development tarball packaging:** Add `npm run pack:dev` producing `<version>+dev.<timestamp>` tarballs (Spec 002).
 - **Automated `release-check` gate:** Catalog check enforcing version metadata, documentation parity and empty runtime dependencies.
+
+### Removed
+- **Third-Party UI Companions (Spec 015):** Completely removed external UI companion catalogs and `--ui-companion` CLI flag from core runtime. Replaced with clean component kit selection (`--ui-components`) and bundled zero-dependency design guidance (`guide design`).
 
 ### Changed
 - **CI test matrix expansion:** Include Node.js 26.x and `next/**` branch triggers in GitHub Actions workflow (Spec 003).
@@ -35,7 +40,7 @@ Presets/import-export (015) and remote update notices/companion synchronization 
 - **Documentation refresh:** Synchronize README, banner, CONTRIBUTING, and `docs/` guidelines with `0.8.0-preview.1` preview status and mark `0.7.0-preview.2` as published on 2026-10-24.
 
 ### Fixed
-- **UI companion detection and preservation:** Recognize valid empty npm dependency ranges in UI signals without changing legacy stack fields. Preserve edited former companions as user-owned files when switching, reject invalid companion paths before writes, and retain both wizard selections in TUI and plain modes.
+- **CLI Flag Parsing & Fit Route Validation:** Fixed boolean flag parsing for `--crosses-contract` and `--existing-tests`, added fail-fast validation for `--preset` and `--route`, and prevented unhandled `TypeError` crashes during invalid triage routes.
 - **Coexistence workflow corrections:** Interactive agent flags retain mode choice; both terminal interfaces explain mixed-tool coexistence. Invalid choices are retried, project diagnosis precedes global plugin replacement, and only regular local skill files count.
 - **Plugin bundle completeness:** Include schema files and license during `plugin install`; attempt to remove the incomplete target on copy failure. Installation replaces the old target and copies items sequentially, without an atomic swap (Spec 006).
 - **Non-destructive test teardown:** Clean up temporary directories on successful `package-smoke` runs while preserving failures for inspection (Spec 002).

@@ -23,24 +23,23 @@ El mismo recorrido sirve para cualquier nivel de experiencia:
 1. Elegir inglés o español, salvo que ya se haya indicado `--lang en|es` o exista un idioma guardado.
 2. Leer la carpeta de destino y el estado detectado: carpeta nueva, archivos existentes o instalación previa.
 3. Elegir la herramienta con IA, salvo argumento `--agent` o selección existente. En la interfaz visual, usar flechas y Espacio para marcar una o varias; Enter confirma y Ctrl+A selecciona las integraciones concretas. La opción genérica es exclusiva. En modo de texto se aceptan nombres separados por comas, `all` o `generic`. `plugin` se declara explícitamente para usuarios del plugin global de Antigravity; init no instala ese plugin global.
-4. Si un módulo del proyecto presenta señal de interfaz de usuario (Tailwind CSS, un framework de UI, `components.json` o un kit reconocido), no hay una selección de UI guardada y no se indicaron flags de UI, elegir el kit de componentes y el companion de diseño (`better`, `frontend-design` o `none`). Sin señal, o al reinicializar con una selección guardada, este paso se omite. Los flags sustituyen el campo indicado y conservan el otro valor guardado; sin valor guardado, se usa el primer kit detectado o `none` y el companion parte de `none`.
+4. Si un módulo del proyecto presenta señal de interfaz de usuario (Tailwind CSS, un framework de UI, `components.json` o un kit reconocido), no hay una selección de UI guardada y no se indicó el flag `--ui-components`, elegir el kit de componentes (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui` o `none`). Sin señal, o al reinicializar con una selección guardada, este paso se omite. El flag sustituye el campo indicado; sin valor guardado, se usa el primer kit detectado o `none`.
 5. Confirmar la preparación de esa carpeta. Las respuestas inválidas se vuelven a preguntar; cancelar o cerrar la entrada antes de confirmar no escribe archivos de instalación.
 6. Instalar runtime, plantillas, contexto inicial e integración; comprobar los archivos administrados y la versión local.
 7. Abrir la misma carpeta en la herramienta elegida y utilizar la invocación mostrada por el instalador.
 
-No se pregunta stack, estándar de documentación, perfil regulatorio ni quality gates durante este recorrido. Esas decisiones requieren conocer el proyecto y se discuten con el agente. El nombre inicial se deriva de la carpeta; puede declararse con `--name`. Las declaraciones `--stack`, `--doc`, `--profile`, `--gates`, `--ui-companion` (`better`, `frontend-design`, `none`) y `--ui-components` (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui`, `none`) siguen disponibles y se muestran antes de confirmar. No se ejecuta el texto de esos checks durante la instalación.
+No se pregunta stack, estándar de documentación, perfil regulatorio ni quality gates durante este recorrido. Esas decisiones requieren conocer el proyecto y se discuten con el agente. El nombre inicial se deriva de la carpeta; puede declararse con `--name`. Las declaraciones `--stack`, `--doc`, `--profile`, `--gates` y `--ui-components` (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui`, `none`) siguen disponibles y se muestran antes de confirmar. No se ejecuta el texto de esos checks durante la instalación.
 
-## Companions de interfaz
+## Componentes y Guía de Interfaz (`guide design`)
 
-`--ui-companion` acepta `better`, `frontend-design` o `none`; `--ui-components` declara el kit elegido. Ambos flags funcionan con `init --yes` aunque el proyecto todavía no tenga dependencias de UI. La selección queda en `manifest.ui` y se conserva al repetir `init` sin nuevos flags.
+OmniSpec 0.8 no requiere ni distribuye *companions* externos de terceros. La arquitectura visual se gobierna mediante la selección del kit de componentes (`--ui-components`) y la guía de diseño del sistema (`specs/resources/design.md` accesible vía `omni-spec guide design` o `/omni-guide design`).
 
-El companion activo se instala en `specs/.omni/companions/<nombre>/` como archivos administrados, con su índice, licencia y atribución. Estos archivos se pueden versionar con el proyecto. El catálogo no añade comandos al host.
+`--ui-components` acepta `shadcn`, `radix`, `headlessui`, `preline`, `flyonui` o `none`. Funciona con `init --yes` aunque el proyecto todavía no tenga dependencias de UI. La selección queda registrada en `manifest.ui.components` y se conserva al repetir `init` sin nuevos flags.
 
-Al cambiar de companion, OmniSpec elimina los archivos anteriores que no se editaron y conserva las ediciones como archivos propios, fuera del registro administrado. Esas copias no se actualizan automáticamente. Elegir `none` deja de administrar el companion anterior y conserva esas personalizaciones.
-
-`update --dry-run` permite revisar la actualización del companion activo. Las ediciones administradas bloquean su reemplazo; `update --accept-updates` acepta reemplazarlas y guarda sus bytes en un backup. Cuando el comando se ejecuta desde el runtime local aislado y falta el catálogo, conserva los companions y muestra cómo actualizar con la distribución completa de la misma versión.
-
-Los presets y los avisos de versiones remotas están [pendientes para otra entrega](ROADMAP.md); no hay que configurarlos para usar los companions actuales.
+La guía de diseño oficial (`guide design`) establece el estándar de artesanía visual:
+- **4 Estados Obligatorios**: Toda vista interactiva debe contemplar explícitamente *Loading* (skeletons con CLS = 0), *Empty* (explicación y CTA claro), *Error* (mensaje amigable con reintento) y *Protected* (estado restringido o sin permisos).
+- **Anti-Cliché & Tipografía Deliberada**: Prohibidos los degradados azul/púrpura genéricos, resplandores difusos artificiales y el anidamiento excesivo de tarjetas con sombras (*card-itis*). Se prioriza la jerarquía mediante tipografía y whitespace.
+- **Tokens Semánticos y Accesibilidad**: Contraste WCAG 2.1 AA medible, paletas de color con roles funcionales y soporte completo de navegación por teclado y lectores de pantalla.
 
 ## Terminales, agentes y automatización
 
