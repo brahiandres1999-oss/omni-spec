@@ -48,7 +48,16 @@ function findPresetIndex(target) {
   if (/\b(typescript|ts)\b/.test(lower)) {
     return STACK_PRESETS.findIndex(p => p.label.includes('TypeScript'));
   }
-  if (lower.includes('node') || lower.includes('javascript') || lower.includes('react') || lower.includes('express')) {
+  if (
+    lower.includes('node') ||
+    lower.includes('javascript') ||
+    lower.includes('react') ||
+    lower.includes('vue') ||
+    lower.includes('astro') ||
+    lower.includes('svelte') ||
+    lower.includes('nuxt') ||
+    lower.includes('express')
+  ) {
     return STACK_PRESETS.findIndex(p => p.label.includes('Node.js / JavaScript'));
   }
   if (lower.includes('full-stack') || lower.includes('monorepo')) {

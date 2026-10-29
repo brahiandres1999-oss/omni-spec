@@ -158,11 +158,17 @@ export async function detectProjectEnvironment(baseDir) {
             ? 'React'
             : deps.vue
               ? 'Vue.js'
-              : deps.express
-                ? 'Express'
-                : deps['@nestjs/core']
-                  ? 'NestJS'
-                  : null;
+              : deps.astro
+                ? 'Astro'
+                : deps['@sveltejs/kit'] || deps.svelte
+                  ? 'Svelte'
+                  : deps.nuxt
+                    ? 'Nuxt'
+                    : deps.express
+                      ? 'Express'
+                      : deps['@nestjs/core']
+                        ? 'NestJS'
+                        : null;
         stack = framework
           ? `${framework} / ${ts ? 'TypeScript' : 'JavaScript'}`
           : `Node.js / ${ts ? 'TypeScript' : pkg.type === 'module' ? 'JavaScript ESM' : 'JavaScript'}`;
@@ -181,7 +187,7 @@ export async function detectProjectEnvironment(baseDir) {
             ? 'pnpm'
             : /^yarn@/.test(pkg.packageManager || '') || names.includes('yarn.lock')
               ? 'yarn'
-              : /^bun@/.test(pkg.packageManager || '') || names.includes('bun.lock')
+              : /^bun@/.test(pkg.packageManager || '') || names.includes('bun.lock') || names.includes('bun.lockb')
                 ? 'bun'
                 : 'npm';
         for (const name of ['test', 'lint', 'build', 'typecheck', 'check']) {
@@ -248,8 +254,9 @@ export async function detectProjectEnvironment(baseDir) {
               : 'Python';
         stack = framework;
         doc = 'Python Docstrings (PEP 257)';
-        if (/\bpytest\b/i.test(raw)) commands.push('python -m pytest');
-        if (/\bruff\b/i.test(raw)) commands.push('ruff check .');
+        const usesUv = names.includes('uv.lock');
+        if (/\bpytest\b/i.test(raw) || usesUv) commands.push(usesUv ? 'uv run pytest' : 'python -m pytest');
+        if (/\bruff\b/i.test(raw)) commands.push(usesUv ? 'uv run ruff check .' : 'ruff check .');
       } else if (marker === 'pom.xml') {
         stack = 'Java / Maven';
         doc = 'JavaDoc';

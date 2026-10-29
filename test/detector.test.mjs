@@ -168,4 +168,67 @@ describe('Project Environment & Stack Detector', () => {
     assert.equal(result.detectedStack, 'Monorepo: React / TypeScript');
     assert.equal(result.docStandard, 'TSDoc');
   });
+
+  test('identifies Bun package manager with binary lockfile (bun.lockb)', async () => {
+    const pkg = {
+      name: 'bun-project',
+      scripts: { test: 'bun test', build: 'bun build ./index.ts' },
+    };
+    await writeFile(join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
+    await writeFile(join(tempDir, 'bun.lockb'), '');
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.match(result.qualityGates, /^bun test/m);
+    assert.match(result.qualityGates, /^bun run build/m);
+  });
+
+  test('identifies modern Astro frontend framework with TypeScript', async () => {
+    const pkg = {
+      name: 'my-astro-site',
+      dependencies: { astro: '^4.16.0' },
+      devDependencies: { typescript: '^5.7.0' },
+      scripts: { build: 'astro build' },
+    };
+    await writeFile(join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.framework, 'Astro');
+    assert.equal(result.detectedStack, 'Astro / TypeScript');
+    assert.equal(result.docStandard, 'TSDoc');
+  });
+
+  test('identifies SvelteKit frontend framework', async () => {
+    const pkg = {
+      name: 'my-svelte-app',
+      dependencies: { '@sveltejs/kit': '^2.0.0' },
+      devDependencies: { typescript: '^5.0.0' },
+    };
+    await writeFile(join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.framework, 'Svelte');
+    assert.equal(result.detectedStack, 'Svelte / TypeScript');
+  });
+
+  test('identifies Nuxt frontend framework', async () => {
+    const pkg = {
+      name: 'my-nuxt-app',
+      dependencies: { nuxt: '^3.10.0' },
+    };
+    await writeFile(join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.framework, 'Nuxt');
+    assert.equal(result.detectedStack, 'Nuxt / JavaScript');
+  });
+
+  test('identifies Python project with modern uv.lock and sets uv commands', async () => {
+    await writeFile(join(tempDir, 'pyproject.toml'), '[project]\nname = "uv-demo"\ndependencies = ["ruff"]\n');
+    await writeFile(join(tempDir, 'uv.lock'), '# uv lockfile\n');
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.detectedStack, 'Python');
+    assert.match(result.qualityGates, /uv run pytest/);
+    assert.match(result.qualityGates, /uv run ruff check \./);
+  });
 });
