@@ -54,7 +54,6 @@ const valueFlags = new Set([
   'timeout',
   'from',
   'lang',
-  'ui-companion',
   'ui-components',
 ]);
 const booleanFlags = new Set([
@@ -104,7 +103,6 @@ function parse(args) {
   flags.dryRun = flags['dry-run'];
   flags.acceptUpdates = flags['accept-updates'];
   flags.allowDowngrade = flags['allow-downgrade'];
-  flags.uiCompanion = flags['ui-companion'];
   flags.uiComponents = flags['ui-components'];
   if (flags.timeout !== undefined) {
     flags.timeout = Number(flags.timeout);
@@ -185,7 +183,7 @@ omni-spec <command> [arguments] [options]
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
   help | version
 
-init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-companion --ui-components
+init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-components
   --lang en|es sets the installation language; one workflow for every experience level.
   --plain disables terminal UI; pipes, TERM=dumb, CI and JSON retain plain output.
   Interactive UI: arrows to move, Space to select tools, Ctrl+A for all, Enter to continue, Esc/Ctrl+C to cancel.
@@ -227,8 +225,6 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (json && command === 'init' && !flags.yes) throw new Error('init --json requires --yes.');
     if (flags.lang !== undefined && command !== 'init') throw new Error('--lang is supported only by init.');
     if (flags.plain && command !== 'init') throw new Error('--plain is supported only by init.');
-    if (flags.uiCompanion !== undefined && command !== 'init')
-      throw new Error('--ui-companion is supported only by init.');
     if (flags.uiComponents !== undefined && command !== 'init')
       throw new Error('--ui-components is supported only by init.');
     if (flags.all && command !== 'status') throw new Error('--all is supported only by status.');

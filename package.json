@@ -42,7 +42,6 @@
     "agents/",
     "rules/",
     "skills/",
-    "companions/",
     "plugin.json",
     "plugin.extra.json",
     "docs/ONBOARDING.md",

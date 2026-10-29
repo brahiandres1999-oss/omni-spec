@@ -5,7 +5,6 @@ import { homedir } from 'node:os';
 import { lstat } from 'node:fs/promises';
 import { listProfiles } from './profiles/index.mjs';
 import { detectProjectEnvironment, UI_COMPONENT_KITS } from './detector.mjs';
-import { UI_COMPANIONS } from './assets.mjs';
 import { loadManifest } from './manifest.mjs';
 import { normalizeAgents } from './integrations.mjs';
 import { getPluginStatus } from './plugin-manager.mjs';
@@ -130,11 +129,11 @@ export async function promptChoice(rl, question, choices, defaultIndex = 0) {
  * Prepare installation configuration without writing project files or adopting candidate checks.
  * @param {string} baseDir Project directory.
  * @param {object} [cliOptions] Installer flags; yes bypasses questions, pluginDir selects the inspected plugin.
- *   uiCompanion and uiComponents override the corresponding saved UI selections; without flags,
+ *   uiComponents overrides the corresponding saved UI selection; without flags,
  *   saved selections are preserved. New UI questions require a detected UI signal.
  * @param {{input?: import('node:stream').Readable, output?: import('node:stream').Writable, env?: object}} [streams]
  *   Interactive streams; defaults to process stdin/stdout.
- * @returns {Promise<object|null>} Configuration including ui: {companion, components} when selected
+ * @returns {Promise<object|null>} Configuration including ui: {components} when selected
  *   by flags, saved configuration or interactive answers; null on explicit cancellation.
  * @throws {Error} Invalid destination/options or input ending before confirmation.
  */
@@ -155,24 +154,22 @@ export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
     throw new Error(`Invalid profile "${cliOptions.profile}". Valid profiles: ${validProfiles.join(', ')}`);
 
   const validComponents = [...UI_COMPONENT_KITS, 'none'];
-  if (cliOptions.uiCompanion !== undefined && !UI_COMPANIONS.includes(cliOptions.uiCompanion))
-    throw new Error(`Invalid --ui-companion "${cliOptions.uiCompanion}". Valid values: ${UI_COMPANIONS.join(', ')}`);
   if (cliOptions.uiComponents !== undefined && !validComponents.includes(cliOptions.uiComponents))
     throw new Error(
       `Invalid --ui-components "${cliOptions.uiComponents}". Valid values: ${validComponents.join(', ')}`,
     );
 
   const defaultKit = detected.ui?.declaredComponents?.[0] || 'none';
-  const defaultCompanion = 'none';
   let uiConfig = null;
-  const hasUiFlags = cliOptions.uiCompanion !== undefined || cliOptions.uiComponents !== undefined;
+  const hasUiFlags = cliOptions.uiComponents !== undefined;
   if (hasUiFlags) {
     uiConfig = {
-      companion: cliOptions.uiCompanion ?? existing?.ui?.companion ?? defaultCompanion,
       components: cliOptions.uiComponents ?? existing?.ui?.components ?? defaultKit,
     };
   } else if (existing?.ui) {
-    uiConfig = existing.ui;
+    uiConfig = {
+      components: existing.ui.components || defaultKit,
+    };
   }
 
   const locale =
@@ -349,39 +346,10 @@ export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
           defaultValue: defaultKit,
         });
 
-        const selectedCompanion = await ui.choose({
-          language,
-          step: 2,
-          title: es ? 'Compañero de diseño (UI Companion)' : 'Design companion (UI Companion)',
-          details: [
-            es
-              ? 'Guías de diseño curadas en specs/.omni/companions/ sin comandos de host.'
-              : 'Curated design guidelines in specs/.omni/companions/ without host commands.',
-          ],
-          options: [
-            {
-              value: 'none',
-              label: es ? 'Ninguno (Aplicar guide design de OmniSpec)' : 'None (Apply OmniSpec guide design)',
-            },
-            {
-              value: 'better',
-              label: es
-                ? 'Better Skills (Jakub Krehel: microinteracciones, contraste, accesibilidad)'
-                : 'Better Skills (Jakub Krehel: microinteractions, contrast, accessibility)',
-            },
-            {
-              value: 'frontend-design',
-              label: es
-                ? 'Frontend Design (Anthropic: dirección de arte y prevención de clichés)'
-                : 'Frontend Design (Anthropic: art direction and anti-cliché guidance)',
-            },
-          ],
-          defaultValue: defaultCompanion,
-        });
-        uiConfig = { components: selectedComponents, companion: selectedCompanion };
+        uiConfig = { components: selectedComponents };
       }
       if (uiConfig) {
-        details.push(`UI: ${uiConfig.components} · ${uiConfig.companion}`);
+        details.push(`UI: ${uiConfig.components}`);
         if (detected.ui?.signal)
           details.push(
             es
@@ -539,39 +507,10 @@ export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
         )
       ).value;
 
-      const companionChoices = [
-        {
-          value: 'none',
-          label:
-            language === 'es' ? 'Ninguno (Aplicar guide design de OmniSpec)' : 'None (Apply OmniSpec guide design)',
-        },
-        {
-          value: 'better',
-          label:
-            language === 'es'
-              ? 'Better Skills (Jakub Krehel: microinteracciones, contraste, accesibilidad)'
-              : 'Better Skills (Jakub Krehel: microinteractions, contrast, accessibility)',
-        },
-        {
-          value: 'frontend-design',
-          label:
-            language === 'es'
-              ? 'Frontend Design (Anthropic: dirección de arte y prevención de clichés)'
-              : 'Frontend Design (Anthropic: art direction and anti-cliché guidance)',
-        },
-      ];
-      const selectedCompanion = (
-        await promptChoice(
-          rl,
-          language === 'es' ? 'Compañero de diseño (UI Companion)' : 'Design companion (UI Companion)',
-          companionChoices,
-          0,
-        )
-      ).value;
-      uiConfig = { components: selectedComponents, companion: selectedCompanion };
+      uiConfig = { components: selectedComponents };
     }
     console.log(`\n${t.selected}: ${agent}\n${t.pending}`);
-    if (uiConfig) console.log(`  UI: ${uiConfig.components} · ${uiConfig.companion}`);
+    if (uiConfig) console.log(`  UI: ${uiConfig.components}`);
     // Explicit engineering declarations are reviewed here, not requested from every user.
     for (const key of ['name', 'stack', 'doc', 'profile', 'gates'])
       if (cliOptions[key] !== undefined) console.log(`  --${key}: ${cliOptions[key]}`);

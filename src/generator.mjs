@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { getProfile } from './profiles/index.mjs';
 import { _initManifestUnlocked, loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
-import { packageEntries, companionCatalogAvailable, companionEntries, COMPANIONS_PREFIX } from './assets.mjs';
+import { packageEntries } from './assets.mjs';
 import { syncManagedFiles } from './managed.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
@@ -156,13 +156,12 @@ This workspace organizes changes into four archetypes with explicit scope and ev
 /**
  * Prepare or reinitialize OmniSpec under the manifest lock, preserving specifications.
  * @param {string} baseDir Project root.
- * @param {object} [options] Installation configuration from runWizard. ui contains companion and
+ * @param {object} [options] Installation configuration from runWizard. ui contains
  *   components; without ui the saved selection is preserved. force replaces managed local edits.
  * @returns {Promise<object>} Constitution, specifications and manifest paths plus managed-file changes.
- * @throws {Error} Invalid configuration, unsafe paths, edited managed files without force, missing
- *   catalog when changing companions, or filesystem failure. Validation precedes managed-file writes.
- * @description Writes configuration, runtime, templates, host integrations and active companion files;
- *   prunes unedited files of the previous companion and preserves edited ones. Does not run Git.
+ * @throws {Error} Invalid configuration, unsafe paths, edited managed files without force, or filesystem failure.
+ *   Validation precedes managed-file writes.
+ * @description Writes configuration, runtime, templates and host integrations. Does not run Git.
  */
 export async function scaffoldProject(baseDir, options = {}) {
   options = {
@@ -216,33 +215,10 @@ async function scaffoldUnlocked(baseDir, options) {
     }
     entries = preserved;
   }
-  const targetCompanion = options.ui?.companion !== undefined ? options.ui.companion : existingManifest?.ui?.companion;
-  const previousCompanion = existingManifest?.ui?.companion || 'none';
-  const companionChanged = targetCompanion !== undefined && targetCompanion !== previousCompanion;
-  const catalogAvailable = await companionCatalogAvailable();
-
-  let companionFiles = [];
-  let companionPrune;
-
-  if (!catalogAvailable) {
-    if (companionChanged) {
-      throw new Error(
-        `Companion catalog is not available; cannot change companion to "${targetCompanion}". Run npx omni-spec@${version} init --ui-companion ${targetCompanion}.`,
-      );
-    } else if (targetCompanion && targetCompanion !== 'none') {
-      console.warn(
-        `[NOTICE] Companion catalog not available; skipping companion synchronization. Run npx omni-spec@${version} init to synchronize companions.`,
-      );
-    }
-  } else {
-    companionFiles = await companionEntries(targetCompanion);
-    companionPrune = COMPANIONS_PREFIX;
-  }
-
   const assets = await syncManagedFiles(
     baseDir,
-    [...entries, ...integrationEntries({ ...existingManifest, ...options, version }), ...companionFiles],
-    { acceptUpdates: force, prune: companionPrune },
+    [...entries, ...integrationEntries({ ...existingManifest, ...options, version })],
+    { acceptUpdates: force },
   );
 
   if (!constitutionExists || force) {

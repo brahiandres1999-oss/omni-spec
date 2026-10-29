@@ -23,7 +23,6 @@ const bundleItems = [
   'bin',
   'src',
   'schema',
-  'companions',
   'LICENSE',
 ];
 
@@ -148,45 +147,22 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
 
     const init = runCli(
       bin,
-      [
-        'init',
-        '--yes',
-        '--agent',
-        'plugin',
-        '--lang',
-        'es',
-        '--ui-companion',
-        'better',
-        '--ui-components',
-        'shadcn',
-        '--json',
-      ],
+      ['init', '--yes', '--agent', 'plugin', '--lang', 'es', '--ui-components', 'shadcn', '--json'],
       projectDir,
       home,
     );
     assert.equal(init.status, 0, init.stderr);
     assert.equal(JSON.parse(init.stdout).installation.integrity, 'PASSED');
     await assertPackageFiles(join(projectDir, 'specs', '.omni', 'runtime'));
-    assert.deepEqual((await loadManifest(projectDir)).ui, { companion: 'better', components: 'shadcn' });
-    const registry = JSON.parse(await readFile(join(projectDir, 'specs/.omni/managed.json'), 'utf8'));
-    const catalog = await readdir(join(packageRoot, 'companions/better'), { recursive: true });
-    for (const path of catalog.filter(path => /\.md$|^LICENSE$/.test(path))) {
-      const key = `specs/.omni/companions/better/${path.replaceAll('\\', '/')}`;
-      assert.ok(registry.files[key], key);
-      assert.deepEqual(
-        await readFile(join(projectDir, key)),
-        await readFile(join(packageRoot, 'companions/better', path)),
-        key,
-      );
-    }
+    assert.deepEqual((await loadManifest(projectDir)).ui, { components: 'shadcn' });
     for (const host of ['.agents', '.claude', '.codex', '.cursor', '.gemini', '.github', '.kilo', '.opencode'])
       await assert.rejects(stat(join(projectDir, host)), { code: 'ENOENT' });
-    await assert.rejects(stat(join(projectDir, 'specs/.omni/runtime/companions')), { code: 'ENOENT' });
+    await assert.rejects(stat(join(projectDir, 'specs/.omni/companions')), { code: 'ENOENT' });
 
     const update = runCli(bin, ['update', '--json'], projectDir, home);
     assert.equal(update.status, 0, update.stderr);
     assert.deepEqual(JSON.parse(update.stdout).assets.conflicts, []);
-    assert.deepEqual((await loadManifest(projectDir)).ui, { companion: 'better', components: 'shadcn' });
+    assert.deepEqual((await loadManifest(projectDir)).ui, { components: 'shadcn' });
   });
 
   test('plugin bundle carries the schemas and license its CLI reads', async () => {
