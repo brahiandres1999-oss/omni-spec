@@ -592,3 +592,35 @@ test('the verification fingerprint still distinguishes CRLF from LF', async () =
   await newlines('main.mjs', '\r\n');
   assert.notEqual(await projectFingerprint(root, spec, gates), before);
 });
+
+test('identifies modern lockfiles and tool configs as context inputs without citation', async () => {
+  await recordContext(root);
+  const initial = await contextFreshness(root);
+  assert.equal(initial.status, 'CURRENT');
+
+  // Add uv.lock, bun.lockb, biome.json, components.json
+  await writeFile(join(root, 'uv.lock'), '# uv lock\n');
+  await writeFile(join(root, 'bun.lockb'), '');
+  await writeFile(join(root, 'biome.json'), '{\n  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json"\n}\n');
+  await writeFile(join(root, 'components.json'), '{\n  "style": "default"\n}\n');
+
+  const freshness = await contextFreshness(root);
+  assert.equal(freshness.status, 'STALE');
+  assert.ok(freshness.changed.includes('uv.lock'));
+  assert.ok(freshness.changed.includes('bun.lockb'));
+  assert.ok(freshness.changed.includes('biome.json'));
+  assert.ok(freshness.changed.includes('components.json'));
+});
+
+test('identifies modern config patterns (eslint, tailwind, postcss) as context inputs', async () => {
+  await recordContext(root);
+  await writeFile(join(root, 'eslint.config.mjs'), 'export default [];\n');
+  await writeFile(join(root, 'tailwind.config.ts'), 'export default {};\n');
+  await writeFile(join(root, 'postcss.config.js'), 'module.exports = {};\n');
+
+  const freshness = await contextFreshness(root);
+  assert.equal(freshness.status, 'STALE');
+  assert.ok(freshness.changed.includes('eslint.config.mjs'));
+  assert.ok(freshness.changed.includes('tailwind.config.ts'));
+  assert.ok(freshness.changed.includes('postcss.config.js'));
+});

@@ -37,6 +37,12 @@ const CONTEXT_NAMES = new Set([
   'turbo.json',
   'deno.json',
   'bunfig.toml',
+  'bun.lock',
+  'bun.lockb',
+  'uv.lock',
+  'biome.json',
+  'biome.jsonc',
+  'components.json',
   'angular.json',
   'pom.xml',
   'build.gradle',
@@ -77,6 +83,8 @@ const CONTEXT_PATTERNS = [
   /\.(?:csproj|fsproj|sln)$/,
   /^\.env\.(?:example|sample|template)$/,
   /^(?:vite|vitest|next|nuxt|svelte|astro|webpack|rollup|playwright|jest|cypress|karma)\.config\.[cm]?[jt]s$/,
+  /^eslint\.config\.[cm]?[jt]s$/,
+  /^(?:tailwind|postcss)\.config\.[cm]?[jt]s$/,
 ];
 const ROOT_CONTEXT = new Set([
   'AGENTS.md',
