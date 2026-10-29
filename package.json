@@ -1,6 +1,6 @@
 {
   "name": "omni-spec",
-  "version": "0.8.0-preview.1",
+  "version": "0.8.0-preview.2",
   "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding.",
   "type": "module",
   "main": "src/cli.mjs",

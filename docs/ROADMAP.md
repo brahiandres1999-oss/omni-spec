@@ -2,13 +2,13 @@
 
 Actualizado el 2026-10-29. Esta hoja de ruta distingue la candidata actual de las capacidades pendientes; las fechas y el número de la próxima Preview todavía no están fijados.
 
-## Candidata 0.8.0-preview.1
+## Candidata 0.8.0-preview.2
 
 Incluye:
 - **Triaje dinámico y flujo ligero** (Spec 017): Creación adaptativa de especificaciones (`--light`, `--preset`), andamiaje dinámico y flags de triaje con validación fail-fast.
 - **Sintaxis EARS y Zero-Slop Guard** (Spec 016): Estandarización de criterios de aceptación EARS y protocolo de 5 reglas de calidad de código y arquitectura.
 - **Guardián de diseño UI y `omni-init` optimizado** (Specs 015 y 018): Matriz obligatoria de 4 estados (*Loading*, *Empty*, *Error*, *Protected*), desacoplamiento total de *companions* de terceros y detección directa de kits de componentes (`--ui-components`).
-- **Aislamiento y observabilidad**: Economía de contexto (`contracts --active`), runtime local ignorado por Git y restaurable, y diagnóstico de coexistencia de Antigravity. Consulta los cambios y límites en las [notas de la Preview](releases/0.8.0-preview.1.md).
+- **Aislamiento y observabilidad**: Economía de contexto (`contracts --active`), runtime local ignorado por Git y restaurable, y diagnóstico de coexistencia de Antigravity. Consulta los cambios y límites en las [notas de la Preview](releases/0.8.0-preview.2.md).
 
 La publicación usa el canal npm `preview` y una prerelease de GitHub. La validación local del motor no sustituye la aceptación en hosts reales ni promueve la candidata a `0.8.0` estable.
 
