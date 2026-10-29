@@ -456,4 +456,53 @@ describe('Spec Fit in the working project', () => {
     await access(join(dir, 'plan.md'));
     await access(join(dir, 'tasks.md'));
   });
+
+  test('CLI fit rejects unknown preset with descriptive error', async () => {
+    await scaffoldProject(tempDir, { projectName: 'InvalidPresetApp' });
+    const spec = await createSpec(tempDir, 'feature', 'invalid-preset');
+    const errors = [];
+    const original = console.error;
+    console.error = value => errors.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--preset', 'unknown'], tempDir);
+      assert.equal(code, 1);
+      assert.ok(errors.some(e => e.includes('--preset must be light, standard or full')));
+    } finally {
+      console.error = original;
+    }
+  });
+
+  test('CLI fit --crosses-contract escalates light preset to full route', async () => {
+    await scaffoldProject(tempDir, { projectName: 'ContractEscalationApp' });
+    const spec = await createSpec(tempDir, 'feature', 'contract-change', { light: true });
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--preset', 'light', '--crosses-contract', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    const report = JSON.parse(lines.join('\n'));
+    assert.equal(report.route, 'full');
+    assert.ok(report.reasons.some(r => r.includes('contract')));
+  });
+
+  test('CLI fit reports invalid answers with code 1 instead of crashing', async () => {
+    await scaffoldProject(tempDir, { projectName: 'InvalidAnswersApp' });
+    const spec = await createSpec(tempDir, 'feature', 'bad-answers', { light: true });
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--preset', 'light', '--files', '0', '--json'], tempDir);
+      assert.equal(code, 1);
+    } finally {
+      console.log = original;
+    }
+    const report = JSON.parse(lines.join('\n'));
+    assert.equal(report.route, 'invalid');
+    assert.ok(report.errors.some(e => e.includes('"files" is invalid')));
+  });
 });

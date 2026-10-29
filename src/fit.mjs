@@ -309,6 +309,9 @@ export async function saveFit(root, spec, answers) {
 
 export function applyFitPreset(currentAnswers, presetName, overrides = {}) {
   const presetKey = (presetName || 'full').toLowerCase();
+  if (presetName && !FIT_PRESETS[presetKey]) {
+    throw new Error(`Unknown preset: "${presetName}". Allowed presets: light, standard, full.`);
+  }
   const base = FIT_PRESETS[presetKey] || currentAnswers || FIT_PRESETS.full;
   return { ...base, ...overrides, schemaVersion: 2 };
 }

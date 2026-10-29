@@ -78,6 +78,8 @@ const booleanFlags = new Set([
   'light',
   'standard',
   'full',
+  'crosses-contract',
+  'existing-tests',
 ]);
 
 function acceptanceSummary(acceptance) {
@@ -116,6 +118,8 @@ function parse(args) {
   flags.acceptUpdates = flags['accept-updates'];
   flags.allowDowngrade = flags['allow-downgrade'];
   flags.uiComponents = flags['ui-components'];
+  flags.crossesContract = flags['crosses-contract'];
+  flags.existingTests = flags['existing-tests'];
   if (flags.timeout !== undefined) {
     flags.timeout = Number(flags.timeout);
     if (!Number.isSafeInteger(flags.timeout) || flags.timeout < 100 || flags.timeout > 3600000)
@@ -243,8 +247,12 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (flags.active && (command !== 'contracts' || positionals.length))
       throw new Error('--active is supported only by contracts without an ID.');
     if (flags.preset !== undefined && command !== 'fit') throw new Error('--preset is supported only by fit.');
+    if (flags.preset !== undefined && !['light', 'standard', 'full'].includes(flags.preset.toLowerCase()))
+      throw new Error('--preset must be light, standard or full.');
     if (flags.route !== undefined && !['create', 'fit'].includes(command))
       throw new Error('--route is supported only by create and fit.');
+    if (flags.route !== undefined && !['light', 'standard', 'full'].includes(flags.route.toLowerCase()))
+      throw new Error('--route must be light, standard or full.');
     if ((flags.light || flags.standard || flags.full) && !['create', 'fit'].includes(command))
       throw new Error('--light, --standard and --full are supported only by create and fit.');
     const maxPositionals =
@@ -448,6 +456,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           flags.full ||
           flags.files !== undefined ||
           flags.modules !== undefined ||
+          flags.crossesContract !== undefined ||
+          flags.existingTests !== undefined ||
           flags.risk !== undefined ||
           flags.uncertainty !== undefined ||
           flags.ambiguity !== undefined ||
@@ -463,7 +473,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           const overrides = {};
           if (flags.files !== undefined) overrides.files = parseInt(flags.files, 10);
           if (flags.modules !== undefined) overrides.modules = parseInt(flags.modules, 10);
-          if (flags.crossesContract !== undefined) overrides.crossesContract = Boolean(flags.crossesContract);
+          if (flags.crossesContract !== undefined) overrides.crossesContract = true;
+          if (flags.existingTests !== undefined) overrides.existingTests = true;
           if (flags.risk !== undefined) overrides.risk = flags.risk;
           if (flags.uncertainty !== undefined) overrides.uncertainty = flags.uncertainty;
           if (flags.ambiguity !== undefined) overrides.ambiguity = flags.ambiguity;
@@ -473,6 +484,13 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           const newAnswers = applyFitPreset(existingFit?.answers, presetName, overrides);
           await saveFit(workingDir, spec, newAnswers);
           const updatedRoute = await specRoute(workingDir, spec);
+          if (updatedRoute.route === 'invalid') {
+            emit(
+              { spec: spec.slug, type: spec.type, classified: true, route: 'invalid', errors: updatedRoute.errors },
+              `[FIT] ${spec.slug} has an invalid fit.json.\n${updatedRoute.errors.join('\n')}`,
+            );
+            return 1;
+          }
           let scaffolded = [];
           if (updatedRoute && ['standard', 'full'].includes(updatedRoute.route)) {
             scaffolded = await scaffoldMissingRouteArtifacts(workingDir, spec, updatedRoute.route);
