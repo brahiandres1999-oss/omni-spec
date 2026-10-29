@@ -92,11 +92,6 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     if (!needsPlan) optionalArtifacts.add('rca.md');
     if (!needsPlan) optionalArtifacts.add('fix.md');
   }
-  if (optionalArtifacts.size)
-    warnings.push(
-      `Spec fit route is ${route.route}: ${[...optionalArtifacts].join(', ')} are not required and are not audited. Keep required decisions in the active contract or select a fuller route.`,
-    );
-
   let files = [];
   try {
     files = await readdir(specDir);
@@ -108,6 +103,12 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       spec,
     };
   }
+
+  const presentOptional = [...optionalArtifacts].filter(f => files.includes(f));
+  if (presentOptional.length)
+    warnings.push(
+      `Spec fit route is ${route.route}: ${presentOptional.join(', ')} are not required and are not audited. Keep required decisions in the active contract or select a fuller route.`,
+    );
 
   // Optional route artifacts remain on disk for later promotion, but do not block this route.
   for (const file of files) {

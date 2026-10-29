@@ -9,6 +9,7 @@ import { syncManagedFiles } from './managed.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
 import { QUESTIONS, DOCUMENTATION } from './protocols.mjs';
+import { FIT_PRESETS } from './fit.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -317,11 +318,31 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
     }
     const files = await readdir(templateSourceDir);
 
+    const route = options.light ? 'light' : options.standard ? 'standard' : options.full ? 'full' : options.route;
+    const allowedFiles = new Set(files);
+    if (route === 'light') {
+      if (archetypeKey === 'feature') {
+        allowedFiles.delete('plan.md');
+        allowedFiles.delete('tasks.md');
+      } else if (archetypeKey === 'bugfix') {
+        allowedFiles.delete('rca.md');
+        allowedFiles.delete('fix.md');
+      } else if (archetypeKey === 'debt') {
+        allowedFiles.delete('migration-plan.md');
+        allowedFiles.delete('tasks.md');
+      }
+    } else if (route === 'standard') {
+      if (archetypeKey === 'feature' || archetypeKey === 'debt') {
+        allowedFiles.delete('tasks.md');
+      }
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const title = options.title || name.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     const profile = getProfile(manifest.profile || options.profile || 'general');
 
     for (const file of files) {
+      if (!allowedFiles.has(file)) continue;
       const srcFile = join(templateSourceDir, file);
       const destFile = join(specDir, file);
       let content = await readFile(srcFile, 'utf-8');
@@ -365,6 +386,9 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
       '# Verification evidence\n\n[TODO] Map each acceptance criterion to a file, test or manual observation and actual result. Record limitations and unresolved findings. For an RFC, explain the decision and alternatives reviewed.\n',
     );
     await writeFile(join(specDir, 'acceptance.json'), JSON.stringify(acceptanceSeed(archetypeKey), null, 2) + '\n');
+    if (route && FIT_PRESETS[route]) {
+      await writeFile(join(specDir, 'fit.json'), JSON.stringify(FIT_PRESETS[route], null, 2) + '\n', 'utf-8');
+    }
 
     // Register in manifest
     const specEntry = {
@@ -396,8 +420,60 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
       specDir,
       branch: specEntry.branch,
       archetype: archetype.name,
+      route: route || null,
     };
   });
+}
+
+export async function scaffoldMissingRouteArtifacts(baseDir, spec, targetRoute) {
+  const archetype = ARCHETYPES[spec.type];
+  if (!archetype) return [];
+
+  const requiredFiles = [];
+  if (['standard', 'full'].includes(targetRoute)) {
+    if (spec.type === 'feature') requiredFiles.push('plan.md');
+    else if (spec.type === 'bugfix') requiredFiles.push('rca.md', 'fix.md');
+    else if (spec.type === 'debt') requiredFiles.push('migration-plan.md');
+  }
+  if (targetRoute === 'full') {
+    if (['feature', 'debt'].includes(spec.type)) requiredFiles.push('tasks.md');
+  }
+
+  let templateSourceDir = join(baseDir, 'specs', '_templates', archetype.folder);
+  try {
+    await access(templateSourceDir);
+  } catch {
+    templateSourceDir = join(__dirname, 'templates', archetype.folder);
+  }
+
+  const specDir = join(baseDir, 'specs', spec.slug);
+  const today = new Date().toISOString().split('T')[0];
+  const title = spec.title || spec.slug;
+  const idStr = spec.id;
+  const scaffolded = [];
+
+  for (const file of requiredFiles) {
+    const destFile = join(specDir, file);
+    try {
+      await access(destFile);
+    } catch {
+      const srcFile = join(templateSourceDir, file);
+      try {
+        let content = await readFile(srcFile, 'utf-8');
+        content = content
+          .replaceAll('XXX', idStr)
+          .replaceAll('AAAA-MM-DD', today)
+          .replaceAll('YYYY-MM-DD', today)
+          .replaceAll('Título de la Especificación', title)
+          .replaceAll('Short Title', title)
+          .replaceAll('Incident Title / Short Description', title);
+        await writeFile(destFile, content, 'utf-8');
+        scaffolded.push(file);
+      } catch {}
+    }
+  }
+
+  return scaffolded;
 }
 
 export async function ensureProjectContext(baseDir, environment) {
