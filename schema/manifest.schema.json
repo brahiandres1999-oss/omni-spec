@@ -50,14 +50,9 @@
     },
     "ui": {
       "type": "object",
-      "description": "Configured UI component kit and design companion for frontend tasks.",
-      "required": ["companion", "components"],
+      "description": "Configured UI component kit for frontend tasks.",
+      "required": ["components"],
       "properties": {
-        "companion": {
-          "type": "string",
-          "enum": ["better", "frontend-design", "none"],
-          "description": "Design companion installed under specs/.omni/companions/."
-        },
         "components": {
           "type": "string",
           "enum": ["shadcn", "radix", "headlessui", "preline", "flyonui", "none"],

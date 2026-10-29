@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { loadManifest, saveManifest, withManifestLock, MANIFEST_SCHEMA_URL } from './manifest.mjs';
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
-import { packageEntries, companionCatalogAvailable, companionEntries, COMPANIONS_PREFIX } from './assets.mjs';
+import { packageEntries } from './assets.mjs';
 import { syncManagedFiles, checkManagedFiles, loadRegistry, managedSection, safePath } from './managed.mjs';
 import { ensureProjectContext, buildConstitutionContent } from './generator.mjs';
 import { join } from 'node:path';
@@ -130,11 +130,10 @@ export async function checkProjectVersion(baseDir, options = {}) {
  * A local runtime whose package.json is missing, unreadable or of another version than the
  * manifest is replaced without conflict or backup (009-d1); an edited runtime of the manifest's
  * version still conflicts, also when upgrading. Runtime registry entries the package no longer
- * ships are pruned (009-d7). Active companions are synchronized and their obsolete unedited
- * files pruned when the running distribution has a catalog; otherwise they are preserved with a notice.
+ * ships are pruned (009-d7).
  * OmniSpec never runs Git.
  * Side effects, except with dryRun and under the manifest lock: managed files, backups and the
- * registry; deletion of unedited pruned runtime/companion files; specs/project-context.md when absent;
+ * registry; deletion of unedited pruned runtime files; specs/project-context.md when absent;
  * specs/manifest.json.
  * @param {string} baseDir Project root.
  * @param {{dryRun?: boolean, acceptUpdates?: boolean, allowDowngrade?: boolean, agent?: string}} [options]
@@ -167,21 +166,7 @@ export async function updateProject(baseDir, options = {}) {
     const runtime = await localRuntimeVersion(baseDir);
     const replaceRuntime = runtime.version !== manifest.version;
     const ignoreAdded = await runtimeIgnoreAdded(baseDir);
-    const catalogAvailable = await companionCatalogAvailable();
-    let companionFiles = [];
-    let prune = RUNTIME;
-    const companionNotices = [];
-
-    if (catalogAvailable) {
-      companionFiles = await companionEntries(manifest.ui?.companion);
-      prune = [RUNTIME, COMPANIONS_PREFIX];
-    } else {
-      if (manifest.ui?.companion && manifest.ui.companion !== 'none') {
-        companionNotices.push(
-          `Companion catalog is not available in the running OmniSpec distribution; companion files were neither updated nor pruned. Run npx omni-spec@${cliVersion} update to synchronize companions.`,
-        );
-      }
-    }
+    const prune = RUNTIME;
 
     const entries = [
       ...(await packageEntries()).map(entry =>
@@ -189,10 +174,9 @@ export async function updateProject(baseDir, options = {}) {
       ),
       ...integrationEntries({ ...manifest, version: cliVersion, agent }),
       { path: CONSTITUTION_REFERENCE, content: reference },
-      ...companionFiles,
     ];
     const assets = await syncManagedFiles(baseDir, entries, { ...options, prune });
-    const notices = [...companionNotices];
+    const notices = [];
     if (ignoreAdded)
       notices.push(
         'update adds .omni/runtime/ to the managed section of specs/.gitignore. Runtime files already committed stay in the Git index: from the project root, the repository owner can run git rm -r --cached specs/.omni/runtime and commit. OmniSpec does not run Git.',

@@ -9,7 +9,12 @@ Date: YYYY-MM-DD
 [TODO] Who needs what outcome and why? Define the smallest useful change.
 
 ## 2. Acceptance Criteria and Non-Goals
-[TODO] Give observable acceptance criteria with stable IDs and kinds, for example `AC-01 [functional]: input X produces Y` or `AC-02 [visual]: at 375px nothing overflows horizontally`. Kinds: functional, visual, interaction, accessibility. State Non-Goals explicitly.
+[TODO] State Acceptance Criteria using formal EARS syntax (Easy Approach to Requirements Syntax) with stable IDs and kinds (functional, visual, interaction, accessibility).
+- Ubiquitous: `<system> SHALL <action>` (e.g. `AC-01 [functional]: The system SHALL validate input tokens on load`)
+- Event-driven: `WHEN <trigger>, <system> SHALL <action>` (e.g. `AC-02 [functional]: WHEN an invalid token is provided, the CLI SHALL exit with status 1`)
+- State-driven: `WHILE <state>, <system> SHALL <action>` (e.g. `AC-03 [interaction]: WHILE data is loading, the UI SHALL display contextual skeleton placeholders`)
+- Unwanted condition: `IF <error/condition>, THEN <system> SHALL <action>` (e.g. `AC-04 [functional]: IF the network connection drops, THEN the client SHALL display a retry mechanism`)
+State Non-Goals explicitly to prevent scope creep.
 
 ## 3. Domain applicability
 Review relevant controls only; justify N/A. Domain profiles are not compliance certification.

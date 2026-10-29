@@ -1,11 +1,50 @@
 // Deterministic effort heuristics, not experimentally universal thresholds.
 // Inspect technical facts and record estimates; ask the user about unresolved intent.
 // Keep existing routing behavior until comparative evaluations justify changing it.
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { safePath } from './managed.mjs';
 
 export const FIT_SCHEMA_VERSION = 1;
 export const FIT_SUPPORTED_SCHEMA_VERSIONS = [1, 2];
+
+export const FIT_PRESETS = {
+  light: {
+    schemaVersion: 2,
+    reasoning: 'done',
+    files: 1,
+    modules: 1,
+    crossesContract: false,
+    ambiguity: 'none',
+    existingTests: true,
+    risk: 'low',
+    uncertainty: 'clear',
+    reversibility: 'easy',
+  },
+  standard: {
+    schemaVersion: 2,
+    reasoning: 'done',
+    files: 1,
+    modules: 1,
+    crossesContract: false,
+    ambiguity: 'none',
+    existingTests: false,
+    risk: 'low',
+    uncertainty: 'clear',
+    reversibility: 'easy',
+  },
+  full: {
+    schemaVersion: 2,
+    reasoning: 'done',
+    files: 3,
+    modules: 2,
+    crossesContract: true,
+    ambiguity: 'none',
+    existingTests: true,
+    risk: 'high',
+    uncertainty: 'clear',
+    reversibility: 'easy',
+  },
+};
 
 export const FIT_QUESTIONS = [
   {
@@ -260,4 +299,19 @@ export function fitQuestionnaire(schemaVersion = FIT_SCHEMA_VERSION) {
     questions: schemaVersion === 2 ? FIT_V2_QUESTIONS : FIT_QUESTIONS,
     note: 'Answer every question with the recorded value, then run `omni-spec fit <id>` to read the route. The route is derived, never written by hand.',
   };
+}
+
+export async function saveFit(root, spec, answers) {
+  const path = await safePath(root, `specs/${spec.slug}/fit.json`);
+  await writeFile(path, JSON.stringify(answers, null, 2) + '\n', 'utf8');
+  return path;
+}
+
+export function applyFitPreset(currentAnswers, presetName, overrides = {}) {
+  const presetKey = (presetName || 'full').toLowerCase();
+  if (presetName && !FIT_PRESETS[presetKey]) {
+    throw new Error(`Unknown preset: "${presetName}". Allowed presets: light, standard, full.`);
+  }
+  const base = FIT_PRESETS[presetKey] || currentAnswers || FIT_PRESETS.full;
+  return { ...base, ...overrides, schemaVersion: 2 };
 }

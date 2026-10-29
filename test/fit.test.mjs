@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -9,6 +9,7 @@ import {
   specRoute,
   FIT_QUESTIONS,
   FIT_SCHEMA_VERSION,
+  FIT_PRESETS,
   fitQuestionnaire,
 } from '../src/fit.mjs';
 import { auditSpec } from '../src/auditor.mjs';
@@ -369,10 +370,139 @@ describe('Spec Fit in the working project', () => {
     assert.equal(stored.files, 1);
   });
 
+  test('FIT_PRESETS defines canonical light, standard and full configurations', () => {
+    assert.equal(FIT_PRESETS.light.risk, 'low');
+    assert.equal(FIT_PRESETS.light.files, 1);
+    assert.equal(FIT_PRESETS.standard.existingTests, false);
+    assert.equal(FIT_PRESETS.full.risk, 'high');
+  });
+
   test('a byte order mark in fit.json does not break the route', async () => {
     const { spec, dir } = await project();
     await writeFile(join(dir, 'fit.json'), '﻿' + JSON.stringify(baseAnswers, null, 2), 'utf8');
     const route = await specRoute(tempDir, spec);
     assert.equal(route.route, 'light');
+  });
+
+  test('createSpec with options.light creates only primary artifact and seeds light fit.json', async () => {
+    await scaffoldProject(tempDir, { projectName: 'LightApp' });
+    const spec = await createSpec(tempDir, 'feature', 'quick-fix', { light: true });
+    assert.equal(spec.route, 'light');
+    const dir = join(tempDir, 'specs', spec.slug);
+
+    // Primary artifact and fit exist
+    await access(join(dir, 'spec.md'));
+    await access(join(dir, 'fit.json'));
+    await access(join(dir, 'acceptance.json'));
+    await access(join(dir, 'verification.md'));
+
+    // Plan and tasks do NOT exist
+    await assert.rejects(access(join(dir, 'plan.md')));
+    await assert.rejects(access(join(dir, 'tasks.md')));
+
+    const route = await specRoute(tempDir, spec);
+    assert.equal(route.route, 'light');
+    assert.equal(route.artifacts.plan, false);
+    assert.equal(route.artifacts.tasks, false);
+
+    // Complete spec.md so audit passes without warnings
+    await writeFile(join(dir, 'spec.md'), lightSpec, 'utf8');
+    const audit = await auditSpec(tempDir, spec.id);
+    assert.equal(audit.valid, true);
+    assert.equal(audit.warnings.length, 0);
+  });
+
+  test('CLI create with --light flag initializes light route', async () => {
+    await scaffoldProject(tempDir, { projectName: 'CliLightApp' });
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['create', 'feature', 'fast-change', '--light', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    const created = JSON.parse(lines.join('\n'));
+    assert.equal(created.route, 'light');
+    const dir = join(tempDir, 'specs', created.slug);
+    await assert.rejects(access(join(dir, 'plan.md')));
+    await assert.rejects(access(join(dir, 'tasks.md')));
+  });
+
+  test('CLI fit --preset modifies route and scaffolds missing artifacts on escalation', async () => {
+    await scaffoldProject(tempDir, { projectName: 'EscalationApp' });
+    const spec = await createSpec(tempDir, 'feature', 'escalating-change', { light: true });
+    const dir = join(tempDir, 'specs', spec.slug);
+    await assert.rejects(access(join(dir, 'plan.md')));
+    await assert.rejects(access(join(dir, 'tasks.md')));
+
+    // Reclassify to full using CLI preset
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--preset', 'full', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+
+    const report = JSON.parse(lines.join('\n'));
+    assert.equal(report.route, 'full');
+    assert.deepEqual(report.scaffolded.sort(), ['plan.md', 'tasks.md'].sort());
+
+    // Both artifacts are now present on disk
+    await access(join(dir, 'plan.md'));
+    await access(join(dir, 'tasks.md'));
+  });
+
+  test('CLI fit rejects unknown preset with descriptive error', async () => {
+    await scaffoldProject(tempDir, { projectName: 'InvalidPresetApp' });
+    const spec = await createSpec(tempDir, 'feature', 'invalid-preset');
+    const errors = [];
+    const original = console.error;
+    console.error = value => errors.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--preset', 'unknown'], tempDir);
+      assert.equal(code, 1);
+      assert.ok(errors.some(e => e.includes('--preset must be light, standard or full')));
+    } finally {
+      console.error = original;
+    }
+  });
+
+  test('CLI fit --crosses-contract escalates light preset to full route', async () => {
+    await scaffoldProject(tempDir, { projectName: 'ContractEscalationApp' });
+    const spec = await createSpec(tempDir, 'feature', 'contract-change', { light: true });
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--preset', 'light', '--crosses-contract', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    const report = JSON.parse(lines.join('\n'));
+    assert.equal(report.route, 'full');
+    assert.ok(report.reasons.some(r => r.includes('contract')));
+  });
+
+  test('CLI fit reports invalid answers with code 1 instead of crashing', async () => {
+    await scaffoldProject(tempDir, { projectName: 'InvalidAnswersApp' });
+    const spec = await createSpec(tempDir, 'feature', 'bad-answers', { light: true });
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--preset', 'light', '--files', '0', '--json'], tempDir);
+      assert.equal(code, 1);
+    } finally {
+      console.log = original;
+    }
+    const report = JSON.parse(lines.join('\n'));
+    assert.equal(report.route, 'invalid');
+    assert.ok(report.errors.some(e => e.includes('"files" is invalid')));
   });
 });

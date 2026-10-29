@@ -302,12 +302,20 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
     assert.deepEqual(design.match(/^## .+$/gm), [
       '## Antes de dibujar',
       '## Contrato de diseño proporcional',
-      '## UI companion',
       '## Contrato de dirección de arte (antes de programar)',
       '## De la pantalla al recorrido',
       '## Evidencia de aceptación v2',
       '## Referencias primarias para consultar según alcance',
     ]);
+    assertIncludes(
+      headed(design, '## Contrato de diseño proporcional'),
+      [
+        'Rechaza los clichés visuales de IA: prohíbe degradados genéricos azul/púrpura',
+        'badges con glow difuso artificial y el anidamiento excesivo de tarjetas con sombras («card-itis»)',
+        'Construye jerarquía visual deliberada mediante tipografía y espaciado proporcional en lugar de cajas artificiales',
+      ],
+      'anti-cliches',
+    );
     assertIncludes(
       headed(design, '## Contrato de dirección de arte (antes de programar)'),
       [
@@ -325,6 +333,11 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
         'de 120 a 240 ms, una curva `cubic-bezier` declarada y respeto de `prefers-reduced-motion`',
         'Loading (carga real), Empty (sin datos), Error (fallo y recuperación), Partial/Overflow (datos incompletos o contenido largo) e Ideal (contenido típico completo), más foco y deshabilitado',
         'Describe cada uno o márcalo N/A con motivo',
+        'Toda vista interactiva debe contemplar explícitamente los 4 estados de interfaz obligatorios:',
+        'Loading**: skeletons contextuales o indicadores de carga real con Cumulative Layout Shift (CLS) = 0',
+        'Empty**: explicación contextual clara acompañada de una acción inmediata (CTA)',
+        'Error**: mensaje de error comprensible (sin códigos opacos) con mecanismo explícito de reintento',
+        'Protected / Ideal**: renderizado del contenido típico completo o tratamiento de estado restringido/sin permisos',
         '`:hover`, `:active` y `:focus-visible` diferenciados',
         'Son decisiones y rangos que se registran, no una receta obligatoria. Conserva la identidad y los tokens aprobados',
       ],
@@ -343,6 +356,7 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
         'Si observa el agente un criterio visual, guarda una imagen de la superficie como artefacto en cada viewport que nombra el criterio (si no nombra ninguno, registra el usado)',
         'una nota de texto del agente no sustituye la imagen',
         'Mide cada par de contraste real con una herramienta que nombras y registra los dos colores, la razón obtenida y el umbral aplicado',
+        'mínimo 4.5:1 para texto estándar y 3:1 para componentes de UI o texto grande',
         'afirmar un nivel WCAG sin esa medición no es evidencia',
       ],
       'evidence',
@@ -356,5 +370,39 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
     assert.ok(cursorRule);
     assert.ok(cursorRule.content.includes(HOST_RULE));
     assert.doesNotMatch(cursorRule.content, /Deliver first-pass precision|4 mandatory states/i);
+  });
+
+  test('templates and workflows instruct formal EARS syntax and 5 anti-slop rules', async () => {
+    const specTemplate = await source('templates/01-feature/spec.md');
+    assertIncludes(
+      specTemplate,
+      ['formal EARS syntax', 'Ubiquitous', 'Event-driven', 'State-driven', 'Unwanted condition'],
+      'feature spec template EARS',
+    );
+
+    const bugTemplate = await source('templates/02-bugfix/bug.md');
+    assert.ok(bugTemplate.includes('formal EARS syntax'), 'bug template EARS');
+
+    const debtTemplate = await source('templates/03-tech-debt/audit.md');
+    assert.ok(debtTemplate.includes('formal EARS syntax'), 'debt template EARS');
+
+    const specifySkill = OMNI_SKILLS.find(s => s.name === 'omni-specify');
+    assert.ok(specifySkill);
+    assert.match(specifySkill.instructions, /EARS syntax/i);
+
+    const commonSkills = ['omni-plan', 'omni-implement', 'omni-specify'];
+    for (const name of commonSkills) {
+      const skill = OMNI_SKILLS.find(s => s.name === name);
+      assert.ok(skill);
+      assertIncludes(
+        skill.instructions,
+        ['Type-Slop', 'Mock-Slop', 'Visual-Slop', 'Scope-Slop', 'Dependency-Slop'],
+        `${name} anti-slop rules`,
+      );
+    }
+
+    const implementSkill = OMNI_SKILLS.find(s => s.name === 'omni-implement');
+    assert.match(implementSkill.instructions, /minimal touch surgery/i);
+    assert.match(implementSkill.instructions, /Fail fast without hiding exceptions/i);
   });
 });

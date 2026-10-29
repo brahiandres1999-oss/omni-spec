@@ -29,33 +29,13 @@ function exec(args, cwd, expected = 0, input) {
   assert.equal(result.status, expected, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
   return expected === 0 ? result.stdout : result.stdout + result.stderr;
 }
-
-async function listFiles(directory, prefix) {
-  const files = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const path = `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) files.push(...(await listFiles(join(directory, entry.name), path)));
-    else if (entry.isFile()) files.push(path);
-  }
-  return files;
-}
 const packageInfo = JSON.parse(
   exec([npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', temporary], source),
 )[0];
 assert.ok(packageInfo.files.some(f => f.path === 'schema/manifest.schema.json'));
 assert.ok(packageInfo.files.some(f => f.path === 'schema/acceptance.schema.json'));
 assert.ok(packageInfo.files.some(f => f.path === 'src/workflows.mjs'));
-assert.ok(packageInfo.files.some(f => f.path === 'companions/better/INDEX.md'));
-assert.ok(packageInfo.files.some(f => f.path === 'companions/frontend-design/LICENSE.txt'));
-const catalogFiles = await listFiles(join(source, 'companions'), 'companions');
-assert.deepEqual(
-  packageInfo.files
-    .map(file => file.path)
-    .filter(path => path.startsWith('companions/'))
-    .sort(),
-  [...catalogFiles].sort(),
-  'The tarball must contain every file of both bundled companions',
-);
+assert.ok(!packageInfo.files.some(f => f.path.startsWith('companions/')), 'Package must not include companions');
 assert.ok(!packageInfo.files.some(f => f.path.startsWith('test/')));
 assert.ok(
   !packageInfo.files.some(f => /^(?:biome\.json|package-lock\.json|coverage\/|scripts\/coverage\.mjs)/.test(f.path)),
@@ -156,36 +136,26 @@ assert.ok(
   'npm exec and npx must install into the isolated cache, not the user cache',
 );
 
-for (const companion of ['better', 'frontend-design']) {
-  const companionProject = join(temporary, `companion-smoke-${companion}`);
-  await mkdir(companionProject);
-  exec(
-    [
-      npx,
-      '--offline',
-      '--yes',
-      '--package',
-      join(temporary, packageInfo.filename),
-      'omni-spec',
-      'init',
-      '--yes',
-      '--agent',
-      companion === 'better' ? 'codex' : 'plugin',
-      '--ui-companion',
-      companion,
-    ],
-    companionProject,
-  );
-  const manifest = JSON.parse(await readFile(join(companionProject, 'specs/manifest.json'), 'utf8'));
-  assert.deepEqual(manifest.ui, { companion, components: 'none' });
-  const registry = JSON.parse(await readFile(join(companionProject, 'specs/.omni/managed.json'), 'utf8'));
-  for (const path of catalogFiles.filter(path => path.startsWith(`companions/${companion}/`))) {
-    const installedPath = `specs/.omni/${path}`;
-    assert.deepEqual(await readFile(join(companionProject, installedPath)), await readFile(join(source, path)), path);
-    assert.ok(registry.files[installedPath], installedPath);
-  }
-  await assert.rejects(readdir(join(companionProject, 'specs/.omni/runtime/companions')), { code: 'ENOENT' });
-}
+const initProject = join(temporary, 'package-smoke-init');
+await mkdir(initProject);
+exec(
+  [
+    npx,
+    '--offline',
+    '--yes',
+    '--package',
+    join(temporary, packageInfo.filename),
+    'omni-spec',
+    'init',
+    '--yes',
+    '--agent',
+    'plugin',
+  ],
+  initProject,
+);
+const initManifest = JSON.parse(await readFile(join(initProject, 'specs/manifest.json'), 'utf8'));
+assert.equal(initManifest.ui?.companion, undefined);
+await assert.rejects(readdir(join(initProject, 'specs/.omni/companions')), { code: 'ENOENT' });
 const globalPrefix = join(temporary, 'global-tool');
 exec(
   [
@@ -453,8 +423,7 @@ console.log(
         'unattended npx init --yes returns generic fallback and pending discovery',
         'offline package install and npm binary',
         'npm-exec/npx-style execution from tarball',
-        'complete UI companion catalog in tarball with byte-identical better and frontend-design installations',
-        'plugin-mode companion installation without duplicating the catalog in the local runtime',
+        'package excludes companions directory and companion entries',
         'temporary-prefix global command',
         'development package with +dev build suffix installs offline',
         'portable local runtime',
