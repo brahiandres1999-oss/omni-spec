@@ -12,6 +12,8 @@ Si falta dirección, busca pocas referencias pertinentes: una interfaz comparabl
 
 Registra tarea, contenido/muestra permitida, jerarquía de información, densidad y comportamiento. Explica por qué sirven al usuario. Evita rellenar con componentes repetidos sin función. No existe una obligación universal de tarjetas, gradientes, animaciones, fuentes externas, skeletons o tamaños fijos. Usa controles nativos accesibles cuando resuelvan la tarea.
 
+Rechaza los clichés visuales de IA: prohíbe degradados genéricos azul/púrpura sin justificación de marca, badges con glow difuso artificial y el anidamiento excesivo de tarjetas con sombras («card-itis»). Construye jerarquía visual deliberada mediante tipografía y espaciado proporcional en lugar de cajas artificiales y sombras decorativas.
+
 En una interfaz sustancial e incierta, implementa primero una pantalla o recorrido representativo con contenido largo y un estado exigente. Enséñalo para resolver preferencias materiales pendientes; conserva decisiones previas o delegación, sin pedir aprobación repetida. Un ajuste pequeño puede seguir directamente a implementación y comprobación.
 
 ## Contrato de dirección de arte (antes de programar)
@@ -25,7 +27,11 @@ Registra estas decisiones en el plan antes de escribir la interfaz. Los ejemplos
    - Superficies: como mucho tres radios; bordes de 1 px con alfa controlado; dos o tres niveles de elevación con sombras de ambiente y clave.
    - Color: rampa neutra, un acento intencional y colores semánticos con pares de contraste medidos (ver «Evidencia de aceptación v2»).
    - Movimiento: de 120 a 240 ms, una curva `cubic-bezier` declarada y respeto de `prefers-reduced-motion`.
-3. **Matriz de estados por superficie.** Loading (carga real), Empty (sin datos), Error (fallo y recuperación), Partial/Overflow (datos incompletos o contenido largo) e Ideal (contenido típico completo), más foco y deshabilitado. Describe cada uno o márcalo N/A con motivo.
+3. **Matriz de estados por superficie.** Loading (carga real), Empty (sin datos), Error (fallo y recuperación), Partial/Overflow (datos incompletos o contenido largo) e Ideal (contenido típico completo), más foco y deshabilitado. Describe cada uno o márcalo N/A con motivo. Toda vista interactiva debe contemplar explícitamente los 4 estados de interfaz obligatorios:
+   - **Loading**: skeletons contextuales o indicadores de carga real con Cumulative Layout Shift (CLS) = 0 para evitar saltos bruscos de maquetación.
+   - **Empty**: explicación contextual clara acompañada de una acción inmediata (CTA) para orientar al usuario.
+   - **Error**: mensaje de error comprensible (sin códigos opacos) con mecanismo explícito de reintento o vía de recuperación.
+   - **Protected / Ideal**: renderizado del contenido típico completo o tratamiento de estado restringido/sin permisos.
 4. **Pulido.** `:hover`, `:active` y `:focus-visible` diferenciados; alineación óptica entre icono y texto; densidad coherente; ninguna decoración que no comunique.
 
 Son decisiones y rangos que se registran, no una receta obligatoria. Conserva la identidad y los tokens aprobados; si un rango no sirve a la tarea, sustitúyelo y explica por qué.
@@ -42,7 +48,7 @@ Clasifica cada criterio en el contrato: `AC-01 [visual]`, `[interaction]`, `[acc
 
 Una observación registra actor/observador, fecha real, superficie, entorno, pasos, esperado, resultado observado y artefacto local dentro de la spec. Para visual añade el viewport medido. Si observa el agente, registra antes las capacidades de esa sesión mediante session-record. Si observa el agente un criterio visual, guarda una imagen de la superficie como artefacto en cada viewport que nombra el criterio (si no nombra ninguno, registra el usado), junto con los pasos y resultados; una nota de texto del agente no sustituye la imagen, y una imagen sola no acredita el recorrido. Los campos son evidencia declarada con trazabilidad, no un certificado de verdad.
 
-En el navegador comprueba anchos relevantes, contenido largo, scrollWidth/clientWidth cuando corresponda, Tab/Shift+Tab, activación con teclado y foco tras error/diálogo. Revisa zoom/reflow y movimiento reducido cuando aplique. Mide cada par de contraste real con una herramienta que nombras y registra los dos colores, la razón obtenida y el umbral aplicado; afirmar un nivel WCAG sin esa medición no es evidencia. En UI nativa usa las herramientas de plataforma adecuadas. Sin herramienta disponible conserva el criterio pendiente/blocked y un procedimiento manual; no cierres como aprobado desde CSS o JSX.
+En el navegador comprueba anchos relevantes, contenido largo, scrollWidth/clientWidth cuando corresponda, Tab/Shift+Tab, activación con teclado y foco tras error/diálogo. Revisa zoom/reflow y movimiento reducido cuando aplique. Mide cada par de contraste real con una herramienta que nombras y registra los dos colores, la razón obtenida y el umbral aplicado (mínimo 4.5:1 para texto estándar y 3:1 para componentes de UI o texto grande); afirmar un nivel WCAG sin esa medición no es evidencia. En UI nativa usa las herramientas de plataforma adecuadas. Sin herramienta disponible conserva el criterio pendiente/blocked y un procedimiento manual; no cierres como aprobado desde CSS o JSX.
 
 ## Referencias primarias para consultar según alcance
 

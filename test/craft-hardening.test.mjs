@@ -308,6 +308,15 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
       '## Referencias primarias para consultar según alcance',
     ]);
     assertIncludes(
+      headed(design, '## Contrato de diseño proporcional'),
+      [
+        'Rechaza los clichés visuales de IA: prohíbe degradados genéricos azul/púrpura',
+        'badges con glow difuso artificial y el anidamiento excesivo de tarjetas con sombras («card-itis»)',
+        'Construye jerarquía visual deliberada mediante tipografía y espaciado proporcional en lugar de cajas artificiales',
+      ],
+      'anti-cliches',
+    );
+    assertIncludes(
       headed(design, '## Contrato de dirección de arte (antes de programar)'),
       [
         'Los ejemplos usan términos web; en otras plataformas aplica sus equivalentes nativos (estados de interacción, curvas de animación, ajustes de accesibilidad del sistema).',
@@ -324,6 +333,11 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
         'de 120 a 240 ms, una curva `cubic-bezier` declarada y respeto de `prefers-reduced-motion`',
         'Loading (carga real), Empty (sin datos), Error (fallo y recuperación), Partial/Overflow (datos incompletos o contenido largo) e Ideal (contenido típico completo), más foco y deshabilitado',
         'Describe cada uno o márcalo N/A con motivo',
+        'Toda vista interactiva debe contemplar explícitamente los 4 estados de interfaz obligatorios:',
+        'Loading**: skeletons contextuales o indicadores de carga real con Cumulative Layout Shift (CLS) = 0',
+        'Empty**: explicación contextual clara acompañada de una acción inmediata (CTA)',
+        'Error**: mensaje de error comprensible (sin códigos opacos) con mecanismo explícito de reintento',
+        'Protected / Ideal**: renderizado del contenido típico completo o tratamiento de estado restringido/sin permisos',
         '`:hover`, `:active` y `:focus-visible` diferenciados',
         'Son decisiones y rangos que se registran, no una receta obligatoria. Conserva la identidad y los tokens aprobados',
       ],
@@ -342,6 +356,7 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
         'Si observa el agente un criterio visual, guarda una imagen de la superficie como artefacto en cada viewport que nombra el criterio (si no nombra ninguno, registra el usado)',
         'una nota de texto del agente no sustituye la imagen',
         'Mide cada par de contraste real con una herramienta que nombras y registra los dos colores, la razón obtenida y el umbral aplicado',
+        'mínimo 4.5:1 para texto estándar y 3:1 para componentes de UI o texto grande',
         'afirmar un nivel WCAG sin esa medición no es evidencia',
       ],
       'evidence',
