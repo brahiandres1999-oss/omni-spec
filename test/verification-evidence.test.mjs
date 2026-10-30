@@ -93,3 +93,12 @@ test('context edits invalidate verification and unrelated archived specs stay ou
   await writeFile(context, (await readFile(context, 'utf8')) + '\nA revised domain decision.\n');
   assert.notEqual(await projectFingerprint(root, spec, gates), first);
 });
+
+test('files inside .astro/ build directory are ignored by default and do not invalidate snapshot', async () => {
+  const first = await projectFingerprint(root, spec, gates);
+  const astroDir = join(root, '.astro');
+  await mkdir(astroDir, { recursive: true });
+  await writeFile(join(astroDir, 'types.d.ts'), '// Astro generated types');
+  await writeFile(join(astroDir, 'settings.json'), '{"cache":true}');
+  assert.equal(await projectFingerprint(root, spec, gates), first);
+});

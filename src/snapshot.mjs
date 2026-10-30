@@ -27,6 +27,7 @@ export const DEFAULT_IGNORE_PATTERNS = [
   '.next/',
   '.nuxt/',
   '.svelte-kit/',
+  '.astro/',
   '.angular/',
   '.turbo/',
   '.parcel-cache/',
