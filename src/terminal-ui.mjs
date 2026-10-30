@@ -94,136 +94,22 @@ function wrap(value, width) {
   return lines;
 }
 
-/** Same isometric surfaces and painter order as OmniPage's ascii-spec-canvas.
- * Source: https://brahiandres1999-oss.github.io/OmniPage/ (2026-10-23).
- * Sample the geometry at terminal-cell resolution; never shrink it by dropping rows.
- */
-export function logoLines(color = false, depth = 24, { columns = 69, rows = 27 } = {}) {
-  const surfaces = [];
-  const polygon = (points, region, side = false) => surfaces.push({ points, region, side });
-  const slab = (x, y, width, height, thickness, region) => {
-    polygon(
-      [
-        [x, y - height],
-        [x + width, y],
-        [x, y + height],
-        [x - width, y],
-      ],
-      region,
-    );
-    polygon(
-      [
-        [x - width, y],
-        [x, y + height],
-        [x, y + height + thickness],
-        [x - width, y + thickness],
-      ],
-      region,
-      true,
-    );
-    polygon(
-      [
-        [x, y + height],
-        [x + width, y],
-        [x + width, y + thickness],
-        [x, y + height + thickness],
-      ],
-      region,
-      true,
-    );
-  };
-  polygon(
-    [
-      [0, -22],
-      [68, 17],
-      [0, 56],
-      [-68, 17],
-    ],
-    'plinth',
+const BANNER_PARTS = [
+  ['  ___                  _ ', '____'],
+  [' / _ \\ _ __ ___  _ __ (_)', ' ___| _ __   ___  ___'],
+  ["| | | | '_ ` _ \\| '_ \\| ", "\\___ \\| '_ \\ / _ \\/ __|"],
+  ['| |_| | | | | | | | | | ', '|___) | |_) |  __/ (__'],
+  [' \\___/|_| |_| |_|_| |_|_', '|____/| .__/ \\___|\\___|'],
+];
+
+/** Clean dual-tone ASCII wordmark for OmniSpec: corporate blue for Omni and warm amber for Spec. */
+export function logoLines(color = false, depth = 24, { version = '0.8.0' } = {}) {
+  const versionTag = version?.startsWith('v') ? version : `v${version || '0.8.0'}`;
+  const lines = BANNER_PARTS.map(
+    ([omni, spec]) => paint(omni, 'blue', color, depth) + paint(spec, 'amber', color, depth),
   );
-  polygon(
-    [
-      [-68, 17],
-      [0, 56],
-      [0, 66],
-      [-68, 27],
-    ],
-    'plinth',
-    true,
-  );
-  polygon(
-    [
-      [0, 56],
-      [68, 17],
-      [68, 27],
-      [0, 66],
-    ],
-    'plinth',
-    true,
-  );
-  slab(0, -22, 32, 19, 10, 'feature');
-  slab(30, -5, 28, 18, 9, 'bugfix');
-  slab(0, 12, 28, 17, 7, 'techdebt');
-  slab(-30, -5, 28, 18, 9, 'rfc');
-  polygon(
-    [
-      [0, -12],
-      [18, -2],
-      [0, 8],
-      [-18, -2],
-    ],
-    'gate',
-  );
-  polygon(
-    [
-      [0, -8],
-      [12, -2],
-      [0, 4],
-      [-12, -2],
-    ],
-    'jewel',
-  );
-  const regions = {
-    plinth: { rgb: [161, 161, 170], alpha: 0.55, ansi: 90 },
-    feature: { rgb: [59, 130, 246], alpha: 0.95, ansi: 94 },
-    bugfix: { rgb: [245, 158, 11], alpha: 0.9, ansi: 33 },
-    techdebt: { rgb: [16, 185, 129], alpha: 0.9, ansi: 32 },
-    rfc: { rgb: [161, 161, 170], alpha: 0.8, ansi: 37 },
-    gate: { rgb: [245, 158, 11], alpha: 1, ansi: 33 },
-    jewel: { rgb: [245, 158, 11], alpha: 1, ansi: 93 },
-  };
-  const contains = (points, x, y) => {
-    let inside = false;
-    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-      const [xi, yi] = points[i],
-        [xj, yj] = points[j];
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-    }
-    return inside;
-  };
-  const result = [];
-  for (let row = 0; row < rows; row++) {
-    let line = '';
-    for (let column = 0; column < columns; column++) {
-      const x = ((column + 0.5) / columns) * 140 - 70,
-        y = ((row + 0.5) / rows) * 110 - 42;
-      const surface = surfaces.findLast(item => contains(item.points, x, y));
-      if (!surface) {
-        line += ' ';
-        continue;
-      }
-      const seed = (column * 374761393 + row * 668265263) >>> 0;
-      const glyphs = surface.side ? '..:-~+=|/\\' : '#@%8&$=+*x';
-      const glyph = glyphs[((seed ^ (seed >>> 13)) >>> 0) % glyphs.length];
-      const region = regions[surface.region];
-      const shade = region.alpha * (surface.side ? 0.55 : 1);
-      const rgb = region.rgb.map(channel => Math.round(channel * shade));
-      const code = depth >= 24 ? `38;2;${rgb.join(';')}` : region.ansi;
-      line += color ? `${ESC}${surface.side && depth < 24 ? '2;' : ''}${code}m${glyph}${reset}` : glyph;
-    }
-    result.push(line.trimEnd());
-  }
-  return result;
+  lines.push(' '.repeat(30) + paint('|_|', 'amber', color, depth) + '   ' + paint(versionTag, 'muted', color, depth));
+  return lines;
 }
 
 /** Render one complete frame; callers decide whether ANSI interaction is available. */
@@ -264,25 +150,17 @@ function frameLayout({
   ];
   const footerHeight = 1 + helpLines.length;
   const logoRoom = rows - detailLines.length - Math.min(9, options.length) - footerHeight - 8;
-  if (columns >= 76 && logoRoom >= 11) {
-    // Terminal cells are roughly twice as tall as they are wide. More available
-    // cells (including after zooming out) increase detail without changing shape.
-    const logoRows = Math.min(27, logoRoom, Math.floor((width - 26) / 2.55));
-    const logo = logoLines(color, depth, { columns: Math.round(logoRows * 2.55), rows: logoRows });
-    const brandWidth = Math.max(...logo.map(textWidth)) + 3;
-    const caption = [
-      'OmniSpec',
-      version,
-      '',
-      es ? 'Construye con claridad.' : 'Build with clarity.',
-      es ? 'Comprueba con evidencia.' : 'Verify with evidence.',
-    ];
-    logo.forEach((line, index) => {
+  if (columns >= 52 && logoRoom >= 6) {
+    const logo = logoLines(color, depth, { version });
+    for (const line of logo) lines.push(`  ${line}`);
+    if (logoRoom >= 8) {
+      lines.push('');
       lines.push(
-        `  ${line}${' '.repeat(Math.max(0, brandWidth - textWidth(line)))}${index < caption.length ? paint(fit(caption[index], width - brandWidth), index === 0 ? 'ink' : 'muted', color, depth) : ''}`,
+        `  ${paint(es ? 'Construye con claridad. Comprueba con evidencia.' : 'Build with clarity. Verify with evidence.', 'muted', color, depth)}`,
       );
-    });
-  } else lines.push(`  ${paint('OmniSpec', 'amber', color, depth)}  ${fit(version, width - 11)}`);
+    }
+  } else
+    lines.push(`  ${paint('OmniSpec', 'amber', color, depth)}  ${fit(version ? `v${version}` : 'v0.8.0', width - 11)}`);
   lines.push(
     '',
     `  ${paint(`${es ? 'PREPARAR PROYECTO' : 'PREPARE PROJECT'}   ${step} / 3`, 'muted', color, depth)}`,

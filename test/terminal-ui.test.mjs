@@ -271,16 +271,15 @@ test('NO_COLOR and plain summaries have no ANSI; untrusted labels cannot move th
   assert.equal(plain, stripVTControlCharacters(plain));
   const colored = resultSections('OmniSpec', [{ title: 'NEXT', lines: ['Continue'] }], { output: t.output, env: {} });
   assert.notEqual(colored, stripVTControlCharacters(colored));
-  assert.equal(logoLines().length, 27);
-  assert.ok(logoLines().every(line => /^[ #@%8&$=+*x.:\-~|/\\]+$/.test(line)));
-  const compact = logoLines(false, 24, { columns: 29, rows: 11 });
-  assert.equal(compact.length, 11);
-  assert.ok(compact.every(line => textWidth(line) <= 29));
+  assert.equal(logoLines().length, 6);
+  assert.ok(logoLines().every(line => textWidth(line) <= 50));
+  assert.equal(logoLines(false).join('\n'), stripVTControlCharacters(logoLines(false).join('\n')));
+  assert.ok(logoLines(false).join('\n').includes('v0.8.0'));
   const brand = logoLines(true).join('\n');
-  // The website's blue feature, amber bugfix and emerald debt surfaces must all survive sampling.
-  assert.ok(brand.includes('38;2;56;124;234'));
-  assert.ok(brand.includes('38;2;221;142;10'));
-  assert.ok(brand.includes('38;2;14;167;116'));
+  // Omni in blue (88;166;255), Spec in amber (245;158;11), and version in muted (139;148;158)
+  assert.ok(brand.includes('38;2;88;166;255'));
+  assert.ok(brand.includes('38;2;245;158;11'));
+  assert.ok(brand.includes('38;2;139;148;158'));
 });
 
 test('progress appears only on a terminal and reports each completed stage explicitly', () => {
