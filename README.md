@@ -57,7 +57,7 @@ En una terminal compatible verás el logo de caracteres y una pregunta activa: f
 El `--yes` **antes** del paquete pertenece a npm: evita su confirmación de descarga, pero el asistente de OmniSpec sigue siendo interactivo. Para automatización, añade el `--yes` de OmniSpec **después** de `init` y declara la integración:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.2.tgz" -- omni-spec init --yes --agent codex --lang es
+npx --yes omni-spec init --yes --agent codex --lang es
 # También admite --agent cursor,claude o --agent all.
 ```
 
@@ -298,10 +298,10 @@ Cuando salga una nueva versión de OmniSpec, actualiza tu proyecto sin perder tu
 
 ```sh
 # Previsualiza qué archivos cambiarían (modo seguro):
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.2.tgz" -- omni-spec update --dry-run
+npx omni-spec update --dry-run
 
 # Aplica la actualización de plantillas y adaptadores:
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.2.tgz" -- omni-spec update
+npx omni-spec update
 ```
 
 `specs/.omni/runtime/` no se versiona: la sección administrada de `specs/.gitignore` lo excluye de Git. En un clon, restáuralo con la versión de `specs/manifest.json` usando `update`, no `init`:

@@ -34,11 +34,11 @@ La observación de interacción de coexistencia y los recorridos en hosts reales
 
 1. Crear una cuenta en [npm](https://www.npmjs.com/signup), verificar el correo y configurar la autenticación que solicite npm para publicar. No compartir contraseña, códigos de un solo uso ni tokens con el agente.
 2. En una terminal propia ejecutar `npm login --auth-type=web --registry=https://registry.npmjs.org/` y completar el navegador. `npm whoami --registry=https://registry.npmjs.org/` confirma la identidad.
-3. Seleccionar el tarball y checksum de la versión autorizada y comprobar SHA-256. En PowerShell: `Get-FileHash ./omni-spec-0.8.0-preview.2.tgz -Algorithm SHA256`; comparar con el archivo `.sha256`.
+3. Seleccionar el tarball y checksum de la versión autorizada y comprobar SHA-256. En PowerShell: `Get-FileHash ./omni-spec-0.8.1.tgz -Algorithm SHA256`; comparar con el archivo `.sha256`.
 4. Publicar ese archivo:
 
 ```sh
-npm publish ./omni-spec-0.8.0-preview.2.tgz --tag preview --access public --registry=https://registry.npmjs.org/
+npm publish ./omni-spec-0.8.1.tgz --access public --registry=https://registry.npmjs.org/
 ```
 
 5. Completar la autenticación adicional que npm solicite. Comprobar versión e integridad exactas con npm view y probar el comando por nombre en un proyecto desechable.
@@ -84,7 +84,7 @@ npx --yes omni-spec@0.8.0-preview.2 update
 Antes de publicar en npm, utilizar una copia del código o su tarball local:
 
 ```sh
-npx --yes --package="/ruta/al/omni-spec-0.8.0-preview.2.tgz" omni-spec update --dry-run
+npx --yes --package="/ruta/al/omni-spec-0.8.1.tgz" omni-spec update --dry-run
 ```
 
 Después de revisar, repetir sin `--dry-run`. Se conservan contexto, constitución, especificaciones y selección de agente. Archivos administrados personalizados bloquean la operación; `--accept-updates` acepta su reemplazo con copia de respaldo después de revisar conflictos. Recargar el agente después de actualizar skills/comandos.
@@ -96,7 +96,7 @@ Actualizar el CLI global (`npm install -g omni-spec@preview`) no actualiza las c
 SemVer ordena `0.8.0-preview.2` después de `0.7.0-rc.1` y `rc.2`: pasar de esas candidatas locales a la Preview actual es una subida de versión y no requiere `--allow-downgrade`. Con el CLI de la Preview, revisar:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.2.tgz" -- omni-spec update --dry-run
+npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.1.tgz" -- omni-spec update --dry-run
 ```
 
 Si la revisión es correcta, repetir sin `--dry-run`. Se conservan contexto, configuración y especificaciones; las personalizaciones administradas siguen sujetas a revisión/respaldo. Desde 0.6.1 tampoco hace falta `--allow-downgrade`.
