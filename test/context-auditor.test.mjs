@@ -120,3 +120,22 @@ test('existing citation is never treated as proof of a source claim', async () =
   assert.equal(checked.semanticReview, 'REQUIRED');
   assert.match(checked.warnings.join(' '), /does not prove claim attribution/);
 });
+
+test('auditProjectContext exposes deterministic context budget metrics', async () => {
+  await scaffoldProject(root);
+  const sample = report('[Policy](../CONSTITUTION.md)');
+  await writeFile(join(root, 'specs/project-context.md'), sample);
+  const checked = await auditProjectContext(root);
+  assert.equal(checked.valid, true);
+  assert.equal(typeof checked.characters, 'number');
+  assert.equal(checked.characterLimit, 24000);
+  assert.equal(checked.tokensEstimated, Math.round(checked.characters / 4));
+  assert.equal(checked.withinBudget, true);
+
+  const { code, report: cli } = await contextCheck();
+  assert.equal(code, 0);
+  assert.equal(cli.characters, checked.characters);
+  assert.equal(cli.characterLimit, 24000);
+  assert.equal(cli.tokensEstimated, checked.tokensEstimated);
+  assert.equal(cli.withinBudget, true);
+});

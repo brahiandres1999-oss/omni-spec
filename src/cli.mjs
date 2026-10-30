@@ -321,9 +321,13 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'context-check': {
         if (!root) throw new Error('No OmniSpec project found. Run init first.');
         const result = await auditProjectContext(workingDir);
+        const budget =
+          result.characters != null
+            ? ` (${result.characters.toLocaleString('en-US')} / ${result.characterLimit.toLocaleString('en-US')} chars, ~${result.tokensEstimated.toLocaleString('en-US')} tokens)`
+            : '';
         emit(
           result,
-          `[CONTEXT ${result.valid ? 'STRUCTURE PASSED' : 'BLOCKED'}] Structure and local links only; source-claim review required.\n${result.errors.join('\n')}\n${result.warnings.join('\n')}`,
+          `[CONTEXT ${result.valid ? 'STRUCTURE PASSED' : 'BLOCKED'}]${budget} Structure and local links only; source-claim review required.\n${result.errors.join('\n')}\n${result.warnings.join('\n')}`,
         );
         return result.valid ? 0 : 1;
       }

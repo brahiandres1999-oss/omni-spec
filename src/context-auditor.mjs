@@ -75,6 +75,10 @@ export async function auditProjectContext(root) {
     return {
       valid: false,
       scope: 'STRUCTURE_AND_LOCAL_LINKS_ONLY',
+      characters: null,
+      characterLimit: CONTEXT_CHARACTER_LIMIT,
+      tokensEstimated: null,
+      withinBudget: false,
       errors: [`Cannot read project context: ${error.message}`],
       warnings,
       linksChecked: 0,
@@ -122,7 +126,9 @@ export async function auditProjectContext(root) {
   if (!linksChecked)
     warnings.push('No local Markdown citations checked. Backtick paths and prose citations require manual review.');
   const characters = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').length;
-  if (characters > CONTEXT_CHARACTER_LIMIT)
+  const withinBudget = characters <= CONTEXT_CHARACTER_LIMIT;
+  const tokensEstimated = Math.round(characters / 4);
+  if (!withinBudget)
     warnings.push(
       `specs/project-context.md has ${characters} characters, above the ${CONTEXT_CHARACTER_LIMIT} (about 6,000 tokens) that every workflow reads. Distill it: keep current state, decisions, open risks and next action; summarize completed work.`,
     );
@@ -132,6 +138,10 @@ export async function auditProjectContext(root) {
   return {
     valid: !errors.length,
     scope: 'STRUCTURE_AND_LOCAL_LINKS_ONLY',
+    characters,
+    characterLimit: CONTEXT_CHARACTER_LIMIT,
+    tokensEstimated,
+    withinBudget,
     errors,
     warnings,
     linksChecked,
