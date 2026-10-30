@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.0--preview.2-blue.svg" alt="Version 0.8.0-preview.2"></a>
-  <a href="docs/releases/0.8.0-preview.2.md"><img src="https://img.shields.io/badge/canal-preview-amber.svg" alt="0.8.0 Preview, pendiente de publicación"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.0--preview.3-blue.svg" alt="Version 0.8.0-preview.3"></a>
+  <a href="docs/releases/0.8.0-preview.3.md"><img src="https://img.shields.io/badge/canal-preview-amber.svg" alt="0.8.0 Preview, pendiente de publicación"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -13,7 +13,7 @@
 
 ---
 
-# OmniSpec 0.8.0-preview.2
+# OmniSpec 0.8.0-preview.3
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
@@ -22,7 +22,7 @@ Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un frame
 
 ---
 
-> **0.8.0 Preview — lanzamiento en preparación.** Esta rama prepara `0.8.0-preview.2` para distribución pública en el canal npm `preview` y como prerelease en GitHub. Es una versión para probar y recibir feedback, con validaciones pendientes. `0.6.1` sigue en npm `latest` (consultado el 2026-10-28). Consulta las [notas de la Preview](docs/releases/0.8.0-preview.2.md) y el [piloto local](docs/PILOT.md).
+> **0.8.0 Preview — lanzamiento en preparación.** Esta rama prepara `0.8.0-preview.3` para distribución pública en el canal npm `preview` y como prerelease en GitHub. Es una versión para probar y recibir feedback, con validaciones pendientes. `0.6.1` sigue en npm `latest` (consultado el 2026-10-28). Consulta las [notas de la Preview](docs/releases/0.8.0-preview.3.md) y el [piloto local](docs/PILOT.md).
 
 ## ¿Por qué OmniSpec?
 

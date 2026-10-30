@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Changes after the prepared Preview will be recorded here.
 
+## [0.8.0-preview.3] — 2026-10-29
+
+Prepared for the npm `preview` channel and a GitHub prerelease. npm `latest` remains `0.6.1`. See the [Preview 3 notes](docs/releases/0.8.0-preview.3.md).
+
+### Added
+- **Modern Package Manager & Lockfile Detection (Spec 019):** Added support for Bun binary lockfile (`bun.lockb`) alongside `bun.lock`, and modern Python tooling (`uv.lock`) with automated command candidate generation (`uv run pytest`, `uv run ruff check .`).
+- **Modern Frontend Framework Recognition (Spec 019):** First-class environment detection for Astro, Svelte (`@sveltejs/kit` / `svelte`), and Nuxt in `detector.mjs`, with automatic wizard preset mapping in `findPresetIndex` to standard documentation conventions (`TSDoc` / `JSDoc`).
+- **Expanded Context Inputs Tracking (Spec 020):** Native context baseline tracking for modern lockfiles (`uv.lock`, `bun.lock`, `bun.lockb`), linter/tool configs (`biome.json`, `biome.jsonc`, `components.json`), and config patterns (`eslint.config.*`, `tailwind.config.*`, `postcss.config.*`) in `project-state.mjs`.
+- **Default Snapshot Ignore for Astro (Spec 021):** Included `.astro/` in `DEFAULT_IGNORE_PATTERNS` in `snapshot.mjs` to prevent ephemeral cache and collection files from invalidating verification fingerprints.
+
+### Fixed
+- **Verification Acceptance Timeout Resiliencia (Spec 021):** Increased acceptance test timeout to prevent transient I/O and antivirus timeouts during intensive Windows temp directory operations.
+
 ## [0.8.0-preview.2] — 2026-10-29
 
 Prepared for the npm `preview` channel and a GitHub prerelease. npm `latest` remains `0.6.1`. See the [Preview 2 notes](docs/releases/0.8.0-preview.2.md).
