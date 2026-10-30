@@ -1,24 +1,27 @@
-# Próximas entregas de OmniSpec 0.8
+# Hoja de ruta de OmniSpec
 
-Actualizado el 2026-10-29. Esta hoja de ruta distingue la candidata actual de las capacidades pendientes; las fechas y el número de la próxima Preview todavía no están fijados.
+Actualizado el 2026-10-30 tras el lanzamiento oficial de **OmniSpec 0.8.0**.
 
-## Candidata 0.8.0-preview.2
+---
 
-Incluye:
-- **Triaje dinámico y flujo ligero** (Spec 017): Creación adaptativa de especificaciones (`--light`, `--preset`), andamiaje dinámico y flags de triaje con validación fail-fast.
-- **Sintaxis EARS y Zero-Slop Guard** (Spec 016): Estandarización de criterios de aceptación EARS y protocolo de 5 reglas de calidad de código y arquitectura.
-- **Guardián de diseño UI y `omni-init` optimizado** (Specs 015 y 018): Matriz obligatoria de 4 estados (*Loading*, *Empty*, *Error*, *Protected*), desacoplamiento total de *companions* de terceros y detección directa de kits de componentes (`--ui-components`).
-- **Aislamiento y observabilidad**: Economía de contexto (`contracts --active`), runtime local ignorado por Git y restaurable, y diagnóstico de coexistencia de Antigravity. Consulta los cambios y límites en las [notas de la Preview](releases/0.8.0-preview.2.md).
+## OmniSpec 0.8.0 — Lanzamiento Oficial Estable (Completado)
 
-La publicación usa el canal npm `preview` y una prerelease de GitHub. La validación local del motor no sustituye la aceptación en hosts reales ni promueve la candidata a `0.8.0` estable.
+Publicado en el canal npm `latest` y GitHub Releases el 2026-10-30.
 
-## Capacidades planificadas para próximas iteraciones (0.8.0-preview.2 / 0.8 estable)
+### Núcleo y Arquitectura Consolidada:
+- **Pilar 6: MDD (Memory Distillation Driven) & FinOps de Contexto (Spec 023):** Exposición de presupuestos de tokens en CLI (`context-check`), destilación compacta del contexto en 5 épocas evolutivas y reducción de más del 70% del consumo de tokens por turno.
+- **Ecosistema de Agentes y Protocolo Multimodal (Spec 022):** 10 adaptadores de host estandarizados (Antigravity, Cursor, Claude Code, Copilot, Codex, Kilo, OpenCode, Gemini, Generic y Plugin). Soporte bidireccional gestionado para `CLAUDE.md` y `AGENTS.md`.
+- **Detección de Herramientas Modernas y Runtime Bun (Spec 019):** Reconocimiento de locks binarios (`bun.lockb`) y textuales (`bun.lock`), tooling de Python moderno (`uv.lock`), frameworks Astro, Svelte y Nuxt, y compatibilidad desatendida con `bunx omni-spec`.
+- **Gobernanza de Artefactos y Anti-Slop (Specs 016, 017 y 018):** Protocolo Zero-Slop con 5 reglas de artesanía de software, criterios de aceptación EARS y triaje dinámico de especificaciones (`--light`, `--preset`).
+- **Antigravity First-Class Plugin:** Empaquetado autónomo de ~540 KB con inyección de constitución (`trigger: always_on`) y subagente auditor (`omni-auditor.md`), validado formalmente con `agy plugin validate --strict`.
+
+---
+
+## Próximas iteraciones planificadas (0.8.1 / 0.9.0)
 
 | Capacidad | Estado | Objetivo |
-| --- | --- | --- |
-| Evidencia formal Rojo→Verde en TDD | Planificado | Verificación automatizada de fallos iniciales antes de la implementación de features y bugfixes |
-| Auditoría automatizada de Observabilidad y Estados en CI | Planificado | Gate de verificación en CI para contrastes WCAG y observabilidad de errores en runtime |
-| Perfiles avanzados y puente Web Initializr | Planificado | Importar/exportar perfiles de gobernanza reproducibles y definir contrato headless para web |
-| Destilación de memoria duradera | Planificado | Indexación compacta de decisiones arquitectónicas y aprendizajes entre sesiones |
-
-Antes de promover `0.8.0` estable se revisarán la aceptación en hosts reales y los resultados del piloto comparativo. Las observaciones pendientes se mantienen visibles en las notas de cada entrega.
+| :--- | :--- | :--- |
+| **Flujo Ceremonial Rojo→Verde en TDD (Opcional)** | Planificado | Registro automatizado de fallo previo a la implementación para equipos que elijan TDD estricto sin penalizar el consumo de tokens en tareas estándar. |
+| **Auditoría Automatizada de Accesibilidad y UI en CI** | Planificado | Gate ejecutable para contrastes WCAG 2.1 AA y verificación de los 4 estados de interfaz en pipelines desatendidos. |
+| **Puente Web Initializr y Perfiles Headless** | Planificado | Interfaz visual web interactiva para configurar manifiestos de OmniSpec y exportar configuraciones reproducibles. |
+| **Multi-Agent Collaboration Mesh** | Investigación | Protocolos de coordinación formal entre subagentes independientes para monorepos de gran escala. |

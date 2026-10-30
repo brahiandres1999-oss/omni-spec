@@ -1,75 +1,67 @@
-# Compatibilidad y verificación — 0.8.0 Preview
+# Compatibilidad y verificación — OmniSpec 0.8.0 Oficial Estable
 
-La versión preparada es `0.8.0-preview.2`, canal npm `preview`. Los resultados históricos de rc.1/rc.2 se conservan con su alcance; no implican una ejecución nueva de todos los hosts. Ver [notas de la Preview](releases/0.8.0-preview.2.md).
+La versión oficial de producción es **0.8.0**, publicada globalmente en el canal npm `latest` y GitHub Releases el 2026-10-30.
 
-OmniSpec instala flujos de especificación y revisión por proyecto, con soporte de Plugin en Google Antigravity y adaptadores para otros hosts. Conserva contexto y especificaciones al actualizar y exige auditoría, cobertura declarada de criterios y un registro de verificación antes de cerrar trabajo. No garantiza precisión al primer intento ni certifica la aplicación o el razonamiento de un modelo por instalarse.
+OmniSpec instala flujos de especificación y revisión por proyecto, con soporte nativo de Plugin en Google Antigravity y adaptadores para los principales agentes de IA y herramientas de terminal. Conserva contexto y especificaciones al actualizar y exige auditoría, cobertura declarada de criterios y un registro de verificación formal antes de cerrar trabajo. No garantiza precisión al primer intento ni certifica la aplicación o el razonamiento de un modelo por instalarse.
 
-## Plataformas y paquete
+## Runtimes y gestores de paquetes
 
-El candidato requiere Node >=22.19.0. La matriz configurada de GitHub Actions contempla Windows y Ubuntu con Node 22.19, 22, 24 y 26: suite del motor, instalación del tarball, ejecución mediante npm-exec, CLI global en prefijo temporal y runtime autónomo. Esa configuración no implica una ejecución remota. rc.1 se validó localmente en Windows y Ubuntu (WSL) con Node 22.23.4 y en Windows con 22.19.0. rc.2 se validó en Linux con Node 22.22.0 (suite, cobertura, lint, paquete instalado y paridad de reglas de ignorado con Git); el ajuste local del instalador del 2026-10-23 se comprobó en Windows con Node 24.22.1 (299 pruebas: 296 aprobadas y 3 omitidas por permisos de enlaces; 21 escenarios de paquete, incluidos npx interactivo y automático, interfaz de teclado y auditor instalado). La matriz completa y el descubrimiento real por host siguen pendientes. Consultar el resultado del workflow correspondiente a una etiqueta cuando exista; la matriz aprobada de una candidata no sustituye la de otra versión.
+OmniSpec 0.8.0 mantiene una estricta política de **Zero Runtime Dependencies** (`dependencies: {}`), eliminando riesgos de vulnerabilidades en la cadena de suministro y permitiendo compatibilidad directa entre diferentes runtimes y gestores:
 
-`npm run test:package` recorre proyectos nuevos, existentes, con fallos, stacks desconocidos, monorepos y documentos sin código. También verifica los cuatro tipos de trabajo y el rechazo de cierres sin evidencia. Son fixtures reproducibles, no una certificación de todos los proyectos.
+| Entorno / Gestor | Comando recomendado | Compatibilidad verificada |
+| :--- | :--- | :--- |
+| **Node.js** | `npx --yes omni-spec init` | Node.js >=22.19.0, Node 22 LTS, Node 24 Current. |
+| **Bun** | `bunx omni-spec init` | Bun 1.1+ y 1.2+. Compatible con `process.versions.bun` sin falsos positivos de versión Node. |
+| **pnpm** | `pnpm dlx omni-spec init` | pnpm v9+ y v10+. Detección de `pnpm-lock.yaml`. |
+| **Yarn** | `yarn dlx omni-spec init` | Yarn Berry / Modern v4+. Detección de `yarn.lock`. |
+| **Global CLI** | `npm i -g omni-spec` → `omni-spec init` | Disponible en cualquier shell interactivo del sistema. |
 
-`0.7.0-preview.1` se comprobó localmente en Windows con Node 24.22.1 y npm 11.19.1: 300 pruebas (297 aprobadas, 3 omitidas por permisos de enlaces), cobertura de líneas 94,80 %, lint y 21 escenarios del paquete aprobados. La migración desde el tarball rc.2 conservó especificaciones, idioma, contexto y constitución; requiere la opción explícita de versión descrita en [RELEASING](RELEASING.md#copias-locales-de-070-rc1-o-rc2).
+### Detección de herramientas modernas y lockfiles
 
-## Reglas de exclusión y Preview 2
+El motor de detección contextual (`src/detector.mjs`) reconoce:
+- **Ecosistema JS/TS**: npm (`package-lock.json`), pnpm (`pnpm-lock.yaml`), yarn (`yarn.lock`), Bun binario (`bun.lockb`) y Bun textual moderno (`bun.lock`). Frameworks modernos como Astro, Svelte, Nuxt, Next.js, Vite, Remix.
+- **Ecosistema Python**: uv (`uv.lock`), Poetry (`poetry.lock`), Pipenv (`Pipfile.lock`), pip estándar (`requirements.txt`, `pyproject.toml`).
+- **Ecosistema Backend**: Maven (`pom.xml`), Gradle (`build.gradle`, `build.gradle.kts`), Go (`go.mod`), Rust (`Cargo.lock`), Ruby (`Gemfile.lock`).
+- **Monorepos**: pnpm workspaces (`pnpm-workspace.yaml`), Turborepo (`turbo.json`), Lerna, npm/yarn workspaces.
 
-`0.7.0-preview.2` se publicó el 2026-10-24 en el canal npm `preview`; el tag `v0.7.0-preview.1` falló en CI antes de empaquetar. La candidata actual es `0.8.0-preview.2`, pendiente de publicación.
+## Plataformas y sistemas operativos
 
-El ajuste posterior al primer tag Preview conserva la semántica documentada de globstar: `a**/b` no excluye `a/x/b`; `a/**/b` sí. Algunas compilaciones de Git, incluida la 2.51.0.windows.1 comprobada localmente, difieren en el primer patrón. OmniSpec mantiene la misma regla en todos los sistemas para evitar omitir fuentes de la huella. La regresión independiente y la prueba diferencial reconocen únicamente ese resultado antiguo concreto. Ver la [sintaxis oficial de gitignore](https://git-scm.com/docs/gitignore#_pattern_format).
+La suite de verificación y empaquetado contempla soporte formal en:
+- **Windows**: Probado en Windows 11 (PowerShell y CMD). Normalización bidireccional de rutas con backslash, manejo de políticas de ejecución restringidas y reintentos automáticos de I/O (`fs-retry.mjs`) ante bloqueos transitorios por antivirus o indexación (EPERM/EBUSY/EACCES).
+- **macOS / Linux**: Probado en Ubuntu LTS y entornos POSIX. Compatible con señales de proceso estándar (SIGINT, SIGTERM) y grupos de procesos para limpieza estricta de subprocesos.
 
-## Agentes
+`npm run test:package` recorre proyectos nuevos, existentes, con fallos, stacks desconocidos, monorepos y documentos sin código. También verifica los cuatro tipos de trabajo y el rechazo de cierres sin evidencia reproducible.
 
-Antigravity es la integración principal, soportando instalación en workspace (`.agents/skills/` y `.agents/agents/omni-auditor.md`) y modo Plugin modular (`plugin.json` enlazable mediante `npm run sync:plugin`) junto con el subagente independiente `omni-auditor`. Las nueve skills y sus contratos actuales tienen comprobaciones automatizadas; no se ha registrado un nuevo recorrido completo de chat con cada versión/modelo de Antigravity.
+## Adaptadores de agentes soportados
 
-Cursor, Claude Code, Copilot en VS Code, Kilo, OpenCode, Gemini y Codex tienen adaptadores según sus formatos documentados y pruebas de generación. Su invocación y comportamiento deben comprobarse en la versión del host utilizada. `generic` ofrece archivos para lectura explícita, sin registrar comandos nativos. Ver [fuentes y formatos](STANDARDS.md).
+OmniSpec 0.8.0 incluye 10 adaptadores probados en generación e integración:
+
+1. **Antigravity**: Integración principal. Soporta modo workspace (`.agents/skills/` y `.agents/agents/omni-auditor.md`) y modo Plugin empaquetado (`plugin.json`), inyección de constitución con `trigger: always_on` y auditor sandboxeado.
+2. **Claude Code**: Adaptador para `.claude/skills/` y sincronización gestionada de `CLAUDE.md`. Si un proyecto contiene `CLAUDE.md`, Claude Code ignora `AGENTS.md`; OmniSpec administra su bloque en ambos archivos para garantizar continuidad de gobernanza.
+3. **Cursor**: Adaptador para `.cursor/skills/` y sección gestionada en `.cursorrules` / `AGENTS.md`.
+4. **Codex**: Adaptador para `.agents/skills/` e inyección de directivas en `AGENTS.md` para invocación `$omni-init`.
+5. **GitHub Copilot**: Sincronización de `.agents/skills/` compatible con agentes de VS Code.
+6. **Kilo**: Adaptador para `.kilo/skills/` y `.kilo/commands/` para comandos slash documentados.
+7. **OpenCode**: Adaptador para `.opencode/skills/` con metadatos de slash command (`metadata: {"opencode/slash": "true"}`).
+8. **Gemini CLI**: Adaptador para `.gemini/skills/` y archivos TOML en `.gemini/commands/`.
+9. **Generic**: Generación de plantillas y prompts en `specs/commands/` para cualquier modelo o interfaz de chat sin extensiones.
+10. **Plugin**: Enlace y gobernanza directa mediante el plugin oficial instalado.
 
 Para aceptar un host: confirmar descubrimiento de comandos, usar `omni-init` en proyecto nuevo y existente, discutir sin implementar, completar una feature y un bug, registrar una RFC sin código y reanudar el foco en otra sesión. Conservar los resultados reales y declarar cualquier comprobación pendiente.
 
-## Actualizaciones
+## Actualizaciones y migraciones
 
-La actualización admite instalaciones anteriores y copias de desarrollo que ya indiquen 0.5.0: compara archivos administrados aunque coincida el número de versión. `--dry-run` no escribe; `update` conserva contexto, constitución, gates y especificaciones. Las personalizaciones administradas bloquean el reemplazo hasta su revisión. La excepción es un runtime local (`specs/.omni/runtime/`) que no es de la versión de `specs/manifest.json`: sin `package.json`, con uno que no es JSON válido o no tiene `version`, o de otra versión. Se sustituye sin conflicto ni copia, y un `package.json` ilegible se avisa. Un runtime editado de la versión del proyecto sigue bloqueando, también al subir de versión. Ver [procedimiento](RELEASING.md#actualizar-proyectos).
+La actualización admite instalaciones anteriores y copias de desarrollo: compara archivos administrados aunque coincida el número de versión. `--dry-run` no escribe; `update` conserva contexto, constitución, gates y especificaciones. Las personalizaciones administradas bloquean el reemplazo hasta su revisión explícita.
 
-La sección administrada de `specs/.gitignore` ignora `specs/.omni/runtime/`. En un clon sin runtime, `npx omni-spec@<versión del manifiesto> update` lo recrea igual que el paquete y sin conflictos; `init` no lo restaura. Cuando `update` añade esa línea a una sección que no la tenía, avisa de que los archivos ya confirmados siguen en el índice de Git. También quita del registro `specs/.omni/managed.json` las entradas del runtime que el paquete ya no incluye: borra los archivos intactos y conserva los editados, con un aviso; `--dry-run` lo muestra sin escribir. `doctor` resume en una línea un runtime ausente o de otra versión, con el comando de restauración, en vez de listar sus archivos; en modo plugin, donde el runtime local no se usa, no lo señala. `status` avisa, sin bloquear, cuando la versión del CLI difiere de la del manifiesto. Fuera del modo plugin propone restaurar esa versión y, con un CLI más nuevo, recuerda que `update` con él sube el proyecto. En modo plugin solo propone `npx omni-spec@<versión> plugin update` si el plugin es más antiguo: bajar el plugin global afectaría a todos los proyectos de la máquina.
+La sección administrada de `specs/.gitignore` ignora `specs/.omni/runtime/`. En un clon sin runtime, `npx omni-spec@<versión del manifiesto> update` lo recrea idéntico al paquete publicado; `init` no lo restaura. `doctor` resume en una línea un runtime ausente o de otra versión, con el comando de restauración. `status` avisa, sin bloquear, cuando la versión del CLI difiere de la del manifiesto.
 
-Los trabajos completados permanecen como historial. Reabrir o volver a verificar un trabajo antiguo requiere adaptar sus criterios a `acceptance.json`; la actualización no inventa evidencia ni reescribe su resultado.
+Los trabajos completados permanecen como historial inmutable. Reabrir o volver a verificar un trabajo antiguo requiere adaptar sus criterios a `acceptance.json`; la actualización no inventa evidencia ni reescribe su resultado.
 
-El cálculo de la huella cambió en rc.1 (evidencia recursiva) y en rc.2 (reglas de ignorado y orden independiente del locale). Antes de completar una spec verificada con un cálculo anterior, ejecutar `verify` de nuevo; no migrar la huella como si se hubieran repetido las comprobaciones. `update` conserva la constitución y deja `specs/.omni/reference/CONSTITUTION.md` para comparar con la guía vigente.
+## Límites operativos y garantías
 
-## Rutas de esfuerzo
-
-Para feature y debt, `audit` respeta los artefactos requeridos por `fit`: light no exige plan ni tareas; standard exige plan pero no tareas; full exige ambos. Fit v2 incorpora riesgo, incertidumbre y reversibilidad, y permite bugfix light con reproducción, causa y regresión en bug.md; standard exige además rca.md y el diseño de fix.md, y full también sus tareas. Fit v1 conserva la regla anterior de bugfix full. Los documentos opcionales se conservan en disco y se anuncian como no auditados. Las decisiones necesarias deben estar en el contrato activo, no ocultas en esos documentos. Al promover a full vuelven a ser obligatorios, incluidos sus placeholders y tareas pendientes. Sin fit, se conserva la ruta completa; un fit inválido bloquea la auditoría.
-
-## Límites operativos
-
-- `context-check` y `audit` revisan estructura; el agente debe comprobar el significado de fuentes y requisitos.
-- `acceptance.json` v2 exige cobertura de IDs, tipo, estado, método y evidencia. Los criterios UI manuales requieren observaciones de pasos, esperado/real, fecha y artefacto local; los visuales incluyen viewport. Una observación del agente exige capacidad render registrada. La veracidad y suficiencia requieren revisión: ni una cadena ni una captura certifican conformidad de accesibilidad.
-- `verify` ejecuta los gates y el catálogo `specs/checks.json`; `complete` rechaza pendientes y cambios posteriores al snapshot. El catálogo incorpora ID, cwd, timeout y tipo. Un criterio automatizado usa `checkIds` o `checkCommands` inequívocos; los criterios UI automatizados exigen checks de tipo ui. La salida distingue declaración y ejecución; el cierre conserva ese alcance en `verification.acceptance`. La relevancia de las assertions sigue requiriendo revisión. El texto de evidencia no introduce comandos ejecutables. Ver [contratos de entrega](DELIVERY.md).
-- El snapshot comparte un límite de 20.000 archivos y 256 MiB entre fuentes, contexto y archivos de la spec. Excluye rutas de `.gitignore`, `.git/info/exclude`, `.omnispecignore` y las exclusiones por defecto (dependencias, cachés, salidas de build/test e IDE), además de otras specs y el estado de OmniSpec. Recorre toda la spec activa, también sus subcarpetas de evidencia, sin aplicar reglas de ignorado; solo omite su `verification.json` raíz. Fuera de la carpeta de la spec, un symlink a un archivo del proyecto se atesta por su contenido; se rechazan los symlinks a directorios, fuera del proyecto o hacia `.git/`, `specs/` o `.omni/`, salvo que estén ignorados. Dentro de la spec activa se rechaza cualquier symlink. La comparación distingue mayúsculas en todos los sistemas, de modo que los mismos bytes producen la misma huella en Windows, macOS y Linux (una copia con CRLF tiene bytes distintos), y no lee reglas de carpetas superiores. Los registros locales son editables; la huella detecta cambios, no demuestra veracidad ni ausencia de regresiones.
-- Las escrituras de varios archivos no son una transacción global. Cada archivo de estado se reemplaza atómicamente y los renombres reintentan errores transitorios de Windows (EPERM/EBUSY/EACCES) causados por antivirus o sincronización. Aun así, se recomienda trabajar fuera de carpetas sincronizadas como OneDrive. Ante un fallo de I/O, revisar `doctor`, backups y la vista previa antes de reintentar.
-- Una copia con finales de línea CRLF de los archivos administrados no cuenta como modificación local.
-- La línea base de contexto (`context-record`) no distingue CRLF de LF en las entradas de texto: un clon o una copia con otros finales de línea no la deja `STALE`. Las entradas con un byte NUL se comparan por bytes, y la huella de `verify` sí distingue CRLF de LF.
-- Un CLI 0.7.x no conoce el scope `CONTEXT_INPUTS_V3` y trata esa línea base como antigua: puede marcarla `STALE`, no vigila `AGENTS.md` ni los archivos de `specs/` citados, y con `context-record` la vuelve a registrar como `CONTEXT_INPUTS_V2`. Todo el equipo debe usar la misma versión de OmniSpec.
-- `status --json` omite la aceptación de las specs no activas y las decisiones que solo aplican a specs cerradas; `specs/manifest.json` y `specs/project-state.json` no cambian. Quien leía esos datos desde la salida de `status` debe usar `status --json --all`. La alternativa `npx omni-spec@<versión>` de las instrucciones no impide ejecutar un paquete enlazado con `npm link` de esa misma versión ni, con una versión `+dev.`, la versión base publicada; la defensa es comparar `version` con `specs/manifest.json`, que tampoco distingue un enlace de la misma versión.
-- `specs/.omni/runtime/` no se versiona. Restaurarlo requiere el paquete de la versión del manifiesto (registro npm, caché de npm o tarball local); sin él, `npx` falla con el error de npm. Una CI que use el runtime local debe restaurarlo antes con `npx omni-spec@<versión> update`, o invocar `npx omni-spec@<versión>` directamente. Un runtime ya confirmado sigue en el índice de Git, y `git status` muestra los cambios de cada `update`, hasta que el dueño del repositorio ejecuta `git rm -r --cached specs/.omni/runtime` y confirma; OmniSpec no ejecuta Git. Para seguir versionándolo, por ejemplo en clones sin acceso al paquete, basta con añadir `!.omni/runtime/` en una línea propia después de la sección administrada de `specs/.gitignore`.
-- No se garantiza cero alucinaciones, cumplimiento regulatorio ni funcionamiento idéntico de todos los modelos y entornos.
-
-Los registros de verificación usan `version: 3`: identidad completa del catálogo, `checkCwd` relativo, hashes de logs, archivos cambiados durante la ejecución y número de archivos atestados. Los registros anteriores requieren ejecutar `verify` nuevamente antes de completar. La aceptación v1 se conserva; etiquetas UI explícitas del contrato primario exigen evidencia tipada incluso en reportes anteriores. No se convierten automáticamente pruebas declaradas en resultados ejecutados.
-
-Ejemplo de fila automatizada (el comando debe estar previamente aprobado y configurado como gate, y el archivo de prueba debe comprobar ese requisito):
-
-```json
-{
-  "id": "AC-01",
-  "status": "passed",
-  "method": "automated",
-  "evidence": "El test de acceso comprueba el rechazo de una sesión sin permisos; no acredita revisión visual.",
-  "checkCommands": ["node --test test/access.test.mjs"]
-}
-```
-
-La correspondencia se hace con el comando exacto, incluyendo argumentos. Un comando puede comprobar varios criterios y un criterio puede requerir varios comandos. Una fila manual no se convierte en automatizada porque también haya gates en el proyecto. No renombrar el método para evitar una comprobación fallida: conservar el resultado y corregir o resolver el bloqueo real.
-
-Un timeout falla siempre. La terminación del árbol usa taskkill en Windows y señales al grupo en POSIX; si no puede confirmarse la limpieza dentro de dos segundos adicionales, el registro informa el límite y libera la espera. Pueden quedar procesos activos si el sistema deniega terminarlos; deben revisarse antes de reintentar. No se presenta ese caso como limpieza exitosa.
-
-Cada check conserva un log combinado limitado a 8 MiB; excederlo falla explícitamente. La salida visible es una cola con aviso de truncado. El cierre valida tamaño y hash del log. `status` y `complete` comparten inspección para indicar `READY_TO_COMPLETE`; decisiones requeridas sin resolver y contexto registrado obsoleto bloquean el cierre. Los contratos por capacidad conservan la revisión efectiva mientras una propuesta posterior sigue pendiente. Estos controles acreditan integridad mecánica, no veracidad semántica o calidad universal.
+- `context-check` y `audit` revisan estructura y consistencia declarativa; el agente debe comprobar el significado de fuentes y requisitos.
+- `acceptance.json` v2 exige cobertura de IDs, tipo, estado, método y evidencia. Los criterios UI manuales requieren observaciones de pasos, esperado/real, fecha y artefacto local; los visuales incluyen viewport. Una observación del agente exige capacidad render registrada. La veracidad y suficiencia requieren revisión humana.
+- `verify` ejecuta los gates y el catálogo `specs/checks.json`; `complete` rechaza criterios pendientes y cambios de archivos posteriores al snapshot. El catálogo incorpora ID, cwd, timeout y tipo. Un criterio automatizado usa `checkIds` o `checkCommands` inequívocos.
+- El snapshot comparte un límite de 20.000 archivos y 256 MiB entre fuentes, contexto y archivos de la spec. Excluye rutas de `.gitignore`, `.git/info/exclude`, `.omnispecignore` y las exclusiones por defecto (dependencias, cachés, salidas de build/test e IDE).
+- Las escrituras de estado son atómicas y cuentan con reintentos para entornos Windows con indexadores o antivirus activos.
+- No se garantiza cero alucinaciones ni cumplimiento normativo sin auditoría humana y pruebas ejecutables en entornos reales.

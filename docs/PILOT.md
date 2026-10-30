@@ -1,6 +1,6 @@
-# Piloto de OmniSpec 0.8.0 Preview — 0.8.0-preview.2
+# Piloto de OmniSpec 0.8.0 Oficial Estable
 
-Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. El [estado de la próxima versión](releases/0.8.0-preview.2.md) describe la Preview que se prueba aquí y las validaciones pendientes.
+Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. Las [notas de la versión 0.8.0](releases/0.8.0.md) describen el alcance estable oficial.
 
 ## Preparar el paquete exacto
 

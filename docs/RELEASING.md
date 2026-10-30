@@ -1,12 +1,8 @@
 # Publicación e instalación de OmniSpec
 
-Versión preparada: **0.8.0-preview.2 — 0.8.0 Preview**, canal npm `preview`, prerelease en GitHub. Está pendiente de publicación. Las [notas](releases/0.8.0-preview.2.md) describen cambios, comprobaciones y límites. Publicar una Preview permite distribuirla para pruebas sin mover `latest`; guardar un commit o una rama no publica el paquete.
+Versión oficial: **OmniSpec 0.8.0**, canal npm `latest`, GitHub Releases oficial. Publicada el 2026-10-30. Las [notas de lanzamiento](releases/0.8.0.md) describen cambios, arquitectura y compatibilidad consolidada.
 
-Comprobar cuentas, permisos y estado del registro antes de publicar. Los pasos de esta guía se ejecutan para la versión autorizada por el mantenedor. Un paquete público npm distribuye las fuentes incluidas en su tarball; la visibilidad del repositorio se administra por separado.
-
-## Promoción posterior a versión normal
-
-La publicación Preview no cierra la validación. Para una futura `0.8.0` sin sufijo: aceptar el alcance y resultados, cambiar paquete y lockfile, usar `latest`, finalizar las notas con fecha real y generar un tarball nuevo. Una nueva Preview incrementa el sufijo (`preview.2`, `preview.3`, etc.). El tag `v0.7.0-preview.1` se conserva como intento anterior cuya CI falló; no llegó a publicar paquete npm ni GitHub prerelease.; no se reemplaza una versión ya publicada.
+Comprobar cuentas, permisos y estado del registro antes de publicar futuras versiones. Los pasos de esta guía se ejecutan para la versión autorizada por el mantenedor. Un paquete público npm distribuye las fuentes incluidas en su tarball; la visibilidad del repositorio se administra por separado.
 
 ## Release en GitHub
 

@@ -1,34 +1,47 @@
 # Instalación y primera entrega al agente
 
-Este contrato corresponde a [0.8.0 Preview](releases/0.8.0-preview.2.md), versión `0.8.0-preview.2`, en preparación para publicación. Se distribuirá mediante el canal npm `preview`; no sustituye a la versión normal en `latest`. Para probar los bytes actuales utiliza el tarball de [PILOT](PILOT.md); `latest` todavía corresponde a 0.6.1 (consultado el 2026-10-28).
+Este contrato corresponde a la versión oficial estable [OmniSpec 0.8.0](releases/0.8.0.md), distribuida globalmente en el canal npm `latest`. No requiere dependencias de terceros (`dependencies: {}`) y está lista para inicializar proyectos desde cero o gobernar proyectos existentes.
 
-## Punto de entrada
+## Punto de entrada oficial
 
-Para el candidato actual, desde la carpeta destino:
-
-```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.2.tgz" -- omni-spec init
-```
-
-Con Node.js >=22.19.0, abre una terminal en la carpeta del proyecto y, cuando la Preview esté publicada, ejecuta:
+Con Node.js >=22.19.0 (o Node 24 Current / Node 22 LTS), abre una terminal en la carpeta del proyecto y ejecuta:
 
 ```sh
-npx --yes omni-spec@preview init
+npx --yes omni-spec init
 ```
 
-El primer `--yes` es de npm: acepta obtener el paquete, pero no contesta las preguntas de OmniSpec. No elige tecnologías ni aprueba publicación. No hace falta instalar globalmente.
+El primer `--yes` es de npm: acepta descargar y ejecutar la versión oficial de `omni-spec` sin confirmaciones redundantes del gestor, pero no contesta las preguntas del asistente interactivo de OmniSpec. No preselecciona tecnologías ni aprueba commits o publicaciones. No es obligatorio instalar el paquete de forma global.
 
-El mismo recorrido sirve para cualquier nivel de experiencia:
+### Gestores alternativos y ejecución multiplataforma
 
-1. Elegir inglés o español, salvo que ya se haya indicado `--lang en|es` o exista un idioma guardado.
-2. Leer la carpeta de destino y el estado detectado: carpeta nueva, archivos existentes o instalación previa.
-3. Elegir la herramienta con IA, salvo argumento `--agent` o selección existente. En la interfaz visual, usar flechas y Espacio para marcar una o varias; Enter confirma y Ctrl+A selecciona las integraciones concretas. La opción genérica es exclusiva. En modo de texto se aceptan nombres separados por comas, `all` o `generic`. `plugin` se declara explícitamente para usuarios del plugin global de Antigravity; init no instala ese plugin global.
-4. Si un módulo del proyecto presenta señal de interfaz de usuario (Tailwind CSS, un framework de UI, `components.json` o un kit reconocido), no hay una selección de UI guardada y no se indicó el flag `--ui-components`, elegir el kit de componentes (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui` o `none`). Sin señal, o al reinicializar con una selección guardada, este paso se omite. El flag sustituye el campo indicado; sin valor guardado, se usa el primer kit detectado o `none`.
-5. Confirmar la preparación de esa carpeta. Las respuestas inválidas se vuelven a preguntar; cancelar o cerrar la entrada antes de confirmar no escribe archivos de instalación.
-6. Instalar runtime, plantillas, contexto inicial e integración; comprobar los archivos administrados y la versión local.
-7. Abrir la misma carpeta en la herramienta elegida y utilizar la invocación mostrada por el instalador.
+OmniSpec 0.8.0 soporta de forma nativa los principales ejecutores y gestores de paquetes del ecosistema moderno:
 
-No se pregunta stack, estándar de documentación, perfil regulatorio ni quality gates durante este recorrido. Esas decisiones requieren conocer el proyecto y se discuten con el agente. El nombre inicial se deriva de la carpeta; puede declararse con `--name`. Las declaraciones `--stack`, `--doc`, `--profile`, `--gates` y `--ui-components` (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui`, `none`) siguen disponibles y se muestran antes de confirmar. No se ejecuta el texto de esos checks durante la instalación.
+```sh
+# Usando pnpm
+pnpm dlx omni-spec init
+
+# Usando Bun (1.1+ / 1.2+)
+bunx omni-spec init
+
+# Usando Yarn Modern (Berry / v4)
+yarn dlx omni-spec init
+
+# Instalación global permanente (npm, pnpm o bun)
+npm install -g omni-spec
+omni-spec init
+```
+
+El mismo recorrido interactivo sirve para cualquier nivel de experiencia:
+
+1. **Idioma**: Elegir inglés o español, salvo que ya se haya indicado `--lang en|es` o exista un idioma guardado previamente en el proyecto.
+2. **Detección de entorno**: Leer la carpeta de destino y el estado detectado: carpeta nueva, archivos existentes o instalación previa de OmniSpec.
+3. **Selección de herramientas con IA**: Salvo argumento `--agent` o selección existente. En la interfaz visual de terminal, usar flechas y Espacio para marcar una o varias; Enter confirma y Ctrl+A selecciona todas las integraciones concretas. La opción genérica es exclusiva. En modo de texto (`--plain`) se aceptan nombres separados por comas, `all` o `generic`. La opción `plugin` se declara explícitamente para usuarios del plugin oficial de Antigravity; `init` no instala el plugin global de máquina.
+4. **Kit de componentes UI**: Si un módulo del proyecto presenta señal de interfaz de usuario (Tailwind CSS, frameworks como React, Vue, Svelte, Astro, Nuxt, `components.json` o un kit reconocido), no hay una selección guardada y no se indicó `--ui-components`, elegir el kit (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui` o `none`). Sin señal o al reinicializar, este paso se omite.
+5. **Confirmación y preparación**: Confirmar la preparación de la carpeta. Las respuestas inválidas se vuelven a preguntar; cancelar o cerrar la entrada antes de confirmar no escribe archivos en disco.
+6. **Instalación de runtime y artefactos**: Instalar runtime local en `specs/.omni/runtime/`, plantillas, contexto inicial en `specs/project-context.md` y adaptadores de agentes; comprobar los archivos administrados y la versión local.
+7. **Invocación en el agente**: Abrir la carpeta en la herramienta elegida y utilizar la invocación mostrada por el instalador (ej. `/omni-init` o `$omni-init`).
+
+No se pregunta stack, estándar de documentación, perfil regulatorio ni quality gates durante este recorrido inicial. Esas decisiones requieren conocer el propósito del proyecto y se discuten de forma asistida con el agente. El nombre inicial se deriva de la carpeta y puede declararse con `--name`. Las declaraciones `--stack`, `--doc`, `--profile`, `--gates` y `--ui-components` (`shadcn`, `radix`, `headlessui`, `preline`, `flyonui`, `none`) están disponibles por CLI y se resumen antes de confirmar. No se ejecuta el texto de esos checks durante la instalación.
 
 ## Componentes y Guía de Interfaz (`guide design`)
 
@@ -37,8 +50,8 @@ OmniSpec 0.8 no requiere ni distribuye *companions* externos de terceros. La arq
 `--ui-components` acepta `shadcn`, `radix`, `headlessui`, `preline`, `flyonui` o `none`. Funciona con `init --yes` aunque el proyecto todavía no tenga dependencias de UI. La selección queda registrada en `manifest.ui.components` y se conserva al repetir `init` sin nuevos flags.
 
 La guía de diseño oficial (`guide design`) establece el estándar de artesanía visual:
-- **4 Estados Obligatorios**: Toda vista interactiva debe contemplar explícitamente *Loading* (skeletons con CLS = 0), *Empty* (explicación y CTA claro), *Error* (mensaje amigable con reintento) y *Protected* (estado restringido o sin permisos).
-- **Anti-Cliché & Tipografía Deliberada**: Prohibidos los degradados azul/púrpura genéricos, resplandores difusos artificiales y el anidamiento excesivo de tarjetas con sombras (*card-itis*). Se prioriza la jerarquía mediante tipografía y whitespace.
+- **4 Estados Obligatorios**: Toda vista interactiva debe contemplar explícitamente *Loading* (skeletons contextuales con CLS = 0), *Empty* (explicación clara con acción inmediata), *Error* (mensaje amigable con mecanismo de reintento) y *Protected* (estado restringido o sin permisos).
+- **Anti-Cliché & Tipografía Deliberada**: Prohibidos los degradados azul/púrpura genéricos, resplandores difusos artificiales y el anidamiento excesivo de tarjetas con sombras (*card-itis*). Se prioriza la jerarquía visual mediante tipografía y whitespace deliberado.
 - **Tokens Semánticos y Accesibilidad**: Contraste WCAG 2.1 AA medible, paletas de color con roles funcionales y soporte completo de navegación por teclado y lectores de pantalla.
 
 ## Terminales, agentes y automatización
@@ -52,18 +65,30 @@ Si el destino, las declaraciones o los avisos ocupan más espacio, PgUp/PgDn per
 La interfaz visual requiere entrada y salida TTY y un tamaño mínimo de 40 columnas por 18 filas. `--plain`, `TERM=dumb`, CI o salida redirigida usan texto por líneas. `NO_COLOR` desactiva colores sin cambiar el recorrido. `--json` conserva JSON sin controles ANSI. No se modifica el historial anterior ni se requieren paquetes de UI externos.
 
 ```sh
-npx --yes omni-spec@preview init --plain
+npx --yes omni-spec init --plain
 ```
 
-Si no hay entrada disponible, falla con instrucciones concretas antes de instalar. Para ejecución desatendida:
+Si no hay entrada interactiva disponible, falla con instrucciones concretas antes de instalar. Para ejecución desatendida o automatización de scripts:
 
 ```sh
-npx --yes omni-spec@preview init --yes --agent codex --lang es
-npx --yes omni-spec@preview init --yes --agent cursor,claude --lang es
-npx --yes omni-spec@preview init --yes --agent generic --lang es --json
+npx --yes omni-spec init --yes --agent codex --lang es
+npx --yes omni-spec init --yes --agent cursor,claude --lang es
+npx --yes omni-spec init --yes --agent generic --lang es --json
 ```
 
 El segundo `--yes` es de OmniSpec y acepta preparar la carpeta con los datos declarados. Sin `--agent`, el modo automático conserva la integración existente o usa `generic`; no selecciona silenciosamente un host. `--json` requiere `init --yes` para que la salida no se mezcle con preguntas. La salida incluye `installation` con `FILES_READY`, integridad `PASSED`, `agentDiscovery: NOT_CHECKED`, `projectOnboarding: PENDING`, versión, idioma, invocaciones y ruta de recuperación.
+
+## Adaptadores y sincronización de agentes
+
+OmniSpec 0.8.0 ofrece 10 adaptadores estandarizados:
+- **Antigravity**: Instalación de 9 skills en `.agents/skills/` y subagente auditor en `.agents/agents/omni-auditor.md`. En modo plugin, enlaza directamente al plugin centralizado validado (`plugin.json`).
+- **Claude Code**: Genera `.claude/skills/` y administra la sección gestionada en `CLAUDE.md`. Si un proyecto contiene `CLAUDE.md`, Claude Code prioriza este archivo sobre `AGENTS.md`; OmniSpec sincroniza ambos para garantizar que las directivas de gobernanza permanezcan activas.
+- **Cursor**: Genera `.cursor/skills/` y mantiene la sección de instrucciones en `.cursorrules` o `AGENTS.md`.
+- **Codex**: Genera `.agents/skills/` e inyecta la sección gestionada en `AGENTS.md` para invocación vía `$omni-init`.
+- **GitHub Copilot**: Sincroniza `.agents/skills/` y directivas compatibles con agentes en VS Code.
+- **Kilo & OpenCode**: Configura `.kilo/skills/` y `.opencode/skills/` con metadatos de slash commands nativos.
+- **Gemini CLI**: Genera `.gemini/skills/` y comandos TOML en `.gemini/commands/`.
+- **Generic & Plugin**: Archivos Markdown directos para cualquier LLM o conexión con plugins externos.
 
 ## Recuperación cuando no aparece la skill
 
