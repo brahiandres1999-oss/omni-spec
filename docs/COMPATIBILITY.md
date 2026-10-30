@@ -1,12 +1,12 @@
-# Compatibilidad y verificación — OmniSpec 0.8.0 Oficial Estable
+# Compatibilidad y verificación — OmniSpec 0.8.1 Oficial Estable
 
-La versión oficial de producción es **0.8.0**, publicada globalmente en el canal npm `latest` y GitHub Releases el 2026-10-30.
+La versión oficial de producción es **0.8.1**, publicada globalmente en el canal npm `latest` y GitHub Releases el 2026-10-30.
 
 OmniSpec instala flujos de especificación y revisión por proyecto, con soporte nativo de Plugin en Google Antigravity y adaptadores para los principales agentes de IA y herramientas de terminal. Conserva contexto y especificaciones al actualizar y exige auditoría, cobertura declarada de criterios y un registro de verificación formal antes de cerrar trabajo. No garantiza precisión al primer intento ni certifica la aplicación o el razonamiento de un modelo por instalarse.
 
 ## Runtimes y gestores de paquetes
 
-OmniSpec 0.8.0 mantiene una estricta política de **Zero Runtime Dependencies** (`dependencies: {}`), eliminando riesgos de vulnerabilidades en la cadena de suministro y permitiendo compatibilidad directa entre diferentes runtimes y gestores:
+OmniSpec 0.8.1 mantiene una estricta política de **Zero Runtime Dependencies** (`dependencies: {}`), eliminando riesgos de vulnerabilidades en la cadena de suministro y permitiendo compatibilidad directa entre diferentes runtimes y gestores:
 
 | Entorno / Gestor | Comando recomendado | Compatibilidad verificada |
 | :--- | :--- | :--- |
@@ -34,7 +34,7 @@ La suite de verificación y empaquetado contempla soporte formal en:
 
 ## Adaptadores de agentes soportados
 
-OmniSpec 0.8.0 incluye 10 adaptadores probados en generación e integración:
+OmniSpec 0.8.1 incluye 10 adaptadores probados en generación e integración:
 
 1. **Antigravity**: Integración principal. Soporta modo workspace (`.agents/skills/` y `.agents/agents/omni-auditor.md`) y modo Plugin empaquetado (`plugin.json`), inyección de constitución con `trigger: always_on` y auditor sandboxeado.
 2. **Claude Code**: Adaptador para `.claude/skills/` y sincronización gestionada de `CLAUDE.md`. Si un proyecto contiene `CLAUDE.md`, Claude Code ignora `AGENTS.md`; OmniSpec administra su bloque en ambos archivos para garantizar continuidad de gobernanza.

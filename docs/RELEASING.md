@@ -1,6 +1,6 @@
 # Publicación e instalación de OmniSpec
 
-Versión oficial: **OmniSpec 0.8.0**, canal npm `latest`, GitHub Releases oficial. Publicada el 2026-10-30. Las [notas de lanzamiento](releases/0.8.0.md) describen cambios, arquitectura y compatibilidad consolidada.
+Versión oficial: **OmniSpec 0.8.1**, canal npm `latest`, GitHub Releases oficial. Publicada el 2026-10-30. Las [notas de lanzamiento](releases/0.8.1.md) describen cambios, arquitectura y compatibilidad consolidada.
 
 Comprobar cuentas, permisos y estado del registro antes de publicar futuras versiones. Los pasos de esta guía se ejecutan para la versión autorizada por el mantenedor. Un paquete público npm distribuye las fuentes incluidas en su tarball; la visibilidad del repositorio se administra por separado.
 

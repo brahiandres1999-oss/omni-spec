@@ -1,6 +1,14 @@
 # Hoja de ruta de OmniSpec
 
-Actualizado el 2026-10-30 tras el lanzamiento oficial de **OmniSpec 0.8.0**.
+Actualizado el 2026-10-30 tras el lanzamiento oficial de **OmniSpec 0.8.1**.
+
+---
+
+## OmniSpec 0.8.1 — Lanzamiento de Parche y TUI Dual-Tone (Completado)
+
+Publicado en el canal npm `latest` y GitHub Releases el 2026-10-30.
+
+- **TUI Visual Modernization & Dual-Tone Wordmark (Spec 024):** Banner FIGlet ASCII limpio (azul corporativo / ámbar) reemplazando la rasterización isométrica ruidosa, reduciendo el consumo vertical de 27 a 6 líneas de alto con umbral responsivo adaptable.
 
 ---
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-10-30
+
+Official patch release on npm `latest` channel and GitHub Releases. See the [0.8.1 release notes](docs/releases/0.8.1.md).
+
+### Changed
+- **TUI Visual Modernization & Dual-Tone Wordmark (Spec 024):** Replaced 3D isometric polygon ray-casting in `src/terminal-ui.mjs` with a clean, 6-line standard FIGlet ASCII banner in corporate Dual-Tone (`Omni` in blue, `Spec` in amber, version in muted).
+- **Interactive Terminal Ergonomics:** Reduced vertical header consumption from 27 rows to 6 rows (8 rows with margins and slogan), keeping 75%+ of the terminal viewport available for interactive wizard prompts in Windows PowerShell, CMD and Unix terminals.
+- **Responsive Viewport Treshold:** Adjusted banner threshold to `columns >= 52` and `logoRoom >= 6`, preserving concise single-line fallback for narrow screens.
+
 ## [0.8.0] — 2026-10-30
 
 Official stable release on npm `latest` channel and GitHub Releases. See the [0.8.0 release notes](docs/releases/0.8.0.md).

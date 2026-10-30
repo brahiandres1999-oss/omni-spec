@@ -103,8 +103,8 @@ const BANNER_PARTS = [
 ];
 
 /** Clean dual-tone ASCII wordmark for OmniSpec: corporate blue for Omni and warm amber for Spec. */
-export function logoLines(color = false, depth = 24, { version = '0.8.0' } = {}) {
-  const versionTag = version?.startsWith('v') ? version : `v${version || '0.8.0'}`;
+export function logoLines(color = false, depth = 24, { version = '0.8.1' } = {}) {
+  const versionTag = version?.startsWith('v') ? version : `v${version || '0.8.1'}`;
   const lines = BANNER_PARTS.map(
     ([omni, spec]) => paint(omni, 'blue', color, depth) + paint(spec, 'amber', color, depth),
   );
@@ -160,7 +160,7 @@ function frameLayout({
       );
     }
   } else
-    lines.push(`  ${paint('OmniSpec', 'amber', color, depth)}  ${fit(version ? `v${version}` : 'v0.8.0', width - 11)}`);
+    lines.push(`  ${paint('OmniSpec', 'amber', color, depth)}  ${fit(version ? `v${version}` : 'v0.8.1', width - 11)}`);
   lines.push(
     '',
     `  ${paint(`${es ? 'PREPARAR PROYECTO' : 'PREPARE PROJECT'}   ${step} / 3`, 'muted', color, depth)}`,

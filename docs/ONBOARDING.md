@@ -1,6 +1,6 @@
-# Contrato de onboarding — OmniSpec 0.8.0 Oficial Estable
+# Contrato de onboarding — OmniSpec 0.8.1 Oficial Estable
 
-Contrato distribuido en `0.8.0` estable. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [notas de la versión 0.8.0](releases/0.8.0.md).
+Contrato distribuido en `0.8.1` estable. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [notas de la versión 0.8.1](releases/0.8.1.md).
 
 ## Preparación y decisiones pendientes
 

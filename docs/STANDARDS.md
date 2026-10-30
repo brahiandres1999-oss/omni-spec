@@ -1,6 +1,6 @@
 # Fuentes y decisiones de interoperabilidad
 
-Consulta inicial: 2026-10-22. Actualizado: 2026-10-30 tras el lanzamiento de **OmniSpec 0.8.0 Estable**. Las fuentes de interoperabilidad son documentación oficial o especificaciones primarias. Las referencias de investigación y artículos se identifican por separado en las filas correspondientes. No son una certificación de OmniSpec ni garantizan el comportamiento de un modelo.
+Consulta inicial: 2026-10-22. Actualizado: 2026-10-30 tras el lanzamiento de **OmniSpec 0.8.1 Estable**. Las fuentes de interoperabilidad son documentación oficial o especificaciones primarias. Las referencias de investigación y artículos se identifican por separado en las filas correspondientes. No son una certificación de OmniSpec ni garantizan el comportamiento de un modelo.
 
 | Fuente | Decisión aplicada | Comprobación local |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ Consulta inicial: 2026-10-22. Actualizado: 2026-10-30 tras el lanzamiento de **O
 | [Yang et al. (Orchid), ASE 2026](https://doi.org/10.1145/3832783.3834403) | Motiva tratar ambigüedad material explícitamente. OmniSpec inspecciona hechos disponibles y pregunta por decisiones faltantes; no convierte toda incertidumbre en una pregunta ni atribuye esa regla universal al estudio. | `ambiguity` es una respuesta obligatoria; `material` o `blocked` escalan a ruta completa. |
 | [Konstantinou et al., arXiv:2607.05139](https://arxiv.org/abs/2607.05139) | Referencia sobre pruebas y detección de fallos. Conservar bugfix en ruta completa es una decisión conservadora de OmniSpec; el estudio no demuestra que todo bugfix necesite todos nuestros artefactos. | Fit v1 conserva bugfix full; v2 considera también riesgo, incertidumbre, reversibilidad y regresión. RFC mantiene su ruta de decisión. |
 | [NIST SSDF 1.1](https://csrc.nist.gov/pubs/sp/800/218/final) | Usado como referencia de prácticas de desarrollo seguro y verificación integrables en el ciclo de vida; no como supuesta certificación SDD. | Evidencia explícita, resultados de pruebas y límites documentados. |
-| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | `0.8.0` es el lanzamiento oficial estable en el canal npm `latest`. El dist-tag oficial es `latest`. | Versión única `0.8.0` en package.json y registry público de npm. |
+| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | `0.8.1` es el lanzamiento oficial estable en el canal npm `latest`. El dist-tag oficial es `latest`. | Versión única `0.8.1` en package.json y registry público de npm. |
 
 ## Qué significa SDD en esta implementación
 

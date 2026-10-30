@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.0-blue.svg" alt="Version 0.8.0"></a>
-  <a href="docs/releases/0.8.0.md"><img src="https://img.shields.io/badge/canal-latest-green.svg" alt="0.8.0 Oficial"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.1-blue.svg" alt="Version 0.8.1"></a>
+  <a href="docs/releases/0.8.1.md"><img src="https://img.shields.io/badge/canal-latest-green.svg" alt="0.8.1 Oficial"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -13,7 +13,7 @@
 
 ---
 
-# OmniSpec 0.8.0
+# OmniSpec 0.8.1
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
@@ -22,7 +22,7 @@ Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un frame
 
 ---
 
-> **OmniSpec 0.8.0 — Lanzamiento Oficial Estable.** Disponible en el canal npm `latest` y en GitHub Releases. Consulta las [notas de lanzamiento](docs/releases/0.8.0.md).
+> **OmniSpec 0.8.1 — Lanzamiento Oficial Estable.** Disponible en el canal npm `latest` y en GitHub Releases. Consulta las [notas de lanzamiento](docs/releases/0.8.1.md).
 
 ## ¿Por qué OmniSpec?
 
@@ -38,7 +38,7 @@ OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
 ---
 
-## Empezar con 0.8.0
+## Empezar con 0.8.1
 
 ### 1. Prepara la carpeta donde vas a trabajar
 
@@ -320,13 +320,14 @@ Restaurar requiere el paquete de esa versión: normalmente se descarga del regis
 
 OmniSpec nace como una iniciativa personal con el propósito de contar con un framework de *Spec-Driven Development* verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, sin ataduras a dependencias externas ni flujos rígidos.
 
-La próxima publicación es **0.8.0 Preview** (`0.8.0-preview.2`, canal `preview`). Se están validando el instalador, las integraciones y el recorrido conversacional; la aprobación de pruebas del motor no demuestra por sí sola mayor estabilidad que 0.6.1. Las [notas de la Preview](docs/releases/0.8.0-preview.2.md) distinguen cambios incluidos, comprobaciones realizadas y pendientes. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
+La versión actual es **OmniSpec 0.8.1** (canal `latest`). Las [notas de la versión 0.8.1](docs/releases/0.8.1.md) detallan la modernización visual del instalador y compatibilidad consolidada. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
 
 ---
 
 ## Documentación
 
-- [0.8.0 Preview: estado, cambios y límites](docs/releases/0.8.0-preview.2.md)
+- [0.8.1 Estable: notas de lanzamiento](docs/releases/0.8.1.md)
+- [0.8.0 Estable: arquitectura y pilares SDD](docs/releases/0.8.0.md)
 - [Próximas entregas: presets y avisos de actualización pendientes](docs/ROADMAP.md)
 - [Publicada: 0.7.0-preview.2](docs/releases/0.7.0-preview.2.md) · [Historial de candidatas: 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [Publicada: 0.6.1](docs/releases/0.6.1.md)
 - [Piloto local con el paquete exacto](docs/PILOT.md)

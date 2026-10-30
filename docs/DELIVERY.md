@@ -1,6 +1,6 @@
 # Entrega con estado y evidencia
 
-[OmniSpec 0.8.0](releases/0.8.0.md) oficial estable conserva formatos compatibles y consolida contratos de entrega explícitos. Su publicación en el canal npm `latest` establece el estándar de producción. No confundir el paquete instalado con versiones anteriores o plugins globales desactualizados.
+[OmniSpec 0.8.1](releases/0.8.1.md) oficial estable conserva formatos compatibles y consolida contratos de entrega explícitos. Su publicación en el canal npm `latest` establece el estándar de producción. No confundir el paquete instalado con versiones anteriores o plugins globales desactualizados.
 
 ## Empezar y reanudar
 

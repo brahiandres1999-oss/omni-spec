@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to OmniSpec!
 
-The current release being prepared is **0.8.0 Preview** (`0.8.0-preview.2`, npm channel `preview`). npm `latest` remains 0.6.1 until a normal release is promoted. See the [Preview notes](docs/releases/0.8.0-preview.2.md) for scope, evidence and remaining validation.
+The current official release is **0.8.1** (npm channel `latest`). See the [Release notes](docs/releases/0.8.1.md) for scope, architecture and verification details.
 
 ## Guiding Principles
 1. **Zero External Dependencies:** OmniSpec must remain 100% dependency-free. Do not add third-party npm packages to `dependencies`. Use Node.js built-in modules (`node:fs`, `node:path`, `node:readline`, `node:test`). Tooling used only to build or verify the project belongs in `devDependencies` and is never published; `npm run release:check` enforces that `dependencies` stays empty.

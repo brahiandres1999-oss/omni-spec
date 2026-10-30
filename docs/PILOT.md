@@ -1,6 +1,6 @@
-# Piloto de OmniSpec 0.8.0 Oficial Estable
+# Piloto de OmniSpec 0.8.1 Oficial Estable
 
-Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. Las [notas de la versión 0.8.0](releases/0.8.0.md) describen el alcance estable oficial.
+Usa una carpeta nueva y vacía para empezar un proyecto desde cero, o una copia controlada de otro proyecto si prefieres evaluar su evolución. Conserva el proyecto anterior como referencia: no lo borres ni lo sobrescribas para preparar la prueba. Trabaja fuera de carpetas sincronizadas (OneDrive, Dropbox), que pueden bloquear archivos mientras OmniSpec los reemplaza. Las [notas de la versión 0.8.1](releases/0.8.1.md) describen el alcance estable oficial.
 
 ## Preparar el paquete exacto
 

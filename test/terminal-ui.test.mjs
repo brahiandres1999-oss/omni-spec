@@ -274,7 +274,7 @@ test('NO_COLOR and plain summaries have no ANSI; untrusted labels cannot move th
   assert.equal(logoLines().length, 6);
   assert.ok(logoLines().every(line => textWidth(line) <= 50));
   assert.equal(logoLines(false).join('\n'), stripVTControlCharacters(logoLines(false).join('\n')));
-  assert.ok(logoLines(false).join('\n').includes('v0.8.0'));
+  assert.ok(logoLines(false).join('\n').includes('v0.8.1'));
   const brand = logoLines(true).join('\n');
   // Omni in blue (88;166;255), Spec in amber (245;158;11), and version in muted (139;148;158)
   assert.ok(brand.includes('38;2;88;166;255'));

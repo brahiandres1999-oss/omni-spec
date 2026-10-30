@@ -1,6 +1,6 @@
 # Instalación y primera entrega al agente
 
-Este contrato corresponde a la versión oficial estable [OmniSpec 0.8.0](releases/0.8.0.md), distribuida globalmente en el canal npm `latest`. No requiere dependencias de terceros (`dependencies: {}`) y está lista para inicializar proyectos desde cero o gobernar proyectos existentes.
+Este contrato corresponde a la versión oficial estable [OmniSpec 0.8.1](releases/0.8.1.md), distribuida globalmente en el canal npm `latest`. No requiere dependencias de terceros (`dependencies: {}`) y está lista para inicializar proyectos desde cero o gobernar proyectos existentes.
 
 ## Punto de entrada oficial
 
@@ -14,7 +14,7 @@ El primer `--yes` es de npm: acepta descargar y ejecutar la versión oficial de 
 
 ### Gestores alternativos y ejecución multiplataforma
 
-OmniSpec 0.8.0 soporta de forma nativa los principales ejecutores y gestores de paquetes del ecosistema moderno:
+OmniSpec 0.8.1 soporta de forma nativa los principales ejecutores y gestores de paquetes del ecosistema moderno:
 
 ```sh
 # Usando pnpm
@@ -80,7 +80,7 @@ El segundo `--yes` es de OmniSpec y acepta preparar la carpeta con los datos dec
 
 ## Adaptadores y sincronización de agentes
 
-OmniSpec 0.8.0 ofrece 10 adaptadores estandarizados:
+OmniSpec 0.8.1 ofrece 10 adaptadores estandarizados:
 - **Antigravity**: Instalación de 9 skills en `.agents/skills/` y subagente auditor en `.agents/agents/omni-auditor.md`. En modo plugin, enlaza directamente al plugin centralizado validado (`plugin.json`).
 - **Claude Code**: Genera `.claude/skills/` y administra la sección gestionada en `CLAUDE.md`. Si un proyecto contiene `CLAUDE.md`, Claude Code prioriza este archivo sobre `AGENTS.md`; OmniSpec sincroniza ambos para garantizar que las directivas de gobernanza permanezcan activas.
 - **Cursor**: Genera `.cursor/skills/` y mantiene la sección de instrucciones en `.cursorrules` o `AGENTS.md`.
