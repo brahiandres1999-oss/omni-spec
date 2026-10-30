@@ -69,7 +69,11 @@ export function initText(language = 'en') {
 }
 
 /** Fail before installation writes when Node is below the package requirement. */
-export async function assertInstallationRuntime(nodeVersion = process.versions.node) {
+export async function assertInstallationRuntime(
+  nodeVersion = process.versions.node,
+  runtimeVersions = process.versions,
+) {
+  if (runtimeVersions?.bun) return;
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const minimum = pkg.engines.node.replace(/^>=/, '');
   if (compareVersions(nodeVersion, minimum) < 0)

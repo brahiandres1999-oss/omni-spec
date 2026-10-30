@@ -117,6 +117,7 @@ export function integrationEntries(manifest, options = {}) {
         content: `---\ndescription: OmniSpec project workflow\nglobs: "**/*"\nalwaysApply: true\n---\n${rule}\n`,
       });
     if (target === 'copilot') entries.push({ path: '.github/copilot-instructions.md', content: rule, section: true });
+    if (target === 'claude') entries.push({ path: 'CLAUDE.md', content: rule, section: true });
 
     // AGENTS.md is the only file every supported host reads.
     entries.push({ path: 'AGENTS.md', content: rule, section: true });

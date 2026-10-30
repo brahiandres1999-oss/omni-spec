@@ -156,7 +156,7 @@ test('omni-init and omni-converge carry the link rule and the final-response rul
 });
 
 test('host rules pin npx to the generated version and no adapter emits an unpinned npx', () => {
-  const rules = ['AGENTS.md', '.cursor/rules/omni-spec.mdc', '.github/copilot-instructions.md'];
+  const rules = ['AGENTS.md', '.cursor/rules/omni-spec.mdc', '.github/copilot-instructions.md', 'CLAUDE.md'];
   const seen = new Set();
   for (const agent of Object.keys(AGENTS)) {
     for (const entry of integrationEntries({ version: '1.2.3' }, { agent })) {

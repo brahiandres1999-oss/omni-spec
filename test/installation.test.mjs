@@ -277,5 +277,6 @@ test('installation checks the package Node minimum before writing', async () => 
   await assert.rejects(assertInstallationRuntime('20.19.0'), /requires Node.js/);
   await assertInstallationRuntime('22.19.0');
   await assertInstallationRuntime('24.0.0');
+  await assertInstallationRuntime('18.0.0', { bun: '1.2.0' });
   assert.deepEqual(await readdir(root), []);
 });

@@ -1,6 +1,6 @@
 {
   "name": "omni-spec",
-  "version": "0.8.0-preview.3",
+  "version": "0.8.0",
   "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding.",
   "type": "module",
   "main": "src/cli.mjs",
@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "preview"
+    "tag": "latest"
   },
   "bin": {
     "omni-spec": "bin/omni-spec.mjs"

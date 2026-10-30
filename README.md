@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.0--preview.3-blue.svg" alt="Version 0.8.0-preview.3"></a>
-  <a href="docs/releases/0.8.0-preview.3.md"><img src="https://img.shields.io/badge/canal-preview-amber.svg" alt="0.8.0 Preview, pendiente de publicación"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.0-blue.svg" alt="Version 0.8.0"></a>
+  <a href="docs/releases/0.8.0.md"><img src="https://img.shields.io/badge/canal-latest-green.svg" alt="0.8.0 Oficial"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -13,7 +13,7 @@
 
 ---
 
-# OmniSpec 0.8.0-preview.3
+# OmniSpec 0.8.0
 
 > **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
 > Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
@@ -22,7 +22,7 @@ Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un frame
 
 ---
 
-> **0.8.0 Preview — lanzamiento en preparación.** Esta rama prepara `0.8.0-preview.3` para distribución pública en el canal npm `preview` y como prerelease en GitHub. Es una versión para probar y recibir feedback, con validaciones pendientes. `0.6.1` sigue en npm `latest` (consultado el 2026-10-28). Consulta las [notas de la Preview](docs/releases/0.8.0-preview.3.md) y el [piloto local](docs/PILOT.md).
+> **OmniSpec 0.8.0 — Lanzamiento Oficial Estable.** Disponible en el canal npm `latest` y en GitHub Releases. Consulta las [notas de lanzamiento](docs/releases/0.8.0.md).
 
 ## ¿Por qué OmniSpec?
 
@@ -38,21 +38,19 @@ OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
 ---
 
-## Empezar con 0.8.0 Preview
+## Empezar con 0.8.0
 
 ### 1. Prepara la carpeta donde vas a trabajar
 
 Necesitas Node.js >=22.19.0 y una herramienta con agente de IA. OmniSpec prepara instrucciones y conserva acuerdos en tu proyecto; tu agente conduce la conversación y realiza el trabajo. No necesitas elegir las tecnologías de tu aplicación para instalar OmniSpec.
 
-Abre una terminal en la carpeta del proyecto. Para uno nuevo, crea una carpeta y entra en ella; para uno existente, usa su raíz. Genera el tarball como explica el [piloto](docs/PILOT.md) y utiliza la ruta de ese archivo:
+Abre una terminal en la carpeta del proyecto y ejecuta:
 
 ```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.0-preview.2.tgz" -- omni-spec init
+npx --yes omni-spec init
 ```
 
-Una vez publicada la Preview, el punto de entrada será `npx --yes omni-spec@preview init`; también podrá fijarse `@0.8.0-preview.2`. `@latest` seguirá ejecutando 0.6.1 mientras no se promueva una versión normal. Antes de publicar, utiliza el tarball local. La instalación global es opcional.
-
-En la candidata 0.7.0, el asistente pregunta idioma, herramienta con IA y confirmación de la carpeta. Permite varias herramientas o `generic` si aún no elegiste una. No presupone Antigravity ni pregunta tu nivel de experiencia. Producto, stack, documentación y checks se acuerdan después con el agente. `init` conserva el código existente y no ejecuta scripts de aplicación; los comandos detectados quedan como candidatos en `specs/project-context.md`.
+La instalación global es opcional con `npm install -g omni-spec` (o `pnpm add -g omni-spec`). El asistente interactivo pregunta idioma, herramienta con IA y confirmación de la carpeta. Permite varias herramientas o `generic` si aún no elegiste una. Producto, stack, documentación y checks se acuerdan después con el agente. `init` conserva el código existente y no ejecuta scripts de aplicación; los comandos detectados quedan como candidatos en `specs/project-context.md`.
 
 En una terminal compatible verás el logo de caracteres y una pregunta activa: flechas para moverte, Espacio para marcar herramientas y Enter para continuar; Esc o Ctrl+C cancelan. La presentación se ajusta al tamaño disponible. Usa `--plain` para texto por líneas; tuberías, CI y JSON conservan salida sencilla. `NO_COLOR` desactiva los colores. Antigravity recibe también `.agents/agents/omni-auditor.md` para las superficies que admiten ese formato.
 

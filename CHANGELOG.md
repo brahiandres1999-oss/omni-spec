@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Changes after the prepared Preview will be recorded here.
+## [0.8.0] — 2026-10-30
+
+Official stable release on npm `latest` channel and GitHub Releases. See the [0.8.0 release notes](docs/releases/0.8.0.md).
+
+### Added
+- **Pillar 6: MDD (Memory Distillation Driven) & Context FinOps (Spec 023):** Deterministic budget metrics exposed in CLI (`context-check`) and auditor, saving >70% of LLM tokens per prompt turn via dense 5-epoch index distillation.
+- **Claude Code Native Fallback Synchronization:** Synchronized `CLAUDE.md` managed section in the `claude` host adapter, ensuring Claude Code reads OmniSpec constitution when a project-level `CLAUDE.md` is present.
+- **Bun Runtime Compatibility:** Unattended execution via `bunx omni-spec` verified by recognizing Bun runtime environment in `assertInstallationRuntime`.
+- **Ecosystem Interoperability (Spec 022):** Formal EARS acceptance criteria guidance in RFC template, verification of prompt budgets across all 10 canonical adapters, and native `AGENTS.md` support for modern agentic tools (Cline, Roo Code, Aider, Windsurf).
 
 ## [0.8.0-preview.3] — 2026-10-29
 
