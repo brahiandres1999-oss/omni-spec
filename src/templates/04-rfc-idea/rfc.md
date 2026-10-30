@@ -12,3 +12,5 @@
 Decision: PROPOSED
 
 Use ACCEPTED, REJECTED or DEFERRED when the decision is ready for verification. Implementation requires a separate requested change.
+Formulate formal decision criteria using EARS syntax: `AC-01 [decision]: <The system/architecture SHALL ...>`.
+
