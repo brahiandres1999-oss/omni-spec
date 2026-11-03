@@ -1,7 +1,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, readFile, writeFile, symlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdtemp, mkdir, rm, readFile, writeFile, symlink, readdir } from 'node:fs/promises';
+import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
@@ -13,7 +13,7 @@ let root, spec;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omni-checks-'));
   await scaffoldProject(root, { qualityGates: '' });
-  spec = await createSpec(root, 'feature', 'catalogue');
+  spec = await createSpec(root, 'feature', 'catalogue', { full: true });
   await fillSpec(root, spec);
 });
 afterEach(async () => {
@@ -164,4 +164,45 @@ test('catalogue edits and shared contracts invalidate the fingerprint after a pa
   assert.equal((await verifySpec(root, spec.id)).passed, true);
   await writeFile(join(root, 'specs/contracts.json'), '{"changed":true}');
   await assert.rejects(completeSpec(root, spec.id), /changed after verification/);
+});
+
+test('verify deletes logs of the replaced record and unreferenced logs, keeping current evidence', async () => {
+  await catalogue([{ id: 'test', command: 'node -e "console.log(1)"' }]);
+  const first = await verifySpec(root, spec.id);
+  const logs = join(root, 'specs/.omni/verification-logs');
+  const orphan = 'specs/.omni/verification-logs/0f0f0f0f-0000-4000-8000-000000000000.log';
+  const kept = 'specs/.omni/verification-logs/1e1e1e1e-0000-4000-8000-000000000000.log';
+  await writeFile(join(root, orphan), 'stale');
+  await writeFile(join(root, kept), 'closed spec evidence');
+  await writeFile(join(logs, 'notes.txt'), 'not a log');
+  const other = await createSpec(root, 'feature', 'closed', { full: true });
+  await writeFile(join(other.specDir, 'verification.json'), JSON.stringify({ results: [{ outputLog: kept }] }));
+  const second = await verifySpec(root, spec.id);
+  assert.equal(second.passed, true);
+  assert.deepEqual(second.logCleanup, { removed: 2, failed: [], skipped: null });
+  assert.deepEqual(
+    (await readdir(logs)).sort(),
+    [basename(kept), basename(second.results[0].outputLog), 'notes.txt'].sort(),
+  );
+  assert.notEqual(first.results[0].outputLog, second.results[0].outputLog);
+  assert.equal((await completeSpec(root, spec.id)).status, 'COMPLETED');
+});
+
+test('verify reports a log it cannot delete and skips pruning when a record is unreadable', async () => {
+  await catalogue([{ id: 'test', command: 'node -e "console.log(1)"' }]);
+  await verifySpec(root, spec.id);
+  const stuck = 'specs/.omni/verification-logs/2d2d2d2d-0000-4000-8000-000000000000.log';
+  await mkdir(join(root, stuck));
+  let record = await verifySpec(root, spec.id);
+  assert.equal(record.passed, true);
+  assert.deepEqual(record.logCleanup.failed, [stuck]);
+  const other = await createSpec(root, 'feature', 'broken', { full: true });
+  for (const unreadable of ['{broken', '{"results":{}}']) {
+    await writeFile(join(other.specDir, 'verification.json'), unreadable);
+    const previous = record.results[0].outputLog;
+    record = await verifySpec(root, spec.id);
+    assert.match(record.logCleanup.skipped, /broken\/verification\.json has unreadable results/);
+    assert.equal(record.logCleanup.removed, 0);
+    assert.ok((await readFile(join(root, previous), 'utf8')).length > 0);
+  }
 });

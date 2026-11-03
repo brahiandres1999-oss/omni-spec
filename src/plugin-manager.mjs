@@ -172,7 +172,7 @@ const PLUGIN_COMPATIBLE = new Set(['antigravity', 'plugin']);
  * @param {{targetDir?: string, assumeInstalled?: boolean}} [options] assumeInstalled is used internally
  *   to inspect project inputs before installing the plugin; normal diagnosis requires presence.
  * @throws {Error} Invalid/unreadable project metadata or unsafe/unreadable skill paths.
- * @returns {Promise<{detected: boolean, pluginDir: string, localSkills: string[], canClean: boolean, actions: string[], message: string}|null>}
+ * @returns {Promise<{detected: boolean, pluginDir: string, pluginVersion: string, projectVersion: string, versionMatches: boolean, localSkills: string[], canClean: boolean, actions: string[], message: string}|null>} pluginVersion is "unknown" when the plugin package.json is unreadable; enabled state in the host is not observable.
  */
 export async function detectPluginCoexistence(baseDir, options = {}) {
   if (!baseDir) return null;
@@ -207,13 +207,21 @@ export async function detectPluginCoexistence(baseDir, options = {}) {
 
   const canClean = agents.every(agent => PLUGIN_COMPATIBLE.has(agent));
   const actions = canClean ? ['keep-local', 'review-clean'] : ['keep-local'];
+  const pluginVersion = status.version ?? 'unknown';
+  const versionMatches = pluginVersion === manifest.version;
+  const versions = versionMatches
+    ? `Plugin global ${pluginVersion}, igual que el proyecto.`
+    : `Plugin global ${pluginVersion} y proyecto ${manifest.version}: versiones distintas. Si el plugin está activado en Antigravity, sus comandos pueden ejecutar instrucciones de ${pluginVersion}.`;
   const message = canClean
-    ? 'Posible duplicación de comandos en Antigravity. Puedes conservar las skills locales; para migrar a uso exclusivo del plugin, revisa omni-spec clean --dry-run y ejecuta clean por separado.'
-    : 'Posible duplicación de comandos en Antigravity. Este proyecto declara adaptadores para otras herramientas; conserva las skills locales para no afectar a los demás agentes.';
+    ? `${versions} Posible duplicación de comandos en Antigravity. Puedes conservar las skills locales; para migrar a uso exclusivo del plugin, revisa omni-spec clean --dry-run y ejecuta clean por separado.`
+    : `${versions} Posible duplicación de comandos en Antigravity. Este proyecto declara adaptadores para otras herramientas; conserva las skills locales para no afectar a los demás agentes.`;
 
   return {
     detected: true,
     pluginDir: status.targetDir,
+    pluginVersion,
+    projectVersion: manifest.version,
+    versionMatches,
     localSkills: presentSkills,
     canClean,
     actions,

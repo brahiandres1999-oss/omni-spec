@@ -8,3 +8,9 @@
 
 ## Scope and Non-Goals
 [TODO] Affected users/components and explicit exclusions.
+
+## Root cause and minimal fix
+[TODO] Confirmed cause with evidence, and the smallest change that removes it. On standard/full routes summarize here and detail in rca.md and fix.md.
+
+## Regression verification
+[TODO] The test or check that failed before the fix and passes after it, with the command and observed result.

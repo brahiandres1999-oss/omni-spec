@@ -16,6 +16,7 @@ import { verifySpec, completeSpec, projectFingerprint } from '../src/verificatio
 import { auditSpec } from '../src/auditor.mjs';
 import { focusSpec, loadManifest, saveManifest } from '../src/manifest.mjs';
 import { fillSpec } from '../test-support/fixtures.mjs';
+import { UNCLASSIFIED_MESSAGE } from '../src/fit.mjs';
 import { runCli } from '../src/cli.mjs';
 
 let root;
@@ -42,7 +43,7 @@ test('context input additions, changes and removals require reconciliation and r
 });
 
 test('stale context blocks verification without silently replacing its claims', async () => {
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   await recordContext(root);
   await writeFile(join(root, 'main.mjs'), 'export const value = 2;');
@@ -56,7 +57,7 @@ test('stale context blocks verification without silently replacing its claims', 
 });
 
 test('status predicts closure with the same validation and exposes log tampering as a blocker', async () => {
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   assert.equal((await projectStatus(root)).progress.delivery, 'VERIFICATION_PENDING');
   const record = await verifySpec(root, spec.id);
@@ -68,7 +69,7 @@ test('status predicts closure with the same validation and exposes log tampering
 });
 
 test('required unanswered decisions block closure; answers and revisions retain their provenance', async () => {
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   await recordDecision(root, { id: 'scope', topic: 'scope', status: 'pending', required: true });
   await assert.rejects(verifySpec(root, spec.id), /Required decisions remain/);
@@ -144,7 +145,7 @@ test('CLI context recording and status use the shared state without application 
 });
 
 test('scoped unanswered decisions do not block unrelated work and terminal focus stays terminal', async () => {
-  const spec = await createSpec(root, 'feature', 'local-fix');
+  const spec = await createSpec(root, 'feature', 'local-fix', { full: true });
   await fillSpec(root, spec);
   await recordDecision(root, {
     id: 'future-service',
@@ -163,7 +164,7 @@ test('scoped unanswered decisions do not block unrelated work and terminal focus
 });
 
 test('partial acceptance remains visible and cannot be represented as completed', async () => {
-  const spec = await createSpec(root, 'feature', 'partial-journey');
+  const spec = await createSpec(root, 'feature', 'partial-journey', { full: true });
   await fillSpec(root, spec);
   const path = join(spec.specDir, 'acceptance.json');
   const report = JSON.parse(await readFile(path, 'utf8'));
@@ -226,16 +227,17 @@ const ROUTE_FILES = {
   },
   rfc: { light: ['rfc.md'], standard: ['rfc.md'], full: ['rfc.md'] },
 };
+const PRIMARY = { feature: 'spec.md', bugfix: 'bug.md', debt: 'audit.md', rfc: 'rfc.md' };
 const TOOL_PATHS = ['specs/.omni/', 'specs/_templates/', 'specs/project-state.json', 'specs/contracts.json'];
 
 test('readSet lists the route artifacts of each type and auditSpec requires exactly those', async () => {
   for (const [type, routes] of Object.entries(ROUTE_FILES)) {
-    const spec = await createSpec(root, type, `${type}-reading`);
+    const spec = await createSpec(root, type, `${type}-reading`, { full: true });
     await fillSpec(root, spec);
     const fit = join(spec.specDir, 'fit.json');
     const cases = [
       ...Object.entries(FITS).map(([route, answers]) => [route, JSON.stringify(answers)]),
-      ['full', null],
+      ['unclassified', null],
       ['full', '{'],
       ['full', '{"schemaVersion":2}'],
     ];
@@ -243,9 +245,10 @@ test('readSet lists the route artifacts of each type and auditSpec requires exac
       if (content === null) await rm(fit, { force: true });
       else await writeFile(fit, content);
       const label = `${type}, ${route}, fit.json ${content}`;
+      const listed = route === 'unclassified' ? [PRIMARY[type]] : routes[route];
       assert.deepEqual(
         (await projectStatus(root)).progress.readSet.files,
-        [...routes[route], 'acceptance.json', 'verification.md'].map(name => `specs/${spec.slug}/${name}`),
+        [...listed, 'acceptance.json', 'verification.md'].map(name => `specs/${spec.slug}/${name}`),
         label,
       );
       for (const name of routes.full) {
@@ -255,7 +258,9 @@ test('readSet lists the route artifacts of each type and auditSpec requires exac
         const { errors } = await auditSpec(root, spec.id);
         await writeFile(path, text);
         const missing = errors.some(item => item.startsWith('Missing mandatory') && item.endsWith(`: ${name}`));
-        assert.equal(missing, routes[route].includes(name), `${label}: ${name}`);
+        // An unclassified non-RFC spec reports only the classification error (AC-04).
+        const expected = route === 'unclassified' ? type === 'rfc' && name === 'rfc.md' : routes[route].includes(name);
+        assert.equal(missing, expected, `${label}: ${name}`);
       }
     }
   }
@@ -263,7 +268,7 @@ test('readSet lists the route artifacts of each type and auditSpec requires exac
 
 test('readSet avoids other specs, the verification record and tool state, never a listed file', async () => {
   assert.deepEqual((await projectStatus(root)).progress.readSet, { files: [], avoid: TOOL_PATHS });
-  const first = await createSpec(root, 'feature', 'first');
+  const first = await createSpec(root, 'feature', 'first', { full: true });
   await fillSpec(root, first);
   await verifySpec(root, first.id);
   await completeSpec(root, first.id);
@@ -271,7 +276,7 @@ test('readSet avoids other specs, the verification record and tool state, never 
     files: [],
     avoid: [`specs/${first.slug}/`, ...TOOL_PATHS],
   });
-  const second = await createSpec(root, 'bugfix', 'second');
+  const second = await createSpec(root, 'bugfix', 'second', { full: true });
   await fillSpec(root, second);
   const { files, avoid } = (await projectStatus(root)).progress.readSet;
   assert.deepEqual(avoid, [`specs/${first.slug}/`, `specs/${second.slug}/verification.json`, ...TOOL_PATHS]);
@@ -282,7 +287,7 @@ test('readSet avoids other specs, the verification record and tool state, never 
 });
 
 test('an unreadable fit.json or unknown type empties readSet with one assessment error, open or closed', async () => {
-  const spec = await createSpec(root, 'feature', 'unreadable-fit');
+  const spec = await createSpec(root, 'feature', 'unreadable-fit', { full: true });
   await fillSpec(root, spec);
   const fit = join(spec.specDir, 'fit.json');
   const assessment = async () => {
@@ -294,9 +299,11 @@ test('an unreadable fit.json or unknown type empties readSet with one assessment
     assert.equal(errors.length, 1, JSON.stringify(status.progress.blockers));
     return { status, error: errors[0] };
   };
+  await rm(fit);
   await mkdir(fit);
   assert.match((await assessment()).error.message, /EISDIR/);
   await rm(fit, { recursive: true });
+  await writeFile(fit, JSON.stringify(FITS.full));
   const manifest = await loadManifest(root);
   manifest.specs[0].type = 'mystery';
   await saveManifest(root, manifest);
@@ -306,6 +313,7 @@ test('an unreadable fit.json or unknown type empties readSet with one assessment
   await verifySpec(root, spec.id);
   await completeSpec(root, spec.id);
   await focusSpec(root, spec.id);
+  await rm(fit);
   await mkdir(fit);
   const closed = await assessment();
   assert.match(closed.error.message, /EISDIR/);
@@ -314,7 +322,7 @@ test('an unreadable fit.json or unknown type empties readSet with one assessment
 });
 
 async function closedSpec(name) {
-  const spec = await createSpec(root, 'feature', name);
+  const spec = await createSpec(root, 'feature', name, { full: true });
   await fillSpec(root, spec);
   await verifySpec(root, spec.id);
   await completeSpec(root, spec.id);
@@ -324,8 +332,8 @@ async function closedSpec(name) {
 test('status --json omits closed work it does not need, counts it and --all returns it; files stay intact', async () => {
   const first = await closedSpec('first');
   const second = await closedSpec('second');
-  const open = await createSpec(root, 'feature', 'open');
-  const active = await createSpec(root, 'feature', 'active');
+  const open = await createSpec(root, 'feature', 'open', { full: true });
+  const active = await createSpec(root, 'feature', 'active', { full: true });
   await fillSpec(root, active);
   const decisions = [
     { id: 'global', status: 'approved' },
@@ -585,7 +593,7 @@ test('baselines without a scope still compare raw bytes', async () => {
 });
 
 test('the verification fingerprint still distinguishes CRLF from LF', async () => {
-  const spec = await createSpec(root, 'feature', 'eol');
+  const spec = await createSpec(root, 'feature', 'eol', { full: true });
   await writeFile(join(root, 'main.mjs'), 'export const value = 1;\n');
   const gates = { qualityGates: '', checks: [] };
   const before = await projectFingerprint(root, spec, gates);
@@ -623,4 +631,22 @@ test('identifies modern config patterns (eslint, tailwind, postcss) as context i
   assert.ok(freshness.changed.includes('eslint.config.mjs'));
   assert.ok(freshness.changed.includes('tailwind.config.ts'));
   assert.ok(freshness.changed.includes('postcss.config.js'));
+});
+
+test('AC-03 and AC-04: an unclassified spec asks for fit in status and cannot be verified or completed', async () => {
+  const spec = await createSpec(root, 'feature', 'unclassified-status');
+  await fillSpec(root, spec);
+  const status = await projectStatus(root);
+  const blocker = status.progress.blockers.find(item => item.code === 'FIT_REQUIRED');
+  assert.ok(blocker, JSON.stringify(status.progress.blockers));
+  assert.equal(blocker.message, UNCLASSIFIED_MESSAGE);
+  assert.equal(status.progress.nextAction, `fit ${spec.id}`);
+  assert.ok(!status.progress.blockers.some(item => item.code === 'ARTIFACTS_OR_TASKS_PENDING'));
+  assert.deepEqual(
+    status.progress.readSet.files,
+    ['spec.md', 'acceptance.json', 'verification.md'].map(name => `specs/${spec.slug}/${name}`),
+  );
+  const unclassified = error => error.message.includes(UNCLASSIFIED_MESSAGE);
+  await assert.rejects(verifySpec(root, spec.id), unclassified);
+  await assert.rejects(completeSpec(root, spec.id), unclassified);
 });

@@ -34,7 +34,7 @@ afterEach(async () => {
 async function project(gates = 'node check.mjs') {
   await scaffoldProject(root, { qualityGates: gates });
   await writeFile(join(root, 'check.mjs'), 'process.exit(0);\n');
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   return spec;
 }
@@ -356,6 +356,7 @@ test('the init wizard accepts piped answers that arrive before each prompt', asy
 
 test('fit explains the exact file and schema for an unclassified spec', async () => {
   const spec = await project();
+  await rm(join(root, 'specs', spec.slug, 'fit.json'));
   const result = await run(['fit', spec.id]);
   assert.equal(result.code, 0);
   assert.ok(result.stdout.includes(`specs/${spec.slug}/fit.json`));

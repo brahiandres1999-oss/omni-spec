@@ -229,6 +229,10 @@ for (const [index, type] of ['feature', 'bugfix', 'debt', 'rfc'].entries()) {
   exec([local, 'create', type, `case-${type}`], fresh);
   const id = String(index + 1).padStart(3, '0');
   exec([local, 'complete', id], fresh, 1);
+  if (type !== 'rfc') {
+    assert.match(exec([local, 'audit', id], fresh, 1), /not classified yet/);
+    exec([local, 'fit', id, '--preset', 'full'], fresh);
+  }
   await fillSpec(fresh, { slug: `${id}-case-${type}`, type });
   exec([local, 'audit', id], fresh);
   exec([local, 'verify', id], fresh);
@@ -262,6 +266,7 @@ const adopted = join(existing, 'specs', '.omni', 'runtime', 'bin', 'omni-spec.mj
 assert.equal(JSON.parse(await readFile(join(existing, 'specs', 'manifest.json'), 'utf8')).qualityGates, '');
 exec([adopted, 'configure', '--gates', 'npm test'], existing);
 exec([adopted, 'create', 'fix', 'greeting'], existing);
+exec([adopted, 'fit', '001', '--preset', 'full'], existing);
 await fillSpec(existing, { slug: '001-greeting', type: 'bugfix' });
 exec([adopted, 'verify', '001'], existing, 1);
 exec([adopted, 'complete', '001'], existing, 1);
@@ -286,7 +291,7 @@ for (const scenario of ['empty', 'existing', 'broken', 'noncode', 'conflicting',
   assert.equal(inventory.assessment.projectScriptsExecuted, false);
   const contextPath = join(root, 'specs/project-context.md');
   const context = await readFile(contextPath, 'utf8');
-  assert.match(context, /State: CONTEXT_PENDING/);
+  assert.match(context, /: CONTEXT_PENDING/);
   const checked = JSON.parse(exec([runner, 'context-check', '--json'], root));
   assert.equal(checked.scope, 'STRUCTURE_AND_LOCAL_LINKS_ONLY');
   assert.equal(checked.semanticReview, 'REQUIRED');
@@ -313,7 +318,7 @@ await writeFile(
 exec([installed, 'init', '--yes', '--agent', 'generic'], delivery);
 const candidate = join(delivery, 'specs/.omni/runtime/bin/omni-spec.mjs');
 assert.equal(JSON.parse(exec([candidate, 'guide', 'design', '--json'], delivery)).requiresExternalSkill, false);
-exec([candidate, 'create', 'feature', 'module-greeting'], delivery);
+exec([candidate, 'create', 'feature', 'module-greeting', '--full'], delivery);
 await fillSpec(delivery, { slug: '001-module-greeting', type: 'feature' });
 await mkdir(join(delivery, 'specs/.omni/requests'), { recursive: true });
 await writeFile(
@@ -382,7 +387,7 @@ await writeFile(
 );
 exec([candidate, 'contract-record', 'greeting', '--from', 'specs/.omni/requests/contract.json'], delivery);
 assert.equal(JSON.parse(exec([candidate, 'contracts', 'greeting', '--json'], delivery)).effectiveRevision, 1);
-exec([candidate, 'create', 'feature', 'visual-inspection-negative'], delivery);
+exec([candidate, 'create', 'feature', 'visual-inspection-negative', '--full'], delivery);
 await fillSpec(delivery, { slug: '002-visual-inspection-negative', type: 'feature' });
 await writeFile(
   join(delivery, 'specs/002-visual-inspection-negative/acceptance.json'),

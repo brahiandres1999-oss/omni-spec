@@ -40,7 +40,8 @@ export const FIT_PRESETS = {
     crossesContract: true,
     ambiguity: 'none',
     existingTests: true,
-    risk: 'high',
+    // A preset picks the route through the contract answer; risk stays low until it is actually assessed.
+    risk: 'low',
     uncertainty: 'clear',
     reversibility: 'easy',
   },
@@ -229,14 +230,22 @@ function classifyRiskFit(answers) {
     [answers.reversibility !== 'easy', 'Rollback is difficult; plan recovery and irreversible effects explicitly.'],
     [answers.reasoning !== 'done', 'Reasoning was not completed; templates cannot establish understanding.'],
     [answers.crossesContract, 'A public contract changes; design compatibility, rollback and verification.'],
-    [answers.modules >= 2, `${answers.modules} modules need coordinated design and verification.`],
-    [answers.files >= 3, `${answers.files} affected files exceed the current local-change heuristic.`],
+  ];
+  // Size alone asks for a written design, never for a task breakdown.
+  const standardConditions = [
+    [answers.modules >= 2, `${answers.modules} modules need a coordinated design (size escalates to standard).`],
+    [answers.files >= 3, `${answers.files} affected files need a written design (size escalates to standard).`],
+    [
+      !answers.existingTests,
+      'No existing test coverage; design meaningful regression verification before implementing.',
+    ],
   ];
   for (const [condition, reason] of fullConditions) if (condition) reasons.push(reason);
   let route = reasons.length ? 'full' : 'light';
-  if (route === 'light' && !answers.existingTests) {
-    route = 'standard';
-    reasons.push('No existing test coverage; design meaningful regression verification before implementing.');
+  for (const [condition, reason] of standardConditions) {
+    if (!condition) continue;
+    reasons.push(reason);
+    if (route === 'light') route = 'standard';
   }
   if (!reasons.length)
     reasons.push(
@@ -257,6 +266,13 @@ export async function readFit(root, spec) {
     throw error;
   }
 }
+
+/**
+ * Error shown when a non-RFC spec has no fit.json: audit, verify and complete stop here instead
+ * of assuming the full route. Both recovery commands are named so an upgraded spec keeps working.
+ */
+export const UNCLASSIFIED_MESSAGE =
+  'The change is not classified yet: run `fit` to evaluate it, or `fit --preset full` to keep the full route and its existing documents.';
 
 // Returns the route for a spec, or null when the change was never classified.
 export async function specRoute(root, spec) {

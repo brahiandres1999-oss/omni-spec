@@ -21,6 +21,12 @@ Review specifications, acceptance criteria and quality gates in a separate conte
 2. **Acceptance Criteria Verification:**
    - Inspect `acceptance.json` against `verification.md` and actual code diffs.
    - Every criterion with `status: "passed"` must cite concrete, executable evidence (actual test commands, cwd, timestamps, exit codes, and stdout/stderr) or specific observed interactions.
+   - **Test adequacy, before implementation too:** for each criterion name the planned test or observation that would fail if the behavior broke. A suite named in `checkIds` is not enough: a concurrency criterion needs a concurrent test, an idempotency criterion a repeated request, a rollback criterion an injected failure. A criterion without such a test is a blocker.
+   - **Cross-document consistency:** compare spec, plan and tasks line by line for the same decision (for example where a key is generated or which status a retry returns). Any contradiction is a blocker naming both locations.
+   - **Failure modes when `fit.json` declares `risk` high or critical, or a public contract changes:** check concurrency and lock ordering, check-then-act races, duplicate and retry handling (key lifetime, the response to a repeat that arrives while the first is in flight), partial failure and rollback, and external side effects. Report each unaddressed mode as a blocker with the artifact to change.
+   - Version claims: compare stack versions written in the artifacts with the build manifests; `audit` warns about contradictions it detects.
+   - At delivery, check that each automated criterion's `exercises` in `acceptance.json` matches what its test really runs and that `limits` names what it does not prove (a mocked repository proves no database locking). Report criteria with limits as such.
+   - Never report `AUDIT_PASSED` while a blocker above is open.
 3. **Code, Documentation and UI Review:**
    - **Backend:** Flag unnecessary abstraction layers, unneeded DTOs/factories, parrot comments that restate syntax, and silent error-swallowing `try/catch` blocks.
    - **Documentation:** Review changed public/exported APIs and nontrivial contracts using the module's JSDoc, TSDoc, Javadoc or other agreed convention. Verify meaning, parameters, returns and failure behavior; presence of tags is insufficient.

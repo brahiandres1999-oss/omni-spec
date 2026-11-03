@@ -72,6 +72,36 @@ export async function validateChecks(root, catalogue) {
   return checks;
 }
 
+/**
+ * Reject gate lines that only work in some shells. Gates run from the project root through the
+ * platform shell (cmd.exe on Windows), where `;` does not separate commands and a `cd` chain leaves
+ * the next command in the wrong directory; module commands belong in checks.json with their cwd.
+ * @param {string} gates Newline-separated gate commands; `#` lines are comments.
+ * @returns {string[]} One message per offending line, empty when every line is portable.
+ */
+export function gateProblems(gates) {
+  const problems = [];
+  for (const line of gates.split(/\r?\n/).map(item => item.trim())) {
+    if (!line || line.startsWith('#')) continue;
+    if (/(?:^|&&|\|\||;)\s*(?:cd|pushd|chdir|set-location)\b/i.test(line))
+      problems.push(
+        `"${line}" changes directory. Gates run from the project root; register module commands with checks --from and a cwd per module.`,
+      );
+    let quote = null;
+    for (const char of line) {
+      if (quote) quote = char === quote ? null : quote;
+      else if (char === '"' || char === "'") quote = char;
+      else if (char === ';') {
+        problems.push(
+          `"${line}" uses ";" to chain commands, which cmd.exe does not support. Put each command on its own line.`,
+        );
+        break;
+      }
+    }
+  }
+  return problems;
+}
+
 /** Load the catalogue plus compatible legacy gates, without running either. */
 export async function loadChecks(root, manifest) {
   let catalogue;

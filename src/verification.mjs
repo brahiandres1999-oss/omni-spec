@@ -1,4 +1,4 @@
-import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, stat, mkdir, readdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -330,9 +330,62 @@ export async function verifySpec(root, identifier, options = {}) {
         await safePath(root, `specs/${spec.slug}/verification.json`),
         JSON.stringify(record, null, 2) + '\n',
       );
-      return record;
+      return { ...record, logCleanup: await pruneVerificationLogs(root, manifest) };
     });
   });
+}
+
+/**
+ * Deletes verification logs that no spec's current verification.json references, including the
+ * logs of the record a verify run just replaced. Runs under the verification and manifest locks.
+ * Only `<uuid>.log` files are candidates. If any record exists but cannot be parsed, its
+ * references are unknown and nothing is deleted.
+ * @param {string} root Project root.
+ * @param {{specs: {slug: string}[]}} manifest Manifest whose specs' records are kept.
+ * @returns {Promise<{removed: number, failed: string[], skipped: string|null}>} Deleted count,
+ *   logs that could not be deleted, and the reason pruning was skipped.
+ */
+async function pruneVerificationLogs(root, manifest) {
+  const directory = await safePath(root, 'specs/.omni/verification-logs');
+  let names;
+  try {
+    names = await readdir(directory);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return { removed: 0, failed: [], skipped: null };
+  }
+  const referenced = new Set();
+  for (const spec of manifest.specs) {
+    let text;
+    try {
+      text = await readFile(await safePath(root, `specs/${spec.slug}/verification.json`), 'utf8');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      continue;
+    }
+    let results;
+    try {
+      results = JSON.parse(text)?.results ?? [];
+    } catch {
+      results = null;
+    }
+    if (!Array.isArray(results))
+      return { removed: 0, failed: [], skipped: `specs/${spec.slug}/verification.json has unreadable results` };
+    for (const result of results) referenced.add(result?.outputLog);
+  }
+  let removed = 0;
+  const failed = [];
+  for (const name of names) {
+    const log = `specs/.omni/verification-logs/${name}`;
+    if (!/^[a-f0-9-]+\.log$/.test(name) || referenced.has(log)) continue;
+    try {
+      await unlink(join(directory, name));
+      removed++;
+    } catch (error) {
+      if (error.code !== 'ENOENT') failed.push(log);
+    }
+  }
+  return { removed, failed, skipped: null };
 }
 
 /** @returns {string} One-line reason a stored verification record failed. */

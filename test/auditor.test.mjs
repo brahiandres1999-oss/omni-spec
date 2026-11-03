@@ -50,7 +50,7 @@ describe('Specification Health Auditor (SDD Gate)', () => {
       docStandard: 'JSDoc',
     });
 
-    await createSpec(tempDir, 'feature', 'user-login');
+    await createSpec(tempDir, 'feature', 'user-login', { full: true });
 
     const report = await auditSpec(tempDir);
     // Newly created template files contain sample template text
@@ -66,7 +66,7 @@ describe('Specification Health Auditor (SDD Gate)', () => {
       docStandard: 'JSDoc',
     });
 
-    const spec = await createSpec(tempDir, 'feature', 'user-login');
+    const spec = await createSpec(tempDir, 'feature', 'user-login', { full: true });
     const specDir = join(tempDir, 'specs', spec.slug);
 
     // Overwrite template files with clean, filled-in content without SPEC-XXX
@@ -117,7 +117,7 @@ Revert migrations if needed.
       docStandard: 'JSDoc',
     });
 
-    const spec = await createSpec(tempDir, 'feature', 'payment-gateway');
+    const spec = await createSpec(tempDir, 'feature', 'payment-gateway', { full: true });
     const specDir = join(tempDir, 'specs', spec.slug);
 
     // Spec without Phase 0
@@ -143,7 +143,7 @@ Add Stripe payments.
       docStandard: 'JSDoc',
     });
 
-    const spec = await createSpec(tempDir, 'bugfix', 'crash-on-null');
+    const spec = await createSpec(tempDir, 'bugfix', 'crash-on-null', { full: true });
     const specDir = join(tempDir, 'specs', spec.slug);
 
     // Replace bug.md, rca.md, fix.md without BUG-XXX

@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { safePath } from './managed.mjs';
 import { readProjectState, observationSession } from './project-state.mjs';
+import { readFit } from './fit.mjs';
 
 const primaryFiles = { feature: 'spec.md', bugfix: 'bug.md', debt: 'audit.md', rfc: 'rfc.md' };
 /** @param {string} type Spec archetype. @returns {object} Pending v2 criteria. */
@@ -26,6 +27,8 @@ export function acceptanceSeed(type) {
  * @param {string} root Project root.
  * @param {object} spec Active spec ID, slug and archetype.
  * @returns {Promise<object>} Reviewed declarations; evidence truth still requires review.
+ * In a high or critical risk change (fit.json), every automated criterion needs "exercises"; any
+ * criterion may declare "limits", which status and complete report.
  * @throws {Error} Missing, duplicated or invented IDs, unresolved results or insufficient structured evidence.
  */
 export async function reviewAcceptance(root, spec) {
@@ -48,6 +51,10 @@ export async function reviewAcceptance(root, spec) {
   }
   if (![1, 2].includes(report.schemaVersion) || !Array.isArray(report.criteria))
     throw new Error('Invalid acceptance.json schemaVersion/criteria.');
+  // High-consequence changes must say what each automated test exercises, so a mock cannot pass silently.
+  const { answers } = await readFit(root, spec);
+  const risk = answers?.risk;
+  const highRisk = risk === 'high' || risk === 'critical';
   const seen = new Set();
   for (const [index, item] of report.criteria.entries()) {
     if (!item || typeof item.id !== 'string')
@@ -70,6 +77,13 @@ export async function reviewAcceptance(root, spec) {
       /\[TODO\]|\[NEEDS CLARIFICATION\]/i.test(item.evidence)
     )
       throw new Error(`Record specific evidence and its limits for ${item.id}.`);
+    for (const field of ['exercises', 'limits'])
+      if (item[field] !== undefined && (typeof item[field] !== 'string' || !item[field].trim()))
+        throw new Error(`"${field}" of ${item.id} must be a non-empty text or be omitted.`);
+    if (highRisk && item.method === 'automated' && !(item.exercises?.trim().length >= 20))
+      throw new Error(
+        `${item.id} is automated in a ${risk}-risk change: record in "exercises" what its test actually does (real threads, database, mocks…), and in "limits" what it does not prove.`,
+      );
     if (spec.type === 'rfc' && item.method !== 'decision')
       throw new Error('RFC acceptance evidence must record decision review.');
     const refs = item.checkIds || item.checkCommands;
@@ -160,14 +174,18 @@ export async function reviewAcceptance(root, spec) {
   const missing = criteria.filter(id => !seen.has(id));
   if (missing.length) throw new Error(`Missing acceptance evidence for ${missing.join(', ')}.`);
   return {
-    criteria: report.criteria.map(({ id, status, method, checkCommands, checkIds, kind, observations }) => ({
-      id,
-      status,
-      method,
-      ...(kind ? { kind } : {}),
-      ...(method === 'automated' ? (checkIds ? { checkIds } : { checkCommands }) : {}),
-      ...(observations ? { observations } : {}),
-    })),
+    criteria: report.criteria.map(
+      ({ id, status, method, checkCommands, checkIds, kind, observations, exercises, limits }) => ({
+        id,
+        status,
+        method,
+        ...(kind ? { kind } : {}),
+        ...(method === 'automated' ? (checkIds ? { checkIds } : { checkCommands }) : {}),
+        ...(observations ? { observations } : {}),
+        ...(exercises ? { exercises } : {}),
+        ...(limits ? { limits } : {}),
+      }),
+    ),
     scope: 'DECLARED_CRITERION_EVIDENCE',
     truthOfEvidence: 'AGENT_OR_HUMAN_REVIEW_REQUIRED',
   };

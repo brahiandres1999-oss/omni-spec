@@ -12,7 +12,7 @@ let root, spec, criterion;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omni-ui-evidence-'));
   await scaffoldProject(root);
-  spec = await createSpec(root, 'feature', 'interface');
+  spec = await createSpec(root, 'feature', 'interface', { full: true });
   await fillSpec(root, spec);
   criterion = {
     id: 'AC-01',

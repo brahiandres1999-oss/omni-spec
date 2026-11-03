@@ -201,7 +201,7 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
       profile: 'general',
     });
 
-    await createSpec(projectDir, 'feature', 'demo-feature');
+    await createSpec(projectDir, 'feature', 'demo-feature', { full: true });
 
     // Confirm legacy elements existed
     await stat(join(projectDir, '.agents', 'skills'));

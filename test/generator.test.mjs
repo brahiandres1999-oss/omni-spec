@@ -69,7 +69,7 @@ describe('Project & Spec Generator', () => {
       assert.match(constContent, /AcmeApp/);
 
       const readmeContent = await readFile(join(tempDir, 'specs', 'README.md'), 'utf-8');
-      assert.match(readmeContent, /AcmeApp — Spec-Driven Development/);
+      assert.match(readmeContent, /AcmeApp — OmniSpec/);
 
       const manifest = await loadManifest(tempDir);
       assert.equal(manifest.project, 'AcmeApp');
@@ -88,14 +88,17 @@ describe('Project & Spec Generator', () => {
     });
 
     test('creates a feature spec with correct files and variable substitution', async () => {
-      const spec = await createSpec(tempDir, 'feature', 'user-onboarding');
+      const spec = await createSpec(tempDir, 'feature', 'user-onboarding', { full: true });
 
       assert.equal(spec.id, '001');
       assert.equal(spec.slug, '001-user-onboarding');
       assert.equal(spec.branch, 'feat/001-user-onboarding');
 
       const files = await readdir(spec.specDir);
-      assert.deepEqual(files.sort(), ['acceptance.json', 'plan.md', 'spec.md', 'tasks.md', 'verification.md'].sort());
+      assert.deepEqual(
+        files.sort(),
+        ['acceptance.json', 'fit.json', 'plan.md', 'spec.md', 'tasks.md', 'verification.md'].sort(),
+      );
 
       const specContent = await readFile(join(spec.specDir, 'spec.md'), 'utf-8');
       assert.match(specContent, /SPEC-001/);
@@ -108,22 +111,25 @@ describe('Project & Spec Generator', () => {
     });
 
     test('creates consecutive specs with incrementing IDs and proper archetypes', async () => {
-      const s1 = await createSpec(tempDir, 'feature', 'billing-checkout');
+      const s1 = await createSpec(tempDir, 'feature', 'billing-checkout', { full: true });
       assert.equal(s1.id, '001');
 
-      const s2 = await createSpec(tempDir, 'bugfix', 'stripe-webhook-timeout');
+      const s2 = await createSpec(tempDir, 'bugfix', 'stripe-webhook-timeout', { full: true });
       assert.equal(s2.id, '002');
       assert.equal(s2.branch, 'fix/002-stripe-webhook-timeout');
       const s2Files = await readdir(s2.specDir);
-      assert.deepEqual(s2Files.sort(), ['acceptance.json', 'bug.md', 'fix.md', 'rca.md', 'verification.md'].sort());
+      assert.deepEqual(
+        s2Files.sort(),
+        ['acceptance.json', 'bug.md', 'fit.json', 'fix.md', 'rca.md', 'verification.md'].sort(),
+      );
 
-      const s3 = await createSpec(tempDir, 'debt', 'upgrade-node-22');
+      const s3 = await createSpec(tempDir, 'debt', 'upgrade-node-22', { full: true });
       assert.equal(s3.id, '003');
       assert.equal(s3.branch, 'debt/003-upgrade-node-22');
       const s3Files = await readdir(s3.specDir);
       assert.deepEqual(
         s3Files.sort(),
-        ['acceptance.json', 'audit.md', 'migration-plan.md', 'tasks.md', 'verification.md'].sort(),
+        ['acceptance.json', 'audit.md', 'fit.json', 'migration-plan.md', 'tasks.md', 'verification.md'].sort(),
       );
 
       const s4 = await createSpec(tempDir, 'rfc', 'graphql-vs-trpc');
@@ -139,7 +145,7 @@ describe('Project & Spec Generator', () => {
 
     test('throws an error if archetype is invalid', async () => {
       await assert.rejects(async () => {
-        await createSpec(tempDir, 'invalid-type', 'some-name');
+        await createSpec(tempDir, 'invalid-type', 'some-name', { full: true });
       }, /Invalid archetype "invalid-type"/);
     });
   });

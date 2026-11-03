@@ -47,7 +47,7 @@ process.once('message', async () => {
         process.send({ event: 'done' }); process.disconnect();
       });
     } else {
-      for (let i = 0; i < 3; i++) await createSpec(dir, 'feature', 'worker-' + process.pid + '-' + i);
+      for (let i = 0; i < 3; i++) await createSpec(dir, 'feature', 'worker-' + process.pid + '-' + i, { full: true });
       process.send({ event: 'done' }); process.disconnect();
     }
   } catch (error) { process.send({ event: 'failure', error: error.stack }); process.exitCode = 1; process.disconnect(); }
@@ -123,7 +123,7 @@ test('a living owner retains exclusion beyond the former 15-second expiration', 
   owner.child.send('release');
   await owner.wait('done');
   await owner.closed;
-  const spec = await createSpec(dir, 'feature', 'after-owner');
+  const spec = await createSpec(dir, 'feature', 'after-owner', { full: true });
   assert.equal(spec.id, '001');
 });
 
@@ -164,10 +164,10 @@ test('only the acquiring lease can release its claim', async () => {
 
 test('init, create and closure serialize without dropping records or statuses', async () => {
   await scaffoldProject(dir, { projectName: 'Mixed' });
-  await createSpec(dir, 'feature', 'first');
+  await createSpec(dir, 'feature', 'first', { full: true });
   await Promise.all([
     ...Array.from({ length: 4 }, () => initManifest(dir)),
-    ...Array.from({ length: 4 }, (_, i) => createSpec(dir, 'feature', 'task-' + i)),
+    ...Array.from({ length: 4 }, (_, i) => createSpec(dir, 'feature', 'task-' + i, { full: true })),
     updateSpecStatus(dir, '001', 'CLOSED'),
   ]);
   const manifest = await loadManifest(dir);
@@ -259,7 +259,7 @@ test('profile injection retains edited original rows, added rows and table notes
   );
   content = content.replace('## 4. Experience', 'CUSTOM_TABLE_NOTE\n\n## 4. Experience').replace(/\r?\n/g, '\r\n');
   await writeFile(template, content);
-  const spec = await createSpec(dir, 'feature', 'custom');
+  const spec = await createSpec(dir, 'feature', 'custom', { full: true });
   const generated = await readFile(join(spec.specDir, 'spec.md'), 'utf8');
   for (const text of [
     'MANDATORY_HSM_POLICY',
@@ -273,7 +273,7 @@ test('profile injection retains edited original rows, added rows and table notes
 
 test('clarification headings alone fail, but answered clarification passes', async () => {
   await scaffoldProject(dir, { projectName: 'Audit' });
-  const spec = await createSpec(dir, 'feature', 'clarification');
+  const spec = await createSpec(dir, 'feature', 'clarification', { full: true });
   const head = '# A long document title that must not satisfy clarification\n## 0. Clarification\n';
   const headings = '### 0.1 Registro de Preguntas y Decisiones Acordadas\n\n### 0.2 Supuestos Tecnicos y de Negocio\n';
   const tail = '\n## 1. Scope\nScope.\nNon-Goals.\nAcceptance Criteria.\n';

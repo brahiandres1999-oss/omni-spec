@@ -26,7 +26,7 @@ describe('Regression R01: Re-initialization & Non-destructive Safety', () => {
     await scaffoldProject(tempDir, options);
 
     // Create a first specification and customize constitution
-    const spec1 = await createSpec(tempDir, 'feature', 'payment-gateway');
+    const spec1 = await createSpec(tempDir, 'feature', 'payment-gateway', { full: true });
     const customConstitution = '# CUSTOM CONSTITUTION WITH SPECIAL SECURITY RULES';
     await writeFile(join(tempDir, 'CONSTITUTION.md'), customConstitution, 'utf-8');
 
@@ -53,7 +53,7 @@ describe('Regression R01: Re-initialization & Non-destructive Safety', () => {
     assert.strictEqual(specAfterReinit, customSpecContent);
 
     // Creating another spec with the same name increments sequence ID safely without collision
-    const spec2 = await createSpec(tempDir, 'feature', 'payment-gateway');
+    const spec2 = await createSpec(tempDir, 'feature', 'payment-gateway', { full: true });
     assert.strictEqual(spec2.id, '002');
     assert.strictEqual(spec2.slug, '002-payment-gateway');
 
@@ -66,7 +66,7 @@ describe('Regression R01: Re-initialization & Non-destructive Safety', () => {
   test('scaffoldProject with force overwrites CONSTITUTION.md while preserving specs', async () => {
     const options = { projectName: 'PaymentService', profile: 'general' };
     await scaffoldProject(tempDir, options);
-    await createSpec(tempDir, 'bugfix', 'critical-bug');
+    await createSpec(tempDir, 'bugfix', 'critical-bug', { full: true });
 
     await writeFile(join(tempDir, 'CONSTITUTION.md'), '# CUSTOM', 'utf-8');
 

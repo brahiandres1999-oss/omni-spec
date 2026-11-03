@@ -6,8 +6,10 @@ import { writeFileAtomic } from './fs-retry.mjs';
 import { loadManifest, withManifestLock } from './manifest.mjs';
 import { auditProjectContext, citedProjectFiles } from './context-auditor.mjs';
 import { hashProjectFiles } from './snapshot.mjs';
-import { specRoute } from './fit.mjs';
+import { specRoute, UNCLASSIFIED_MESSAGE } from './fit.mjs';
 import { compareVersions, isVersion } from './versions.mjs';
+import { profiles } from './profiles/index.mjs';
+import { declaredVersions, contradictedVersions, describeContradiction } from './version-claims.mjs';
 
 const file = 'specs/project-state.json';
 const capabilities = ['questions', 'web', 'terminal', 'render', 'delegation'];
@@ -495,6 +497,20 @@ export async function recordDecision(root, decision) {
 }
 
 /**
+ * configure flags whose manifest value is still the installer placeholder: a stack starting with
+ * Undecided or Unknown, or a documentation standard marked "(review required)".
+ * @param {{stack?: string, documentationStandard?: string}} manifest Project manifest.
+ * @returns {string[]} Pending flags among 'stack' and 'doc', in that order.
+ */
+function pendingConfiguration(manifest) {
+  const pending = [];
+  if (!manifest.stack || /^(?:undecided|unknown)\b/i.test(manifest.stack.trim())) pending.push('stack');
+  if (!manifest.documentationStandard || /\(review required\)/i.test(manifest.documentationStandard))
+    pending.push('doc');
+  return pending;
+}
+
+/**
  * Describe a CLI whose version differs from the project's (009-d4; 009-d6, cases 3 and 4).
  * Outside plugin mode the action restores the project's version; a newer, comparable CLI also
  * gets the upgrade path. In plugin mode update is never proposed: an older plugin gets plugin
@@ -536,8 +552,12 @@ function cliVersionWarning(cliVersion, manifest) {
  * @param {string} root Project root.
  * @param {{all?: boolean}} [options] all keeps every acceptance record and decision.
  * @returns {Promise<object>} Manifest copy plus progress: delivery, blockers, nextAction, warnings
- *   (CLI_VERSION_MISMATCH when the running CLI's version differs from the manifest's; never a
- *   blocker), readSet (files to read for the active spec and paths to avoid), omitted and decisions.
+ *   (CLI_VERSION_MISMATCH when the running CLI's version differs from the manifest's;
+ *   PLUGIN_VERSION_MISMATCH when an installed Antigravity plugin of another version coexists with
+ *   local skills; CONFIGURATION_PENDING when recorded context coexists with placeholder stack or
+ *   documentation values; VERSION_CLAIM_MISMATCH when the context names a component version its
+ *   manifest contradicts; CRITERIA_WITH_LIMITS when the active spec declares criterion limits;
+ *   never blockers), readSet (files to read for the active spec and paths to avoid), omitted and decisions.
  * @throws {Error} No project, invalid project state, or context freshness cannot be computed.
  */
 export async function projectStatus(root, { all = false } = {}) {
@@ -566,15 +586,20 @@ export async function projectStatus(root, { all = false } = {}) {
         action: 'Clarify or research the decision; record the answer/delegation',
       });
   let delivery = 'NO_ACTIVE_WORK',
-    nextAction = freshness.status === 'NOT_RECORDED' ? 'omni-init' : 'omni-discuss';
+    nextAction = freshness.status === 'NOT_RECORDED' ? 'omni-init' : 'omni-discuss',
+    limitedCriteria = [];
   if (spec && CLOSED.includes(spec.status)) delivery = spec.status;
   else if (spec) {
     delivery = spec.status;
     nextAction = 'omni-audit';
     try {
       const { auditSpec } = await import('./auditor.mjs');
-      const audit = await auditSpec(root, spec.id);
-      if (!audit.valid || audit.tasks.pending) {
+      const unclassified = spec.type !== 'rfc' && !(await specRoute(root, spec));
+      const audit = unclassified ? null : await auditSpec(root, spec.id);
+      if (unclassified) {
+        delivery = 'IMPLEMENTATION_PENDING';
+        blockers.push({ code: 'FIT_REQUIRED', message: UNCLASSIFIED_MESSAGE, action: `fit ${spec.id}` });
+      } else if (!audit.valid || audit.tasks.pending) {
         delivery = 'IMPLEMENTATION_PENDING';
         blockers.push({
           code: 'ARTIFACTS_OR_TASKS_PENDING',
@@ -590,6 +615,9 @@ export async function projectStatus(root, { all = false } = {}) {
         const pending = report.criteria
           .filter(item => item.status !== 'passed')
           .map(({ id, kind, status, method }) => ({ id, kind, status, method }));
+        limitedCriteria = report.criteria
+          .filter(item => typeof item.limits === 'string' && item.limits.trim())
+          .map(({ id, limits }) => ({ id, limits }));
         if (pending.length) {
           delivery = 'ACCEPTANCE_PENDING';
           blockers.push({
@@ -654,6 +682,40 @@ export async function projectStatus(root, { all = false } = {}) {
   if (blockers.length) nextAction = blockers[0].action;
   const { getCliVersion } = await import('./updater.mjs');
   const cliVersion = await getCliVersion();
+  const warnings = cliVersion === manifest.version ? [] : [cliVersionWarning(cliVersion, manifest)];
+  const { detectPluginCoexistence } = await import('./plugin-manager.mjs');
+  const plugin = await detectPluginCoexistence(root);
+  if (plugin && !plugin.versionMatches)
+    warnings.push({
+      code: 'PLUGIN_VERSION_MISMATCH',
+      pluginVersion: plugin.pluginVersion,
+      projectVersion: plugin.projectVersion,
+      message: plugin.message,
+    });
+  if (limitedCriteria.length)
+    warnings.push({
+      code: 'CRITERIA_WITH_LIMITS',
+      criteria: limitedCriteria,
+      message: `${limitedCriteria.map(item => item.id).join(', ')} would close with declared limits; report them to the user instead of a plain pass.`,
+    });
+  if (freshness.status !== 'NOT_RECORDED') {
+    const contextText = await readFile(await safePath(root, 'specs/project-context.md'), 'utf8');
+    for (const item of contradictedVersions(contextText, await declaredVersions(root)))
+      warnings.push({
+        code: 'VERSION_CLAIM_MISMATCH',
+        ...item,
+        message: describeContradiction('specs/project-context.md', item),
+      });
+    const pending = pendingConfiguration(manifest);
+    if (pending.length)
+      warnings.push({
+        code: 'CONFIGURATION_PENDING',
+        fields: pending,
+        profile: manifest.profile || 'general',
+        action: `configure ${pending.map(field => `--${field} "<confirmed value>"`).join(' ')}`,
+        message: `specs/manifest.json still holds placeholder ${pending.join(' and ')}. Propose values from the evidence and ask the user; run configure only after confirmation. Also confirm the profile (current: ${manifest.profile || 'general'}; available: ${Object.keys(profiles).join(', ')}). An undecided stack can stay pending until it is decided.`,
+      });
+  }
   let specs = manifest.specs,
     decisions = state.decisions;
   if (!all) {
@@ -679,7 +741,7 @@ export async function projectStatus(root, { all = false } = {}) {
       context: freshness,
       blockers,
       nextAction,
-      warnings: cliVersion === manifest.version ? [] : [cliVersionWarning(cliVersion, manifest)],
+      warnings,
       readSet,
       capabilities:
         state.session?.capabilities || Object.fromEntries(capabilities.map(name => [name, { status: 'unknown' }])),
@@ -697,8 +759,8 @@ export async function projectStatus(root, { all = false } = {}) {
 
 /**
  * List the files an agent reads for a spec: the artifacts its fit route requires, then
- * acceptance.json and verification.md. Without fit.json, or with an invalid one, the full route
- * applies, as in auditSpec.
+ * acceptance.json and verification.md. Without fit.json only the primary artifact is listed,
+ * because the change is unclassified; an invalid fit.json keeps the full route, as in auditSpec.
  * @param {string} root Project root.
  * @param {object} spec Manifest entry of the active spec.
  * @returns {Promise<string[]>} Project-relative paths under specs/<slug>/.
@@ -710,8 +772,8 @@ async function readSetFiles(root, spec) {
   const route = await specRoute(root, spec);
   return [
     ...artifacts.primary,
-    ...(!route || route.artifacts.plan ? artifacts.plan : []),
-    ...(!route || route.artifacts.tasks ? artifacts.tasks : []),
+    ...(route?.artifacts.plan ? artifacts.plan : []),
+    ...(route?.artifacts.tasks ? artifacts.tasks : []),
     'acceptance.json',
     'verification.md',
   ].map(name => `specs/${spec.slug}/${name}`);

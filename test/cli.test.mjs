@@ -78,7 +78,7 @@ describe('OmniSpec CLI', () => {
     assert.equal(code, 0);
 
     // 2. Create Feature
-    code = await runCli(['create', 'feature', 'user-profile'], tempDir);
+    code = await runCli(['create', 'feature', 'user-profile', '--full'], tempDir);
     assert.equal(code, 0);
 
     // 3. Status check
@@ -125,7 +125,7 @@ describe('OmniSpec CLI', () => {
 
   test('audit command blocks unedited spec and approves compliant spec', async () => {
     await runCli(['init', '--yes', '--name', 'AuditApp'], tempDir);
-    await runCli(['create', 'feature', 'checkout-flow'], tempDir);
+    await runCli(['create', 'feature', 'checkout-flow', '--full'], tempDir);
 
     // Fresh spec contains placeholder text -> should exit with code 1 (blocked)
     let code = await runCli(['audit'], tempDir);

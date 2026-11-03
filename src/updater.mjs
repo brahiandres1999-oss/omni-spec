@@ -219,7 +219,7 @@ export async function updateProject(baseDir, options = {}) {
       notices,
     };
     if (options.dryRun) return result;
-    await ensureProjectContext(baseDir);
+    await ensureProjectContext(baseDir, undefined, manifest.language);
     manifest.version = cliVersion;
     manifest.schemaVersion = 1;
     manifest.$schema = MANIFEST_SCHEMA_URL;

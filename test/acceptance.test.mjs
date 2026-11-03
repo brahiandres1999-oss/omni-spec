@@ -12,7 +12,7 @@ let root, spec;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omni-acceptance-'));
   await scaffoldProject(root, { qualityGates: 'node -e "process.exit(0)"' });
-  spec = await createSpec(root, 'feature', 'ui');
+  spec = await createSpec(root, 'feature', 'ui', { full: true });
   await fillSpec(root, spec);
 });
 afterEach(async () => {
@@ -25,7 +25,7 @@ async function change(edit, target = spec) {
   await writeFile(path, JSON.stringify(report));
 }
 async function filledSpec(type) {
-  const created = { ...(await createSpec(root, type, `${type}-case`)), type };
+  const created = { ...(await createSpec(root, type, `${type}-case`, { full: true })), type };
   await fillSpec(root, created);
   return created;
 }

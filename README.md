@@ -194,6 +194,7 @@ npx omni-spec@preview guide evidence         # Forma exacta de cada JSON (tambi�
 npx omni-spec@preview audit 001              # Audita consistencia de artefactos y placeholders
 npx omni-spec@preview checks --from specs/.omni/inputs/checks.json   # Catálogo de checks con ID y cwd por módulo
 npx omni-spec@preview configure --gates "npm test"  # Gates heredados desde la raíz
+npx omni-spec@preview configure --stack "Java 25 + Spring Boot" --profile fintech --doc "Javadoc"  # Sin init --force
 npx omni-spec@preview verify 001             # Ejecuta los checks y liga la evidencia a la huella
 npx omni-spec@preview complete 001           # Cierra el trabajo tras comprobar evidencia
 npx omni-spec@preview contracts              # Contratos de capacidad vigentes y propuestos
@@ -209,7 +210,10 @@ npx omni-spec@preview contracts --active     # Solo los contratos activos, sin h
 No todo cambio necesita el ciclo completo. OmniSpec incorpora **triaje dinámico** y atajos de ceremonia para evitar la burocracia documental innecesaria:
 
 ```sh
-# Crear directamente una especificación en modo ligero (sin plan.md ni tasks.md):
+# Crear sin ruta: solo el documento principal; el cambio queda sin clasificar hasta usar fit
+omni-spec create feature arreglo-etiqueta
+
+# O fijar la ruta al crear:
 omni-spec create feature arreglo-etiqueta --light
 
 # O mutar y escalar la ruta según evoluciona el alcance técnico:
@@ -221,10 +225,10 @@ omni-spec fit --preset full       # Modo completo: diseño, desglose de tareas y
 | Ruta | Artefactos Requeridos | Cuándo Usarla |
 | :--- | :--- | :--- |
 | **light** | `spec.md` + `acceptance.json` | Cambio pequeño (1-2 archivos), local, claro y con tests existentes. |
-| **standard** | `spec.md` + diseño (`plan.md` / `migration-plan.md` / `rca.md` + `fix.md`) | Cambio con incertidumbre de diseño o sin cobertura previa de pruebas. |
-| **full** | `spec.md` + diseño + desglose de tareas (`tasks.md`) | ≥3 archivos, múltiples módulos, cambios de contratos públicos o riesgo elevado. |
+| **standard** | `spec.md` + diseño (`plan.md` / `migration-plan.md` / `rca.md` + `fix.md`) | Cambio de bajo riesgo que toca ≥3 archivos o varios módulos, o sin cobertura previa de pruebas. |
+| **full** | `spec.md` + diseño + desglose de tareas (`tasks.md`) | Riesgo alto o crítico, contratos públicos, ambigüedad o incertidumbre, o reversión difícil. |
 
-La ruta se **deriva** de `specs/<slug>/fit.json` (mediante el cuestionario interactivo o los presets canónicos) y se evalúa automáticamente. En v2 se ponderan consecuencia (*risk*), incertidumbre (*uncertainty*) y reversibilidad (*reversibility*).
+La ruta se **deriva** de `specs/<slug>/fit.json` (mediante el cuestionario interactivo o los presets canónicos) y se evalúa automáticamente. Sin `fit.json`, `audit`, `verify` y `complete` se detienen y piden clasificar con `fit` (o `fit --preset full` para conservar los documentos de una spec abierta con una versión anterior). Un bug ligero cierra en `bug.md`, que incluye causa raíz, corrección mínima y verificación de regresión. En v2 se ponderan consecuencia (*risk*), incertidumbre (*uncertainty*) y reversibilidad (*reversibility*).
 
 **Andamiaje dinámico en escalada:** Si un cambio ligero escala en complejidad, ejecutar `omni-spec fit --preset standard` o `--preset full` no solo actualiza las reglas de auditoría, sino que genera automáticamente en disco los artefactos faltantes (`scaffoldMissingRouteArtifacts`) preservando cualquier contenido o decisión previa sin sobreescrituras destructivas.
 
