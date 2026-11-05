@@ -25,6 +25,7 @@ import { listContracts, readContract, updateContract, contractEffectiveSnapshot 
 import { fileURLToPath } from 'node:url';
 import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
 import { installationProgress } from './terminal-ui.mjs';
+import { runMcpServer } from './mcp-server.mjs';
 
 const mutating = new Set([
   'create',
@@ -39,6 +40,7 @@ const mutating = new Set([
   'session-record',
   'decision-record',
   'contract-record',
+  'mcp',
 ]);
 const aliases = {
   switch: 'focus',
@@ -219,6 +221,7 @@ omni-spec <command> [arguments] [options]
                                  (modified copies block unless --accept-updates backs them up)
   plugin <install|update|status> Manage Antigravity global plugin (~180 KB clean install)
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
+  mcp                           Serve memory tools to AI hosts over MCP stdio (JSON-RPC)
   help | version
 
 init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-components
@@ -713,6 +716,10 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
             `[CLEANED] ${result.project} migrated to plugin mode (v${result.version}).\nRemoved ${result.removed.length} managed files.${result.backups.length ? `\n${result.backups.map(p => 'BACKUP ' + p).join('\n')}` : ''}\nPreserved: ${result.preserved}. Specs: ${result.specsCount}.`,
           );
         }
+        return 0;
+      }
+      case 'mcp': {
+        await runMcpServer({ root: workingDir, version: await getCliVersion() });
         return 0;
       }
       default:

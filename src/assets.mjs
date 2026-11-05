@@ -17,6 +17,9 @@ manifest.json.tmp.*
 .omni/inputs/
 .omni/runtime/
 .omni/reference/
+.omni/memory.db*
+.omni/quarantine/
+decisions/*.json.tmp.*
 # OMNI-SPEC-END`;
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
