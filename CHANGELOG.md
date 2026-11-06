@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Blast radius (`src/cartography/blast-radius.mjs`):** `S = min(100, 100·[(0.5·Φ(K)·ω + 0.2·Centrality)·(1 − 0.4·TestCoverage) + 0.3·ContractLevel])` with `Φ(K) = min(1, ln(1+K)/ln 31)`. Impact is computed per symbol (`path#sym1,sym2`); type-only edges weigh 0.1. TestCoverage counts only an HMAC-attested passing verification, and ContractLevel comes from the evidence paths in `specs/contracts.json`. Root configuration files are `ROOT_ANCHOR` (S = 100). Levels: low (< 25), medium (< 70) and high (`CONTRACT_BREACH_BLOCKER`).
 - **CLI:** `omni-spec cartography [--json]` and `omni-spec blast-radius <files...> [--json] [--depth 1..10] [--fail-on low|medium|high]` (exit code 2 at the threshold). Both refresh the index incrementally first.
 - `npm run bench:cartography` measures the blueprint's targets in fresh processes and exits 1 when one is missed.
+- Measured on Windows 11 with Defender and Node 24.22.1 (accepted as observed evidence; see `docs/NEXTGEN-PHASE3-TEST-PLAN.md` §9.1):
+  - Lexer: 1.87M LOC/s (93 MB/s; the 3M LOC/s target is not met).
+  - Cold index of 500k LOC in 4,004 files: 4.5 s, of which about 2.6 s is antivirus-filtered file opens (the 200 ms target is not met).
+  - Peak RSS: 89.6 MB on a 58 MB process baseline (the 60 MB target is not met).
+  - Depth-10 CTE: 0.24 ms (the 1.2 ms target is met).
+  - Unchanged re-index: 134 ms.
 
 ### Changed (Next-Gen Phase 3)
 - `specs/.omni/memory.db` schema version 3: `module_dependencies`, cache columns on `modules_graph`, `cartography_state` and a recreated `barrel_symbol_routes`. Version 2 databases migrate in place inside `BEGIN IMMEDIATE`.

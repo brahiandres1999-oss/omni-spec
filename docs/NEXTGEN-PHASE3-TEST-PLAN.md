@@ -499,6 +499,13 @@ Fase roja confirmada antes de implementar: los cuatro módulos de `src/cartograp
 
 Los suelos de la suite (D-5) sí se cumplen: ≥ 1 M LOC/s, < 5 s en frío y < 40 MB de crecimiento de RSS.
 
+**Decisión (2026-11-05, aprobada por el mantenedor):** la Fase 3 se cierra aceptando estas mediciones como evidencia `OBSERVED` en lugar de los objetivos `DECLARED` del blueprint. Motivos:
+- El lexer supera en MB/s la cifra del stress test.
+- Las aperturas de archivo bajo el filtro del antivirus (~2,6 s) son un suelo de I/O ajeno al código.
+- El indexador añade ~31 MB sobre la línea base del proceso.
+
+Los tres objetivos absolutos (3 M LOC/s, < 200 ms, < 60 MB de RSS) **siguen sin alcanzarse** en esta máquina: \`bench:cartography\` los sigue midiendo y sale con 1 mientras no se cumplan. El criterio EARS de §0 queda satisfecho en corrección (impacto por símbolo, sin falsos positivos de barrels, sin bucles por ciclos), no en las cifras de tiempo y memoria.
+
 ### 9.2 Desviaciones respecto al plan aprobado
 
 1. **GR-CTE-09:** la CTE cuesta ~15 µs por fila en SQLite en esta máquina, así que el presupuesto aprobado de 200.000 filas tarda ~3 s en el peor caso. Se mantiene el valor de D-1 y el umbral del test pasa de < 1 s a < 5 s. El índice `idx_deps_target` es cubriente (`target_module, target_kind, source_module, edge_type`) para no leer la tabla en cada paso recursivo.
