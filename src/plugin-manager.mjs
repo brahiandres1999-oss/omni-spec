@@ -67,12 +67,7 @@ export async function installPlugin(options = {}) {
 
   await mkdir(pluginsParent, { recursive: true });
 
-  try {
-    const existing = await stat(targetDir);
-    if (existing) {
-      await rm(targetDir, { recursive: true, force: true });
-    }
-  } catch {}
+  await rm(targetDir, { recursive: true, force: true });
 
   await mkdir(targetDir, { recursive: true });
 
@@ -141,7 +136,10 @@ export async function getPluginStatus(options = {}) {
     try {
       const pkg = JSON.parse(await readFile(join(targetDir, 'package.json'), 'utf8'));
       pluginVersion = pkg.version || pluginVersion;
-    } catch {}
+    } catch (error) {
+      // A missing or corrupt package.json reports the version as unknown; other failures are real.
+      if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+    }
 
     const isOutdated = pluginVersion !== cliVersion;
     return {

@@ -1,6 +1,7 @@
 import { readFile, lstat, stat } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, win32 } from 'node:path';
 import { safePath } from './managed.mjs';
+import { tokenizeCommand } from './guardian.mjs';
 
 export const DEFAULT_CHECK_TIMEOUT = 120000;
 const allowedKeys = new Set(['id', 'command', 'cwd', 'timeoutMs', 'kind', 'enabled']);
@@ -61,6 +62,11 @@ export async function validateChecks(root, catalogue) {
         'Invalid checks.json entry: unique non-reserved ID, approved command and supported fields required.',
       );
     ids.add(item.id);
+    try {
+      tokenizeCommand(item.command);
+    } catch (error) {
+      throw new Error(`Invalid checks.json entry ${item.id}: ${error.message}`, { cause: error });
+    }
     const timeoutMs = item.timeoutMs ?? DEFAULT_CHECK_TIMEOUT;
     if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 3600000)
       throw new Error(`Invalid timeoutMs for check ${item.id}; use 100 through 3600000.`);

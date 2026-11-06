@@ -21,7 +21,7 @@
     "omni-spec": "bin/omni-spec.mjs"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1",
+    "test": "node --test --test-concurrency=1 --import ./test-support/isolated-home.mjs",
     "test:coverage": "node scripts/coverage.mjs",
     "lint": "biome ci .",
     "lint:fix": "biome check --write .",

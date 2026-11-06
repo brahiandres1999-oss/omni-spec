@@ -14,6 +14,16 @@ import { FIT_PRESETS } from './fit.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/** @returns {Promise<boolean>} Whether the path exists; errors other than ENOENT propagate. */
+async function pathExists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
 export async function copyDirectoryRecursive(src, dest, overwrite = true) {
   await mkdir(dest, { recursive: true });
   const entries = await readdir(src, { withFileTypes: true });
@@ -23,12 +33,7 @@ export async function copyDirectoryRecursive(src, dest, overwrite = true) {
     if (entry.isDirectory()) {
       await copyDirectoryRecursive(srcPath, destPath, overwrite);
     } else {
-      if (!overwrite) {
-        try {
-          await access(destPath);
-          continue;
-        } catch {}
-      }
+      if (!overwrite && (await pathExists(destPath))) continue;
       await cp(srcPath, destPath, { force: overwrite });
     }
   }
@@ -279,11 +284,7 @@ async function scaffoldUnlocked(baseDir, options) {
 
   // 1. Generate CONSTITUTION.md (preserve if exists and not force)
   const constitutionPath = join(baseDir, 'CONSTITUTION.md');
-  let constitutionExists = false;
-  try {
-    await access(constitutionPath);
-    constitutionExists = true;
-  } catch {}
+  const constitutionExists = await pathExists(constitutionPath);
 
   const existingManifest = await loadManifest(baseDir);
   if (constitutionExists && existingManifest && !force) {
@@ -336,11 +337,7 @@ async function scaffoldUnlocked(baseDir, options) {
 
   // 4. Generate specs/README.md (preserve if exists and not force)
   const specsReadmePath = join(specsDir, 'README.md');
-  let readmeExists = false;
-  try {
-    await access(specsReadmePath);
-    readmeExists = true;
-  } catch {}
+  const readmeExists = await pathExists(specsReadmePath);
 
   if (!readmeExists || force) {
     await writeFile(specsReadmePath, buildSpecsReadmeContent(options.projectName, options.language), 'utf-8');
@@ -386,7 +383,9 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
     let existingDirs = [];
     try {
       existingDirs = await readdir(join(baseDir, 'specs'));
-    } catch {}
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
 
     const dirNumbers = existingDirs.map(d => parseInt(d.split('-')[0], 10)).filter(n => !Number.isNaN(n));
 
@@ -585,7 +584,10 @@ export async function scaffoldMissingRouteArtifacts(baseDir, spec, targetRoute) 
           .replaceAll('Incident Title / Short Description', title);
         await writeFile(destFile, content, 'utf-8');
         scaffolded.push(file);
-      } catch {}
+      } catch (error) {
+        // Archetypes may list documents that have no template; any other failure is real.
+        if (error.code !== 'ENOENT') throw error;
+      }
     }
   }
 

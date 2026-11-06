@@ -17,6 +17,8 @@ const result = spawnSync(
   [
     '--test',
     '--test-concurrency=1',
+    '--import',
+    './test-support/isolated-home.mjs',
     '--experimental-test-coverage',
     '--test-reporter=spec',
     '--test-reporter=lcov',

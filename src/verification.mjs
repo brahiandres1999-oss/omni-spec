@@ -10,6 +10,10 @@ import { hashProjectFiles, hashTree, digestFiles, changedFiles, newBudget } from
 import { reviewAcceptance, bindAcceptance } from './acceptance.mjs';
 import { loadChecks, checkDirectory } from './checks.mjs';
 import { assertContextFresh } from './project-state.mjs';
+import { GuardianError, auditCommand, resolveExecution } from './guardian.mjs';
+import { getAttestationKey, signRecord, verifyRecord } from './attestation.mjs';
+import { hollowTestFindings } from './hollow-guard.mjs';
+import { assertGate } from './gates.mjs';
 
 const placeholders = /\[TODO\]|\[NEEDS CLARIFICATION\]|\b(?:SPEC|BUG|DEBT|RFC)-XXX\b/i;
 
@@ -70,7 +74,8 @@ export async function projectSnapshot(root, spec, gates) {
   const specPath = `specs/${spec.slug}`;
   await safePath(root, specPath);
   for (const [name, digest] of await hashTree(root, specPath, {
-    exclude: new Set([`${specPath}/verification.json`]),
+    // Records and approvals are written after the evidence they describe; they are not inputs.
+    exclude: new Set([`${specPath}/verification.json`, `${specPath}/approvals.json`]),
     label,
     budget,
   }))
@@ -111,9 +116,24 @@ export async function projectFingerprint(root, spec, gates) {
   return (await projectSnapshot(root, spec, gates)).fingerprint;
 }
 
-async function runCommand(check, root, timeoutOverride) {
+/**
+ * Plans a check through Omni-Guardian. A refused or unresolvable command is returned as
+ * `{ blocked }` so it is recorded like any other failed check, without ever reaching spawn().
+ */
+async function planCommand(check, root, cwd, allowedBinaries) {
+  try {
+    const audited = await auditCommand(check.command, { root, cwd: check.cwd, allowedBinaries });
+    return await resolveExecution(audited, { root, cwd });
+  } catch (error) {
+    if (!(error instanceof GuardianError)) throw error;
+    return { blocked: error };
+  }
+}
+
+async function runCommand(check, root, timeoutOverride, allowedBinaries = []) {
   const { command, id: checkId } = check;
   const cwd = await checkDirectory(root, check.cwd);
+  const plan = await planCommand(check, root, cwd, allowedBinaries);
   const timeout = timeoutOverride ?? check.timeoutMs;
   const logName = `specs/.omni/verification-logs/${randomUUID()}.log`;
   const logPath = await safePath(root, logName);
@@ -130,15 +150,18 @@ async function runCommand(check, root, timeoutOverride) {
       timedOut = false,
       cleanupTimer,
       killer,
+      timer = null,
       settled = false;
-    const child = spawn(command, {
-      cwd,
-      shell: true,
-      windowsHide: true,
-      env: process.env,
-      detached: process.platform !== 'win32',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = plan.blocked
+      ? null
+      : spawn(plan.file, plan.args, {
+          cwd,
+          shell: false,
+          windowsHide: true,
+          env: process.env,
+          detached: process.platform !== 'win32',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
     const append = data => {
       outputTotalBytes += data.length;
       const remaining = Math.max(0, outputLimit - outputBytes);
@@ -151,8 +174,7 @@ async function runCommand(check, root, timeoutOverride) {
         terminate();
       }
     };
-    child.stdout.on('data', append);
-    child.stderr.on('data', append);
+
     const finish = result => {
       if (settled) return;
       settled = true;
@@ -166,7 +188,7 @@ async function runCommand(check, root, timeoutOverride) {
         checkCwd: check.cwd,
         kind: check.kind,
         timeoutMs: timeout,
-        processId: child.pid ?? null,
+        processId: child?.pid ?? null,
         startedAt,
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - started,
@@ -219,7 +241,17 @@ async function runCommand(check, root, timeoutOverride) {
         }
       }
     };
-    const timer = setTimeout(() => {
+    if (plan.blocked) {
+      append(
+        Buffer.from(`${plan.blocked.message}
+`),
+      );
+      finish({ exitCode: null, error: plan.blocked.message, errorType: plan.blocked.category });
+      return;
+    }
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    timer = setTimeout(() => {
       timedOut = true;
       terminate();
     }, timeout);
@@ -244,7 +276,7 @@ async function runCommand(check, root, timeoutOverride) {
   return record;
 }
 
-export const VERIFICATION_RECORD_VERSION = 3;
+export const VERIFICATION_RECORD_VERSION = 4;
 
 /**
  * Run approved checks and bind the result to a snapshot. The manifest lock is held only to
@@ -260,6 +292,7 @@ export async function verifySpec(root, identifier, options = {}) {
   return withVerificationLock(root, async () => {
     const prepared = await withManifestLock(root, async () => {
       const { manifest, spec } = await getSpec(root, identifier);
+      await assertGate(root, spec, manifest, 1);
       const initial = await ready(root, spec);
       const checks = await loadChecks(root, manifest);
       const mode = spec.type === 'rfc' ? 'decision' : checks.length ? 'automated' : 'manual';
@@ -272,13 +305,14 @@ export async function verifySpec(root, identifier, options = {}) {
         throw new Error('Manual verification cannot bypass configured quality gates.');
       const configuration = { qualityGates: manifest.qualityGates, checks };
       const before = await projectSnapshot(root, spec, configuration);
-      return { spec, checks, mode, before };
+      const hollowTests = mode === 'decision' ? [] : await hollowTestFindings(root);
+      return { spec, checks, mode, before, hollowTests, allowedBinaries: manifest.guardian?.allowedBinaries ?? [] };
     });
-    const { spec, checks, mode, before } = prepared;
+    const { spec, checks, mode, before, hollowTests, allowedBinaries } = prepared;
     const results = [];
     if (mode === 'automated')
       for (const check of checks) {
-        const result = await runCommand(check, root, options.timeout);
+        const result = await runCommand(check, root, options.timeout, allowedBinaries);
         results.push(result);
         if (result.exitCode !== 0 || result.timedOut || result.error) break;
       }
@@ -301,6 +335,7 @@ export async function verifySpec(root, identifier, options = {}) {
         acceptance = { criteria: [], automatedChecksPassed: false, error: error.message };
       }
       const passed =
+        !hollowTests.length &&
         !changed.length &&
         !acceptanceError &&
         acceptance.automatedChecksPassed &&
@@ -324,8 +359,10 @@ export async function verifySpec(root, identifier, options = {}) {
         checks,
         timeoutOverride: options.timeout ?? null,
         acceptance,
+        hollowTests,
         results,
       };
+      signRecord(await getAttestationKey(), record);
       await writeFileAtomic(
         await safePath(root, `specs/${spec.slug}/verification.json`),
         JSON.stringify(record, null, 2) + '\n',
@@ -393,9 +430,16 @@ export function describeFailure(record) {
   if (record.sourceChangedDuringVerification)
     return `files changed while checks ran (${(record.changedDuringVerification || []).slice(0, 5).join(', ') || 'see record'}${record.changedDuringVerificationCount > 5 ? ', ...' : ''}). Exclude generated outputs in .gitignore or .omnispecignore, or stop concurrent edits.`;
   if (record.acceptance?.error) return `acceptance review failed after checks: ${record.acceptance.error}`;
+  if (record.hollowTests?.length)
+    return `${record.hollowTests
+      .slice(0, 5)
+      .map(item => `${item.code}: ${item.file}:${item.line} ${item.message}`)
+      .join('; ')}.`;
   const failed = (record.results || []).find(result => result.exitCode !== 0 || result.timedOut || result.error);
   if (failed)
-    return `check ${failed.checkId || failed.command} ${failed.timedOut ? 'timed out' : failed.errorType === 'environment' ? 'could not run (environment)' : `exited ${failed.exitCode}`}.`;
+    return failed.errorType === 'policy'
+      ? `check ${failed.checkId || failed.command} was blocked by Omni-Guardian (${failed.error}).`
+      : `check ${failed.checkId || failed.command} ${failed.timedOut ? 'timed out' : failed.errorType === 'environment' ? 'could not run (environment)' : `exited ${failed.exitCode}`}.`;
   if (record.acceptance && !record.acceptance.automatedChecksPassed)
     return 'an automated criterion is not bound to a passing executed check.';
   return 'see verification.json.';
@@ -470,6 +514,9 @@ export async function inspectVerification(root, spec, manifest) {
     )
       throw new Error('Verification output log changed. Run verify again.');
   }
+  // Last, so structural problems keep their specific messages; the signature catches forgeries
+  // that are otherwise consistent.
+  verifyRecord(await getAttestationKey(), record);
   return { record, acceptance };
 }
 
@@ -481,6 +528,7 @@ async function completeUnlocked(root, identifier) {
   return withManifestLock(root, async () => {
     const { manifest, spec } = await getSpec(root, identifier);
     const { record, acceptance } = await inspectVerification(root, spec, manifest);
+    await assertGate(root, spec, manifest, 2);
     spec.status = 'COMPLETED';
     spec.completed_at = spec.updated_at = new Date().toISOString();
     spec.verification = {

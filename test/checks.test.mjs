@@ -82,7 +82,7 @@ test('disabled checks are not executed and missing environment is rejected befor
   await assert.rejects(verifySpec(root, spec.id), /ENOENT/);
 });
 
-test('an unavailable command shell is an environment failure rather than a failed application assertion', async t => {
+test('checks run without a command shell, so a broken ComSpec cannot affect them', async t => {
   if (process.platform !== 'win32') {
     t.skip('ComSpec shell selection is specific to Windows.');
     return;
@@ -92,10 +92,9 @@ test('an unavailable command shell is an environment failure rather than a faile
   try {
     process.env.ComSpec = join(root, 'unavailable-shell.exe');
     const record = await verifySpec(root, spec.id);
-    assert.equal(record.passed, false);
-    assert.equal(record.results[0].exitCode, null);
-    assert.equal(record.results[0].errorType, 'environment');
-    assert.match(record.results[0].error, /ENOENT/);
+    assert.equal(record.passed, true, record.results[0].error);
+    assert.equal(record.results[0].exitCode, 0);
+    assert.equal(record.results[0].errorType, null);
   } finally {
     if (previous === undefined) delete process.env.ComSpec;
     else process.env.ComSpec = previous;

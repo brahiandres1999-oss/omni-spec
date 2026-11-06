@@ -26,6 +26,10 @@ import { fileURLToPath } from 'node:url';
 import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
 import { installationProgress } from './terminal-ui.mjs';
 import { runMcpServer } from './mcp-server.mjs';
+import { approveGate, gateStatus } from './gates.mjs';
+import { migrateTasks } from './tasks.mjs';
+import { inspectStaged, installHooks, uninstallHooks } from './guardian.mjs';
+import { createAuthStore, createPassthrough, PASSTHROUGH_PROVIDERS } from './auth.mjs';
 
 const mutating = new Set([
   'create',
@@ -41,6 +45,8 @@ const mutating = new Set([
   'decision-record',
   'contract-record',
   'mcp',
+  'approve',
+  'tasks',
 ]);
 const aliases = {
   switch: 'focus',
@@ -72,6 +78,9 @@ const valueFlags = new Set([
   'ambiguity',
   'reversibility',
   'reasoning',
+  'gate',
+  'actor',
+  'provider',
 ]);
 const booleanFlags = new Set([
   'yes',
@@ -88,6 +97,7 @@ const booleanFlags = new Set([
   'full',
   'crosses-contract',
   'existing-tests',
+  'replace',
 ]);
 
 function acceptanceSummary(acceptance) {
@@ -222,6 +232,11 @@ omni-spec <command> [arguments] [options]
   plugin <install|update|status> Manage Antigravity global plugin (~180 KB clean install)
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
   mcp                           Serve memory tools to AI hosts over MCP stdio (JSON-RPC)
+  approve <id> --gate <1|2> --actor <name>  Human gate approval on the full route (governance.humanGates)
+  tasks migrate <id>             Move tasks.md into canonical tasks.json (tasks.md becomes its projection)
+  guardian <install|uninstall|check> [--replace]  Omni-Guardian pre-commit hook (conflicts, anti-slop)
+  login --provider <claude|gh|gcloud>  Use an existing CLI session (delegated passthrough)
+  auth status [--json]           Show stored and delegated credentials without secrets
   help | version
 
 init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-components
@@ -293,6 +308,10 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         contracts: 1,
         'contract-record': 1,
         guide: 1,
+        approve: 1,
+        guardian: 1,
+        auth: 1,
+        tasks: 2,
       }[command] || 0;
     if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
     const emit = (value, human) =>
@@ -716,6 +735,87 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
             `[CLEANED] ${result.project} migrated to plugin mode (v${result.version}).\nRemoved ${result.removed.length} managed files.${result.backups.length ? `\n${result.backups.map(p => 'BACKUP ' + p).join('\n')}` : ''}\nPreserved: ${result.preserved}. Specs: ${result.specsCount}.`,
           );
         }
+        return 0;
+      }
+      case 'approve': {
+        if (positionals.length !== 1 || !['1', '2'].includes(flags.gate) || !flags.actor)
+          throw new Error('Usage: approve <id> --gate <1|2> --actor <name>');
+        const approval = await approveGate(workingDir, positionals[0], Number(flags.gate), { actor: flags.actor });
+        emit(approval, `[OK] Gate ${approval.gate} approved by ${approval.actor} at ${approval.approvedAt}.`);
+        return 0;
+      }
+      case 'tasks': {
+        if (positionals[0] === 'status' && positionals[1]) {
+          emit(await gateStatus(workingDir, positionals[1]));
+          return 0;
+        }
+        if (positionals[0] !== 'migrate' || !positionals[1]) throw new Error('Usage: tasks migrate <id>');
+        const migrated = await migrateTasks(workingDir, positionals[1]);
+        emit(migrated, `[OK] ${migrated.tasks.length} tasks moved to tasks.json; tasks.md is now generated from it.`);
+        return 0;
+      }
+      case 'guardian': {
+        const action = positionals[0] || 'check';
+        if (action === 'install') {
+          const result = await installHooks(workingDir, { force: Boolean(flags.replace) });
+          emit(
+            result,
+            `[OK] Omni-Guardian pre-commit hook installed in ${result.directory}${result.chained ? ' (existing hook kept as pre-commit.local)' : ''}.`,
+          );
+          return 0;
+        }
+        if (action === 'uninstall') {
+          const result = await uninstallHooks(workingDir);
+          emit(result, `[OK] Removed ${result.removed.join(', ') || 'nothing'} from ${result.directory}.`);
+          return 0;
+        }
+        if (action !== 'check') throw new Error('Usage: guardian <install|uninstall|check>');
+        const result = await inspectStaged(workingDir);
+        emit(
+          result,
+          result.violations.length
+            ? result.violations.map(item => `${item.file}:${item.line} ${item.code} ${item.message}`).join('\n')
+            : `[OK] ${result.files.length} staged files passed Omni-Guardian.`,
+        );
+        return result.violations.length ? 1 : 0;
+      }
+      case 'login': {
+        const provider = flags.provider;
+        if (!Object.hasOwn(PASSTHROUGH_PROVIDERS, provider ?? ''))
+          throw new Error(`Usage: login --provider <${Object.keys(PASSTHROUGH_PROVIDERS).join('|')}>`);
+        const status = await createPassthrough().status(provider);
+        if (status.authenticated === false) {
+          emit(
+            status,
+            `[LOGIN REQUIRED] ${provider} is installed but not logged in. Run \`${status.login}\`, then retry.`,
+          );
+          return 1;
+        }
+        emit(
+          status,
+          status.delegated
+            ? `[OK] ${provider} keeps its own session; OmniSpec delegates to it.`
+            : `[OK] ${provider} is authenticated; OmniSpec will use its session without storing tokens.`,
+        );
+        return 0;
+      }
+      case 'auth': {
+        if ((positionals[0] || 'status') !== 'status') throw new Error('Usage: auth status [--json]');
+        const store = createAuthStore();
+        const read = await store.read();
+        const report = {
+          store: {
+            path: store.path,
+            status: read.status,
+            providers: Object.keys(read.data?.providers ?? {}),
+            apiKeys: Object.keys(read.data?.apiKeys ?? {}),
+          },
+          passthrough: await createPassthrough().detect(),
+        };
+        emit(
+          report,
+          `Store: ${report.store.path} (${report.store.status})\nSessions: ${report.store.providers.join(', ') || 'none'}\nAPI keys: ${report.store.apiKeys.join(', ') || 'none'}\n${report.passthrough.map(item => `${item.provider}: ${item.available ? item.version || 'available' : 'not installed'}`).join('\n')}`,
+        );
         return 0;
       }
       case 'mcp': {
