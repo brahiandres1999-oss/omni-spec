@@ -1,0 +1,148 @@
+/*
+ * Agent answers rendered as Markdown (components/ui/markdown.tsx). Colours come only from the theme tokens;
+ * syntax highlighting maps highlight.js classes onto the same palette, so code never introduces new colours.
+ */
+@layer components {
+  .md {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--color-fg);
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+  .md > :first-child {
+    margin-top: 0;
+  }
+  .md > :last-child {
+    margin-bottom: 0;
+  }
+  .md p,
+  .md ul,
+  .md ol,
+  .md blockquote,
+  .md table {
+    margin: 0 0 0.75em;
+  }
+  .md h1,
+  .md h2,
+  .md h3,
+  .md h4 {
+    margin: 1.2em 0 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+  .md h1 {
+    font-size: 18px;
+  }
+  .md h2 {
+    font-size: 16px;
+  }
+  .md h3,
+  .md h4 {
+    font-size: 14px;
+  }
+  .md ul,
+  .md ol {
+    padding-inline-start: 1.4em;
+  }
+  .md ul {
+    list-style: disc;
+  }
+  .md ol {
+    list-style: decimal;
+  }
+  .md li + li {
+    margin-top: 0.25em;
+  }
+  .md li::marker {
+    color: var(--color-fg-muted);
+  }
+  .md a {
+    color: var(--color-accent-bright);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .md strong {
+    font-weight: 600;
+  }
+  .md blockquote {
+    border-inline-start: 2px solid var(--color-divider);
+    padding-inline-start: 0.9em;
+    color: var(--color-fg-muted);
+  }
+  .md hr {
+    border: 0;
+    border-top: 1px solid var(--color-divider);
+    margin: 1em 0;
+  }
+  .md :not(pre) > code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: var(--color-floating);
+    border: 1px solid var(--color-divider);
+  }
+  .md table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .md th,
+  .md td {
+    border: 1px solid var(--color-divider);
+    padding: 0.35em 0.7em;
+    text-align: start;
+  }
+  .md th {
+    background: var(--color-surface);
+    font-weight: 600;
+  }
+
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-meta {
+    color: var(--color-fg-muted);
+    font-style: italic;
+  }
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-built_in,
+  .hljs-type {
+    color: var(--color-accent-bright);
+  }
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-addition,
+  .hljs-template-variable {
+    color: var(--color-attested);
+  }
+  .hljs-number,
+  .hljs-literal,
+  .hljs-attr,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-variable {
+    color: var(--color-heat-high);
+  }
+  .hljs-title,
+  .hljs-section,
+  .hljs-name,
+  .hljs-selector-class,
+  .hljs-selector-id {
+    color: var(--color-accent);
+  }
+  .hljs-deletion {
+    color: var(--color-breach);
+  }
+  .hljs-emphasis {
+    font-style: italic;
+  }
+  .hljs-strong {
+    font-weight: 600;
+  }
+}

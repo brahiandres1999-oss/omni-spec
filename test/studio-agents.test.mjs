@@ -239,6 +239,71 @@ describe('AG Claude Code driver', () => {
   });
 });
 
+describe('AG model, effort and context', () => {
+  test('AG-13 changing model or effort restarts the CLI on the same session with --resume', async () => {
+    const procs = [];
+    const spawned = [];
+    const driver = createClaudeDriver({
+      cwd: '.',
+      emit: () => undefined,
+      locate: async () => ({ file: 'claude.exe', prefix: [], path: 'claude.exe' }),
+      spawnImpl: (_file, args) => {
+        spawned.push(args);
+        const proc = fakeProcess();
+        procs.push(proc);
+        return proc;
+      },
+    });
+    await driver.prompt('uno', { model: 'haiku', effort: 'low' });
+    procs[0].send({ type: 'system', subtype: 'init', session_id: 'S1', model: 'claude-haiku-5-5' });
+    procs[0].send({ type: 'result', is_error: false, result: 'ok' });
+    await tick();
+    await driver.prompt('dos', { model: 'haiku', effort: 'low' });
+    assert.equal(spawned.length, 1, 'same options reuse the process');
+    procs[0].send({ type: 'result', is_error: false, result: 'ok' });
+    await tick();
+    await driver.prompt('tres', { model: 'opus', effort: 'max' });
+    assert.equal(spawned.length, 2);
+    const args = spawned[1];
+    assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', 'opus']);
+    assert.deepEqual(args.slice(args.indexOf('--effort'), args.indexOf('--effort') + 2), ['--effort', 'max']);
+    assert.deepEqual(args.slice(args.indexOf('--resume'), args.indexOf('--resume') + 2), ['--resume', 'S1']);
+    assert.deepEqual(driver.status().options, { model: 'opus', effort: 'max' });
+    await assert.rejects(createClaudeDriver({ cwd: '.', emit: () => undefined }).prompt('x', { effort: 'off' }), {
+      code: 'INVALID_EFFORT',
+    });
+  });
+
+  test('AG-14 the result reports context occupancy from the last message and the model window', () => {
+    const state = fresh();
+    translateClaudeMessage({ type: 'system', subtype: 'init', model: 'claude-haiku-5-5' }, state);
+    translateClaudeMessage(
+      {
+        type: 'assistant',
+        message: {
+          id: 'a',
+          content: [],
+          usage: { input_tokens: 2, cache_creation_input_tokens: 100, cache_read_input_tokens: 900, output_tokens: 8 },
+        },
+      },
+      state,
+    );
+    const [result] = translateClaudeMessage(
+      {
+        type: 'result',
+        is_error: false,
+        result: 'ok',
+        total_cost_usd: 0.004,
+        modelUsage: { 'claude-haiku-5-5': { contextWindow: 1_000_000, costBasis: 'list' } },
+      },
+      state,
+    );
+    assert.equal(result.contextTokens, 1010);
+    assert.equal(result.contextWindow, 1_000_000);
+    assert.equal(result.costBasis, 'list');
+  });
+});
+
 describe('AG locate and workspace', () => {
   test('AG-10 the npm claude.cmd shim resolves to the binary it launches', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'omni-claude-bin-'));

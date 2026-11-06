@@ -77,6 +77,15 @@
           "model": {
             "type": "string",
             "minLength": 1
+          },
+          "effort": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
           }
         },
         "required": [

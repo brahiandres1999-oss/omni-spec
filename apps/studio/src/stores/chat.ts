@@ -4,6 +4,7 @@
  */
 import { createStore } from 'zustand/vanilla';
 import { type StudioClient, StudioError } from '@/ipc/client';
+import { readJson, writeJson } from './storage';
 
 export type AgentState = 'idle' | 'starting' | 'ready' | 'busy';
 
@@ -41,10 +42,43 @@ export interface AgentEvent {
   [key: string]: unknown;
 }
 
+/** What the user picked for the next turns; `null` keeps the CLI's own default. */
+export interface AgentOptions {
+  model: string | null;
+  effort: string | null;
+}
+
+/** Context and cost after the last turn, as the CLI reported them. */
+export interface AgentUsage {
+  contextTokens: number | null;
+  contextWindow: number | null;
+  /** Sum of every turn of this conversation; with a subscription it is a list-price estimate, not a charge. */
+  costUsd: number;
+  costBasis: string | null;
+}
+
+const OPTIONS_KEY = 'chat.options';
+const isOptions = (value: unknown): value is AgentOptions => {
+  const entry = value as Partial<AgentOptions> | null;
+  return (
+    !!entry &&
+    (entry.model === null || typeof entry.model === 'string') &&
+    (entry.effort === null || typeof entry.effort === 'string')
+  );
+};
+const EMPTY_USAGE: AgentUsage = { contextTokens: null, contextWindow: null, costUsd: 0, costBasis: null };
+
 export interface AgentStatus {
   workspace: { mode: 'project' | 'studio'; dir: string };
   active: string;
-  agents: Array<{ id: string; label: string; available: boolean; path: string | null }>;
+  agents: Array<{
+    id: string;
+    label: string;
+    available: boolean;
+    path: string | null;
+    models: string[];
+    efforts: string[];
+  }>;
   state: AgentState;
   model: string | null;
   sessionId: string | null;
@@ -137,6 +171,9 @@ export interface ChatState {
   status: AgentStatus | null;
   draft: string;
   error: StudioError | null;
+  options: AgentOptions;
+  usage: AgentUsage;
+  setOptions(patch: Partial<AgentOptions>): void;
   loadStatus(): Promise<void>;
   setDraft(draft: string): void;
   send(text?: string): Promise<void>;
@@ -167,6 +204,17 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         return;
       }
       if (event.kind === 'init') set({ model: str(event.model) || null });
+      if (event.kind === 'result') {
+        const usage = get().usage;
+        set({
+          usage: {
+            contextTokens: num(event.contextTokens) ?? usage.contextTokens,
+            contextWindow: num(event.contextWindow) ?? usage.contextWindow,
+            costUsd: usage.costUsd + (num(event.costUsd) ?? 0),
+            costBasis: str(event.costBasis) || usage.costBasis,
+          },
+        });
+      }
       set({ items: applyAgentEvent(get().items, event) });
     };
 
@@ -179,6 +227,13 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       status: null,
       draft: '',
       error: null,
+      options: readJson<AgentOptions>(OPTIONS_KEY, { model: null, effort: null }, isOptions),
+      usage: EMPTY_USAGE,
+      setOptions(patch) {
+        const options = { ...get().options, ...patch };
+        set({ options });
+        writeJson(OPTIONS_KEY, options);
+      },
       async loadStatus() {
         attach();
         try {
@@ -200,7 +255,12 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           agentState: 'starting',
         });
         try {
-          await client.call('agent.prompt', { text: message });
+          const { model, effort } = get().options;
+          await client.call('agent.prompt', {
+            text: message,
+            ...(model ? { model } : {}),
+            ...(effort ? { effort: effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } : {}),
+          });
         } catch (reason) {
           set({ agentState: 'idle', draft: message });
           fail(reason);
@@ -223,7 +283,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       async reset() {
         try {
           await client.call('agent.reset', {});
-          set({ items: [], model: null, error: null });
+          set({ items: [], model: null, error: null, usage: EMPTY_USAGE });
         } catch (reason) {
           fail(reason);
         }

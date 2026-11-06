@@ -29,6 +29,11 @@ export const CLAUDE_BASE_ARGS = Object.freeze([
   'stdio',
 ]);
 
+/** Model aliases the CLI resolves to the current model of each family (`claude --help`). */
+export const CLAUDE_MODELS = Object.freeze(['fable', 'opus', 'sonnet', 'haiku']);
+/** Values of `--effort` accepted by the CLI (`claude --help`). */
+export const CLAUDE_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
+
 const MAX_TEXT = 16_000;
 const MAX_FIELD = 8_000;
 const STDERR_TAIL = 4_096;
@@ -69,6 +74,24 @@ function textOf(content) {
 }
 
 /**
+ * Context occupancy after a turn: tokens of the last assistant message (input, cache and output) against the
+ * window `modelUsage` reports for the session model. `costBasis: 'list'` means the cost is the API list price
+ * of the tokens, not a charge: with a subscription login the user pays the plan, not per token.
+ */
+function contextOf(message, state) {
+  const models = message.modelUsage && typeof message.modelUsage === 'object' ? message.modelUsage : {};
+  const entry =
+    (state.model && models[state.model]) || (Object.keys(models).length === 1 ? Object.values(models)[0] : null);
+  const contextWindow =
+    typeof entry?.contextWindow === 'number' && entry.contextWindow > 0 ? entry.contextWindow : null;
+  return {
+    contextTokens: typeof state.contextTokens === 'number' ? state.contextTokens : null,
+    contextWindow,
+    costBasis: typeof entry?.costBasis === 'string' ? entry.costBasis : null,
+  };
+}
+
+/**
  * Maps one stdout message of the CLI to provider-independent `agent.event` payloads. Pure: `state` carries
  * what has to be remembered between messages (the streamed message ids).
  * @param {any} message
@@ -81,7 +104,8 @@ export function translateClaudeMessage(message, state) {
   if (message.parent_tool_use_id) return [];
   switch (message.type) {
     case 'system':
-      if (message.subtype === 'init')
+      if (message.subtype === 'init') {
+        state.model = message.model ?? null;
         return [
           {
             kind: 'init',
@@ -91,6 +115,7 @@ export function translateClaudeMessage(message, state) {
             tools: Array.isArray(message.tools) ? message.tools.length : null,
           },
         ];
+      }
       if (message.subtype === 'api_retry')
         return [{ kind: 'notice', text: `El proveedor no responde; reintento ${message.attempt ?? '?'}…` }];
       if (message.subtype === 'api_error')
@@ -107,6 +132,13 @@ export function translateClaudeMessage(message, state) {
     }
     case 'assistant': {
       const id = message.message?.id ?? 'message';
+      const usage = message.message?.usage;
+      if (usage && typeof usage === 'object')
+        state.contextTokens =
+          (usage.input_tokens ?? 0) +
+          (usage.cache_creation_input_tokens ?? 0) +
+          (usage.cache_read_input_tokens ?? 0) +
+          (usage.output_tokens ?? 0);
       const content = Array.isArray(message.message?.content) ? message.message.content : [];
       const events = [];
       content.forEach((block, index) => {
@@ -145,6 +177,7 @@ export function translateClaudeMessage(message, state) {
           costUsd: typeof message.total_cost_usd === 'number' ? message.total_cost_usd : null,
           durationMs: typeof message.duration_ms === 'number' ? message.duration_ms : null,
           numTurns: typeof message.num_turns === 'number' ? message.num_turns : null,
+          ...contextOf(message, state),
         },
       ];
       if (message.is_error && AUTH_HINT.test(text))
@@ -223,6 +256,8 @@ export function createClaudeDriver({
   let state = 'idle'; // idle | starting | ready | busy
   let session = { model: null, sessionId: null };
   let translation = { messageId: null, streamed: new Set() };
+  // Model and effort the running process was started with; changing either restarts it with --resume.
+  let running = { model: null, effort: null };
   let stderr = '';
   let interrupts = 0;
   const pending = new Map();
@@ -263,9 +298,23 @@ export function createClaudeDriver({
       emit(event);
     }
     if (message.type === 'result') {
-      translation = { messageId: null, streamed: new Set() };
+      translation = {
+        messageId: null,
+        streamed: new Set(),
+        model: translation.model,
+        contextTokens: translation.contextTokens,
+      };
       setState('ready');
     }
+  };
+
+  /** Stops the current process without ending the conversation (the next start resumes it). */
+  const stop = () => {
+    const proc = child;
+    child = null;
+    pending.clear();
+    proc?.stdin?.end();
+    proc?.kill();
   };
 
   async function start(options) {
@@ -280,6 +329,9 @@ export function createClaudeDriver({
     }
     const args = [...location.prefix, ...CLAUDE_BASE_ARGS];
     if (options.model) args.push('--model', options.model);
+    if (options.effort) args.push('--effort', options.effort);
+    if (session.sessionId) args.push('--resume', session.sessionId);
+    running = { model: options.model ?? null, effort: options.effort ?? null };
     stderr = '';
     const proc = spawnImpl(location.file, args, { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     child = proc;
@@ -338,6 +390,7 @@ export function createClaudeDriver({
       state,
       model: session.model,
       sessionId: session.sessionId,
+      options: { ...running },
       pendingPermissions: [...pending.keys()],
     }),
 
@@ -347,6 +400,11 @@ export function createClaudeDriver({
         throw new StudioError('AGENT_BUSY', 'Claude todavía está trabajando; espera o detén el turno.');
       if (state === 'starting')
         throw new StudioError('AGENT_BUSY', 'Claude Code está arrancando.', { retryable: true });
+      if (options.effort && !CLAUDE_EFFORTS.includes(options.effort))
+        throw new StudioError('INVALID_EFFORT', `Nivel de esfuerzo desconocido: ${options.effort}.`);
+      const wanted = { model: options.model ?? null, effort: options.effort ?? null };
+      // The CLI fixes model and effort at launch: a change restarts it on the same session.
+      if (child && (wanted.model !== running.model || wanted.effort !== running.effort)) stop();
       if (!child) await start(options);
       write({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } });
       setState('busy');
@@ -387,13 +445,9 @@ export function createClaudeDriver({
 
     /** Ends the conversation; the next prompt starts a new CLI process and a new session. */
     reset() {
-      const proc = child;
-      child = null;
-      pending.clear();
+      stop();
       session = { model: null, sessionId: null };
       translation = { messageId: null, streamed: new Set() };
-      proc?.stdin?.end();
-      proc?.kill();
       setState('idle');
       return { reset: true };
     },

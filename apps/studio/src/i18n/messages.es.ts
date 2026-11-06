@@ -193,6 +193,7 @@ export const messages = {
   },
   shell: {
     stageTabs: 'Vistas',
+    moreViews: 'Más vistas',
     tabs: {
       chat: 'Chat',
       kanban: 'Kanban',
@@ -283,6 +284,20 @@ export const messages = {
     loginHint: 'Abre una terminal, ejecuta claude y usa /login. Después vuelve a enviar tu mensaje.',
     openTerminal: 'Abrir terminal',
     model: (name: string) => `Modelo: ${name}`,
+    code: 'código',
+    modelLabel: 'Modelo',
+    effortLabel: 'Esfuerzo de razonamiento',
+    defaultOption: 'Predeterminado',
+    models: { fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' } as Record<string, string>,
+    efforts: { low: 'Bajo', medium: 'Medio', high: 'Alto', xhigh: 'Muy alto', max: 'Máximo' } as Record<string, string>,
+    effortPill: (level: string) => `Esfuerzo: ${level}`,
+    contextLabel: 'Contexto usado',
+    contextOf: (used: string, total: string) => `${used} de ${total} tokens`,
+    listCost: (cost: string) => `≈ US$ ${cost} a precio de lista (con tu suscripción no se cobra por token)`,
+    apiCost: (cost: string) => `US$ ${cost}`,
+    appliesNext: 'Se aplica desde tu próximo mensaje; la conversación continúa.',
+    copy: 'Copiar',
+    copied: 'Copiado',
   },
   files: {
     tree: 'Archivos del proyecto',

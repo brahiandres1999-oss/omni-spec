@@ -14,6 +14,7 @@ export interface EngineRequestParams {
   readonly 'agent.prompt': {
     readonly text: string;
     readonly model?: string;
+    readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   };
   readonly 'agent.reset': Record<string, never>;
   readonly 'agent.status': Record<string, never>;

@@ -1,5 +1,6 @@
 /**
- * Central stage (SH-01, SH-07): the five view tabs (Ctrl+1…Ctrl+5, persisted) and the floating dock.
+ * Central stage (SH-01, SH-07): Chat and Diffs on the tab bar, the other views under "Más vistas" (all on
+ * Ctrl+1…Ctrl+6, persisted), and the floating dock outside the chat.
  * Only the active view is mounted; its data stays in the stores, so switching back is instant.
  */
 import { useStore } from 'zustand';
@@ -10,11 +11,13 @@ import {
   Gauge,
   Icon,
   KanbanSquare,
+  LayoutGrid,
   MessageSquare,
   Network,
   PanelRight,
   Sparkles,
 } from '@/components/ui/icon';
+import { OptionMenu } from '@/components/ui/option-menu';
 import { ProtectedState } from '@/components/ui/ProtectedState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorState, SkeletonBar } from '@/components/ui/view-state';
@@ -54,6 +57,10 @@ const ICONS = {
   skills: Sparkles,
 } as const;
 
+/** Views always on the tab bar; the others live in "Más vistas" and show as a tab while open. */
+const PRIMARY_TABS: readonly StageTab[] = ['chat', 'diffs'];
+const SECONDARY_TABS = STAGE_TABS.filter(value => !PRIMARY_TABS.includes(value));
+
 function ActiveView({ tab }: { tab: StageTab }) {
   const { snapshot } = useStudio();
   const spec = useStore(snapshot, state => state.data?.activeSpec?.id ?? '');
@@ -84,13 +91,22 @@ export function Stage() {
       <Tabs value={tab} onValueChange={value => layout.getState().setStageTab(value as StageTab)} className="contents">
         <div className="flex h-11 items-center gap-2 border-b border-divider px-3">
           <TabsList aria-label={messages.shell.stageTabs}>
-            {STAGE_TABS.map(value => (
+            {STAGE_TABS.filter(value => PRIMARY_TABS.includes(value) || value === tab).map(value => (
               <TabsTrigger key={value} value={value} className="ps-2.5 pe-3.5">
                 <Icon icon={ICONS[value]} />
                 {messages.shell.tabs[value]}
               </TabsTrigger>
             ))}
           </TabsList>
+          <OptionMenu
+            label={messages.shell.moreViews}
+            value={SECONDARY_TABS.includes(tab) ? tab : ''}
+            options={SECONDARY_TABS.map(value => ({ value, label: messages.shell.tabs[value] }))}
+            icon={LayoutGrid}
+            display={messages.shell.moreViews}
+            side="bottom"
+            onChange={value => layout.getState().setStageTab(value as StageTab)}
+          />
           <span className="flex-1" />
           <InspectorToggle />
         </div>

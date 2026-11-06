@@ -2,6 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { AppShell } from '@/shell/AppShell';
+import { diffLines } from '@/components/ui/line-diff';
 import { applyAgentEvent, type ChatItem } from '@/stores/chat';
 import { FakeTransport } from '@/test/fake-transport';
 import { installLayoutStub, scriptStudio, stubCanvas, stubWorker } from '@/test/fixtures';
@@ -114,5 +115,71 @@ describe('CH chat view', () => {
     });
     expect(screen.getByRole('alert')).toHaveTextContent('/login');
     expect(screen.getByRole('button', { name: 'Abrir terminal' })).toBeInTheDocument();
+  });
+
+  test('CH-06 answers render as Markdown with highlighted, copyable code and tables', async () => {
+    const fake = chatTransport();
+    renderWithStudio(<ChatView />, { transport: fake });
+    await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
+    act(() => {
+      fake.emit('agent.event', {
+        kind: 'text',
+        key: 'm:0',
+        delta: [
+          '## Plan',
+          '',
+          '- **uno**',
+          '',
+          '| a | b |',
+          '|---|---|',
+          '| 1 | 2 |',
+          '',
+          '```ts',
+          'const a = 1;',
+          '```',
+          '',
+        ].join('\n'),
+      });
+    });
+    expect(screen.getByRole('heading', { name: 'Plan' })).toBeInTheDocument();
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copiar' })).toBeInTheDocument();
+    expect(document.querySelector('.hljs-keyword')?.textContent).toBe('const');
+  });
+
+  test('CH-07 the chosen model and effort travel with the prompt; the meter shows context use', async () => {
+    globalThis.localStorage?.setItem('omni-studio:chat.options', JSON.stringify({ model: 'opus', effort: 'high' }));
+    const user = userEvent.setup();
+    const fake = chatTransport();
+    renderWithStudio(<ChatView />, { transport: fake });
+    await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
+    expect(screen.getByRole('button', { name: 'Modelo: Opus' })).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox'), 'hola{Enter}');
+    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'hola', model: 'opus', effort: 'high' }));
+    act(() => {
+      fake.emit('agent.event', {
+        kind: 'result',
+        isError: false,
+        durationMs: 900,
+        costUsd: 0.01,
+        contextTokens: 250_000,
+        contextWindow: 1_000_000,
+        costBasis: 'list',
+      });
+    });
+    expect(screen.getByRole('meter', { name: 'Contexto usado' })).toHaveAttribute('aria-valuenow', '25');
+  });
+});
+
+describe('CH line diff', () => {
+  test('CH-08 edits diff by line, keeping unchanged lines between changes', () => {
+    expect(diffLines(['a', 'b', 'c'].join('\n'), ['a', 'B', 'c', 'd'].join('\n'))).toEqual([
+      { kind: 'same', text: 'a' },
+      { kind: 'del', text: 'b' },
+      { kind: 'add', text: 'B' },
+      { kind: 'same', text: 'c' },
+      { kind: 'add', text: 'd' },
+    ]);
+    expect(diffLines('', 'x')).toEqual([{ kind: 'add', text: 'x' }]);
   });
 });

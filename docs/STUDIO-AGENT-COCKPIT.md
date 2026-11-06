@@ -64,6 +64,41 @@ mismos tipos y la UI no cambia.
 3. Una edición o comando pide aprobación; Rechazar evita el cambio y Aprobar lo aplica.
 4. Sin sesión de Claude Code, la UI explica cómo iniciarla y no se cae.
 
+## Fase 2.5: pulido del chat
+
+- Respuestas en Markdown (GFM) con código resaltado por highlight.js y botón de copiar; sin HTML crudo.
+- Modelo y esfuerzo en el compositor. Solo valores que la CLI acepta: alias `fable`, `opus`, `sonnet`,
+  `haiku` (`--model`) y `low`…`max` (`--effort`). Cambiarlos reinicia la CLI con `--resume` sobre la misma
+  sesión, así la conversación continúa. La elección se recuerda por usuario.
+- Medidor de contexto: tokens del último mensaje (entrada, caché y salida) contra `modelUsage[modelo].contextWindow`.
+  El costo es una estimación a precio de lista cuando `costBasis` es `list` (con suscripción no se cobra por token).
+- Ediciones como diff de líneas; Kanban, Cartografía, FinOps y Skills pasan a «Más vistas».
+- Un agente solo aparece en el selector cuando su driver existe (hoy, Claude Code).
+
+## Pendientes (revisión del 2026-11-06 con capturas reales)
+
+Método: una vuelta por tema, guiada por capturas del usuario; cada vuelta termina probada en la app y con commit.
+
+**P0 · Confusiones y posibles errores**
+1. La cabecera muestra el modelo en ejecución (`claude-opus-5-5`) y el selector el elegido (Haiku), sin explicar que
+   el cambio se aplica desde el próximo mensaje. Mostrar «Opus ahora → Haiku desde tu próximo mensaje».
+2. El medidor de contexto no apareció tras un turno. Primero comprobar con la app reiniciada del todo
+   (`tauri dev` recarga la UI pero no el motor Node); si sigue sin verse, es un error.
+
+**P1 · Menos marco, más foco**
+3. Fusionar la barra de pestañas (Chat · Diffs · Más vistas) y la cabecera del chat en una sola fila.
+4. Panel izquierdo: conversaciones (historial) con «Nueva conversación» como acción principal; la lista de specs
+   y «Nueva Spec» pasan a secundarias.
+5. Inspector derecho cerrado por defecto; se abre solo cuando el agente ejecuta comandos, o muestra los archivos
+   cambiados del turno.
+6. Hacer visible el gasto: el primer turno con Opus costó ≈ US$ 0,28 a precio de lista por cargar el contexto.
+
+**P2 · Capacidades de cockpit**
+7. Retomar conversaciones anteriores (sesiones de Claude Code con `--resume`).
+8. Mencionar archivos con `@` y pegar imágenes.
+9. Comandos con `/`, incluidos los `/omni-*`.
+10. Panel «Cambios del turno»: archivos tocados con su diff y aprobar todo de una vez.
+
 ## Fuera de este prototipo
 
 Inyección de Omni en la sesión (MCP y reglas, fase 3), drivers de Codex y ACP (fases 4 y 6), layout

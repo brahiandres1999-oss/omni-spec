@@ -98,12 +98,15 @@ describe('SH three-column shell', () => {
 
   test('SH-07 stage tabs switch with Ctrl+1…Ctrl+6 and the active tab persists', async () => {
     const { fake, user, view } = await mountShell();
-    expect(
+    const visibleTabs = () =>
       within(stageTabs())
         .getAllByRole('tab')
-        .map(tab => tab.textContent?.trim()),
-    ).toEqual(STAGE_TABS);
+        .map(tab => tab.textContent?.trim());
+    // Chat and Diffs stay on the bar; a view from "Más vistas" shows as a tab while it is open.
+    expect(visibleTabs()).toEqual(['Chat', 'Kanban', 'Diffs']);
     expect(selectedStageTab()).toBe('Kanban');
+    expect(screen.getByRole('button', { name: /Más vistas/ })).toBeInTheDocument();
+    expect(STAGE_TABS).toHaveLength(6);
 
     for (const [key, name] of [
       ['3', 'Cartografía'],
