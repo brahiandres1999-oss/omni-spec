@@ -34,6 +34,7 @@
     "pack:dev": "node scripts/pack-dev.mjs",
     "build:skills": "node scripts/build-plugin-skills.mjs",
     "build:studio-schema": "node scripts/build-studio-schema.mjs",
+    "build:studio-vectors": "node scripts/build-studio-vectors.mjs",
     "sync:plugin": "node scripts/sync-plugin.mjs"
   },
   "files": [

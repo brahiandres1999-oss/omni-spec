@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-window-set-caption-layout"
+description = "Enables the window_set_caption_layout command without any pre-configured scope."
+commands.allow = ["window_set_caption_layout"]
+
+[[permission]]
+identifier = "deny-window-set-caption-layout"
+description = "Denies the window_set_caption_layout command without any pre-configured scope."
+commands.deny = ["window_set_caption_layout"]

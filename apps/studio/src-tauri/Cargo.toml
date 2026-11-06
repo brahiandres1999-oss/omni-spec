@@ -1,0 +1,65 @@
+[package]
+name = "omni-studio"
+version = "0.8.1"
+description = "Omni Studio: Windows 11 desktop host for the OmniSpec engine"
+authors = ["OmniSpec Authors"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+# The `_lib`-style unique name avoids the bin/lib name clash on Windows (cargo#8519).
+name = "omni_studio"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.5", features = ["tray-icon", "image-ico", "image-png"] }
+tauri-plugin-notification = "=2.8.0"
+tauri-plugin-single-instance = "=2.5.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros", "process"] }
+uuid = { version = "1", features = ["v4"] }
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+getrandom = "0.3"
+notify = "=8.2.1"
+ignore = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Dwm",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Console",
+  "Win32_System_IO",
+  "Win32_System_JobObjects",
+  "Win32_System_Pipes",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["test-util", "rt-multi-thread", "macros", "time"] }
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

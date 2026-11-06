@@ -1,0 +1,80 @@
+{
+  "protocolVersion": 1,
+  "maxFrameBytes": 8388608,
+  "frames": [
+    {
+      "name": "request",
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"project.snapshot\",\"params\":{}}",
+      "frameHex": "400000007b226a736f6e727063223a22322e30222c226964223a312c226d6574686f64223a2270726f6a6563742e736e617073686f74222c22706172616d73223a7b7d7d"
+    },
+    {
+      "name": "notification",
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"fs.changed\",\"params\":{\"paths\":[\"src/a.ts\",\"specs/manifest.json\"]}}",
+      "frameHex": "5d0000007b226a736f6e727063223a22322e30222c226d6574686f64223a2266732e6368616e676564222c22706172616d73223a7b227061746873223a5b227372632f612e7473222c2273706563732f6d616e69666573742e6a736f6e225d7d7d"
+    },
+    {
+      "name": "result-multibyte",
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"title\":\"Revisión ñ ✓ 漢字 🚀\",\"lanes\":[]}}",
+      "frameHex": "550000007b226a736f6e727063223a22322e30222c226964223a322c22726573756c74223a7b227469746c65223a22526576697369c3b36e20c3b120e29c9320e6bca2e5ad9720f09f9a80222c226c616e6573223a5b5d7d7d"
+    },
+    {
+      "name": "error",
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":3,\"error\":{\"code\":-32000,\"message\":\"Spec not found\",\"data\":{\"code\":\"SPEC_NOT_FOUND\"}}}",
+      "frameHex": "6c0000007b226a736f6e727063223a22322e30222c226964223a332c226572726f72223a7b22636f6465223a2d33323030302c226d657373616765223a2253706563206e6f7420666f756e64222c2264617461223a7b22636f6465223a22535045435f4e4f545f464f554e44227d7d7d"
+    },
+    {
+      "name": "escapes",
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":\"str-id\",\"result\":{\"text\":\"line\\nbreak \\\"quoted\\\" \\\\ back\\u0001\"}}",
+      "frameHex": "580000007b226a736f6e727063223a22322e30222c226964223a227374722d6964222c22726573756c74223a7b2274657874223a226c696e655c6e627265616b205c2271756f7465645c22205c5c206261636b5c7530303031227d7d"
+    }
+  ],
+  "rejects": [
+    {
+      "name": "empty-frame",
+      "code": "EMPTY_FRAME",
+      "chunkHex": "00000000"
+    },
+    {
+      "name": "oversized-header",
+      "code": "FRAME_TOO_LARGE",
+      "chunkHex": "01008000"
+    },
+    {
+      "name": "over-custom-limit",
+      "code": "FRAME_TOO_LARGE",
+      "chunkHex": "110000002020202020202020202020202020202020",
+      "maxFrameBytes": 16
+    },
+    {
+      "name": "invalid-utf8",
+      "code": "INVALID_UTF8",
+      "chunkHex": "0300000022c322"
+    }
+  ],
+  "handshake": [
+    {
+      "secret": "4f6d6e6953706563537475646f2d746573742d7365637265742d3235362d6269",
+      "role": "engine",
+      "nonce": "0000000000000000000000000000000000000000000000000000000000000000",
+      "proof": "6586516b08861b6cfb0556f9e6ec617fcf41ec60fb123ecd377b9f0a42a7b7b8"
+    },
+    {
+      "secret": "4f6d6e6953706563537475646f2d746573742d7365637265742d3235362d6269",
+      "role": "host",
+      "nonce": "0000000000000000000000000000000000000000000000000000000000000000",
+      "proof": "04ba03037af1d0f2cb6403fd069ca269ac496d2b4addaae3e8f1558aa881b97c"
+    },
+    {
+      "secret": "4f6d6e6953706563537475646f2d746573742d7365637265742d3235362d6269",
+      "role": "engine",
+      "nonce": "e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff00",
+      "proof": "a23bd34a06902c16bfacd2d9b6701fb449d91484d525c11424e292603820414c"
+    },
+    {
+      "secret": "4f6d6e6953706563537475646f2d746573742d7365637265742d3235362d6269",
+      "role": "host",
+      "nonce": "e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff00",
+      "proof": "3ea6ddaf0081d3b4a26e06ad9bd02f63625a6cf1931ac7fef5ae609f5542bb61"
+    }
+  ]
+}

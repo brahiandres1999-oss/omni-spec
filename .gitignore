@@ -35,3 +35,7 @@ coverage/
 
 # Local maintainer/session report; public status belongs in release documentation
 /docs/LOCAL-CANDIDATE-STATUS.md
+
+# Local agent & tooling state
+.claude/
+skills-lock.json

@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Main window: Omni Studio's own commands plus the core window controls of the custom title bar. No fs, shell or http plugin permissions (SEC-01).",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-is-maximized",
+    "notification:default",
+    "allow-engine-call",
+    "allow-engine-stderr",
+    "allow-project-open",
+    "allow-recent-list",
+    "allow-pty-open",
+    "allow-pty-write",
+    "allow-pty-resize",
+    "allow-pty-close",
+    "allow-window-set-caption-layout",
+    "allow-fs-rescan"
+  ]
+}

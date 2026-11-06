@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fs-rescan"
+description = "Enables the fs_rescan command without any pre-configured scope."
+commands.allow = ["fs_rescan"]
+
+[[permission]]
+identifier = "deny-fs-rescan"
+description = "Denies the fs_rescan command without any pre-configured scope."
+commands.deny = ["fs_rescan"]

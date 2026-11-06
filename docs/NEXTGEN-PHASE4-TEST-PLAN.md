@@ -895,3 +895,49 @@ Correcciones de tests escritos en rojo (fixtures, no expectativas):
 - El arnés de EN esperaba `studio.hello` y no la apertura real de la sesión, y no esperaba el cierre de los motores en proceso antes de borrar la carpeta: en Windows no se puede borrar `memory.db` mientras está abierto.
 
 Observación ajena a la fase: LX-10 (rendimiento de `js-lexer`, Fase 2, límite de 50 ms) superó el límite una vez con la suite completa (95 ms). Aislado mide 39–43 ms. Es un suelo con poco margen que depende de la carga de la máquina.
+
+### 16.5 Fase verde — Paso 2: host Rust (2026-11-06)
+
+| Bloque | Tests | Estado |
+| :-- | --: | :-- |
+| JB (`src/win32/job.rs`, `src/win32/spawn.rs`) | 7 | verde |
+| PP (`src/protocol.rs`, `src/pipe.rs`) | 10 | verde |
+| EG (`src/engine.rs`) | 8 | verde |
+| CP (`src/pty.rs`) | 11 | verde |
+| FW (`src/watcher.rs`) | 8 | verde |
+| WN (`src/window.rs`) | 4 | 3 verdes; WN-04 queda `#[ignore]` como evidencia manual |
+| TR (`src/tray.rs`) | 5 | verde |
+| SEC (`src/security.rs`, `capabilities/`, `tauri.conf.json`) | 6 | verde |
+| RP (`src/recent.rs`) | 3 | verde |
+| **Total del paso** | **62** | **61 verdes + 1 manual** |
+
+`cargo fmt --check` y `cargo clippy --all-targets -- -D warnings` limpios; `biome ci .` limpio.
+
+Decisiones de implementación:
+1. **Spawn con una sola lista de atributos.** `spawn_in_job` pasa `PROC_THREAD_ATTRIBUTE_JOB_LIST` y, según el caso, `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` o `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`: el hijo solo hereda sus propias tuberías, nunca las de otro proceso lanzado en paralelo. Los procesos sin ConPTY se crean con `CREATE_NO_WINDOW`; las shells ConPTY reciben `STARTF_USESTDHANDLES` con handles inválidos para no heredar el stdio redirigido del host.
+2. **Pipe.** `tokio` `ServerOptions` con `create_with_security_attributes_raw` y una DACL de un único ACE (`FILE_ALL_ACCESS`) para el SID del token. `ERROR_ACCESS_DENIED` o `ERROR_PIPE_BUSY` al crear se informan como `PIPE_SQUATTED`, sin reintento. El handshake verifica además que `result.pid` coincide con el cliente y que el nonce del motor es hex de 256 bits. Las respuestas tardías tras un `ENGINE_TIMEOUT` se descartan.
+3. **Supervisor.** Cada motor tiene su propio Job Object, pipe y secreto. Un hilo por proceso espera su salida (no `spawn_blocking`, para no bloquear el cierre del runtime). Cierre: se cancelan las peticiones en vuelo, se desconecta el pipe y se cierra `stdin`; si no sale en 1 s, se cierra el job (EG-06).
+4. **Debounce del watcher.** El periodo de calma se reinicia cuando el lote **crece**; volver a tocar una ruta que ya está pendiente no lo pospone. Con la regla de "cualquier evento reinicia la calma" más la espera máxima de 1 s solo caben 4 lotes en los 5 s de FW-02 (1,0 / 2,01 / 3,02 / 4,03 s), y el test exige 5. El límite de 1 s sigue protegiendo frente a rutas nuevas continuas.
+5. **Exclusiones del watcher:** `specs/.omni/**`, `node_modules` a cualquier profundidad, `target/` en la raíz y `.git/**` salvo `HEAD` e `index`; después, `.gitignore` y `.git/info/exclude` de la raíz (se recargan si cambia `.gitignore`). La raíz perdida se detecta comprobando su existencia cada 100 ms.
+6. **ConPTY.** Lector, espera de salida y agrupación en hilos propios con colas acotadas (8 trozos de 16 KiB y 4 eventos de ≤ 64 KiB). Al cerrar, el agrupador descarta en vez de bloquear, el lector sigue drenando y, si la shell no sale en 800 ms tras `ClosePseudoConsole`, se termina.
+7. **Versión del SO** (WN-02) leída de `HKLM\…\Windows NT\CurrentVersion\CurrentBuildNumber`, que no está sujeta a la "mentira" de versión de `GetVersionExW` sin manifiesto.
+8. **Iconos de bandeja** generados con `apps/studio/scripts/build-tray-icons.mjs` (`npm run gen:tray-icons`): 4 estados y 3 fotogramas del pulso, ICO de 16, 20, 24, 32 y 48 px.
+9. **Cableado Tauri** (`src/commands.rs`, `src/lib.rs`): comandos propios con permisos `allow-*` autogenerados por `build.rs` (`AppManifest`), CSP estricta, ventana sin decoraciones creada en `setup` (`create: false`) para que el puerto CDP solo exista en *debug* y con `OMNI_STUDIO_CDP_PORT`, `single-instance`, `notification`, bandeja con "Abrir" y "Salir" y cierre a bandeja. Tauri no admite `.` en nombres de evento, así que los eventos usan `:` (`project:changed`, `finops:tick`, `pty:output`, `pty:exit`, `watcher:error`); el transporte Tauri del frontend hará la traducción.
+
+API añadida respecto a la tabla de §10:
+- `StudioError`: `EmptyFrame`, `InvalidUtf8`, `DecoderFailed` (mismos códigos que el decodificador Node), `InvalidMessage`, `EngineMissing`, `EngineMismatch`, `EngineExited`, `EngineRestarting`, `EngineDisconnected`, `Engine { code, message, error }` (error de dominio del motor, reenviado tal cual), `TerminalClosed` e `Io`. `code()` devuelve `&str` para que los códigos de dominio del motor pasen sin traducir; `to_rpc_error()` produce `{ code, message, data: { code, detail, retryable } }`.
+- `SpawnSpec` gana `stdout`, `stderr` y `StdioMode`; `ChildProcess` gana `take_stdin/stdout/stderr`.
+- `PipeConnection::{call, notify, notifications, abort_pending, close}`; `Supervisor::{notify, subscribe, root}`; `EngineConfig { call_timeout, handshake_timeout, exit_grace }`.
+- `pty::DEFAULT_SHELLS`, `OutputBatcher::flush`; `watcher::{QUIET_PERIOD, MAX_WAIT}`; `security::simplify`.
+
+Cambios fuera del crate:
+- `apps/studio/protocol-vectors.json` no existía: lo genera `scripts/build-studio-vectors.mjs` (`npm run build:studio-vectors`) con `encodeFrame`, `createFrameDecoder` y `handshakeProof`. Incluye 5 *frames* (uno con UTF-8 multibyte), 4 rechazos (`EMPTY_FRAME`, `FRAME_TOO_LARGE` ×2, `INVALID_UTF8`) y 4 pruebas HMAC.
+
+Correcciones de tests escritos en rojo (fixtures, no expectativas):
+- `tests/support::strip_vt` borraba el posicionamiento de cursor sin cortar la línea. Conhost salta las líneas en blanco con `CSI fila;col H` en lugar de `\r\n`, así que la salida de `cd` quedaba pegada al siguiente *prompt* y CP-03 y CP-10 no la encontraban. Ahora CUP equivale a un salto de línea.
+- `clippy::collapsible_if` en `ProcessHandle::drop` de `tests/support` (el código nunca había compilado en rojo).
+
+Pendiente para pasos posteriores:
+- **Snap Layouts:** `hit_test` y el comando `window_set_caption_layout` existen, pero falta subclasificar la ventana (`SetWindowSubclass` sobre `WM_NCHITTEST`). Con WebView2 la ventana hija recibe el *hit-test* del área cliente, así que hay que validarlo a mano con el frontend real (WN-04).
+- **Estado de la bandeja y toasts:** `tray_state` y `ToastPolicy` no están conectados a los datos del motor; la bandeja muestra Emerald fijo.
+- **Empaquetado del núcleo** como recurso (`bundle.resources`, D-4): en *debug* el host usa `bin/omni-spec.mjs` del repositorio u `OMNI_STUDIO_ENGINE_ENTRY`.

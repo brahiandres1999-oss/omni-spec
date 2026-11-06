@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-recent-list"
+description = "Enables the recent_list command without any pre-configured scope."
+commands.allow = ["recent_list"]
+
+[[permission]]
+identifier = "deny-recent-list"
+description = "Denies the recent_list command without any pre-configured scope."
+commands.deny = ["recent_list"]
