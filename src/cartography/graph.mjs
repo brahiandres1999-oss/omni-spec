@@ -634,8 +634,11 @@ export function barrelRoutes(memory, barrel) {
     }));
 }
 
-/** Strongly connected components with more than one module (Tarjan, iterative). */
-export function findCycles(memory) {
+/**
+ * Strongly connected components with more than one module (Tarjan, iterative).
+ * @param {{limit?: number}} [options] How many components to return as samples.
+ */
+export function findCycles(memory, { limit = 10 } = {}) {
   const adjacency = new Map();
   for (const { source_module: source, target_module: target } of memory.db
     .prepare(`SELECT DISTINCT source_module, target_module FROM module_dependencies
@@ -689,7 +692,7 @@ export function findCycles(memory) {
     }
   }
   components.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  return { count: components.length, samples: components.slice(0, 10) };
+  return { count: components.length, samples: components.slice(0, limit) };
 }
 
 /** Aggregate figures for `omni-spec cartography`. */

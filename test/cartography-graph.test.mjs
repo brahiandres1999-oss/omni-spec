@@ -87,8 +87,8 @@ function seed(memory, list) {
 describe('GR-SCH schema v3', () => {
   test('GR-SCH-01 new databases get module_dependencies and its indexes', () => {
     const memory = open();
-    assert.equal(MEMORY_SCHEMA_VERSION, 3);
-    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, 3);
+    assert.ok(MEMORY_SCHEMA_VERSION >= 3);
+    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, MEMORY_SCHEMA_VERSION);
     assert.deepEqual(columns(memory, 'module_dependencies'), [
       'source_module',
       'target_module',
@@ -123,7 +123,7 @@ describe('GR-SCH schema v3', () => {
     legacy.exec(V2_SCHEMA);
     legacy.close();
     const memory = open();
-    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, 3);
+    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, MEMORY_SCHEMA_VERSION);
     assert.equal(
       memory.db.prepare('SELECT basis FROM decisions WHERE id = ?').get('d1').basis,
       'Survives the v3 migration intact.',
@@ -147,16 +147,19 @@ describe('GR-SCH schema v3', () => {
       });
     await Promise.all([run(), run(), run()]);
     const memory = open();
-    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, 3);
+    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, MEMORY_SCHEMA_VERSION);
     assert.equal(memory.db.prepare('SELECT count(*) AS n FROM decisions').get().n, 1);
   });
 
   test('GR-SCH-05 newer schema versions are refused', () => {
     repo.write('specs/.omni/.keep', '');
     const future = new DatabaseSync(dbPath());
-    future.exec('PRAGMA user_version = 4');
+    future.exec(`PRAGMA user_version = ${MEMORY_SCHEMA_VERSION + 1}`);
     future.close();
-    assert.throws(() => openMemory(dbPath()), /Unsupported memory schema version 4/);
+    assert.throws(
+      () => openMemory(dbPath()),
+      new RegExp(`Unsupported memory schema version ${MEMORY_SCHEMA_VERSION + 1}`),
+    );
   });
 
   test('GR-SCH-06 deleting a module cascades to its outgoing edges', () => {

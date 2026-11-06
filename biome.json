@@ -16,7 +16,14 @@
       "package.json",
       "plugin.json",
       "plugin.extra.json",
-      "schema/**/*.json"
+      "schema/**/*.json",
+      "apps/studio/src/**/*.ts",
+      "apps/studio/src/**/*.tsx",
+      "apps/studio/e2e/**/*.ts",
+      "apps/studio/tests/**/*.ts",
+      "apps/studio/vite.config.ts",
+      "apps/studio/scripts/**/*.mjs",
+      "!schema/studio-ipc.schema.json"
     ]
   },
   "formatter": {

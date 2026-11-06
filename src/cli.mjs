@@ -33,6 +33,7 @@ import { approveGate, gateStatus } from './gates.mjs';
 import { migrateTasks } from './tasks.mjs';
 import { inspectStaged, installHooks, uninstallHooks } from './guardian.mjs';
 import { createAuthStore, createPassthrough, PASSTHROUGH_PROVIDERS } from './auth.mjs';
+import { studioEngineCommand } from './studio/engine.mjs';
 
 const mutating = new Set([
   'create',
@@ -249,6 +250,9 @@ omni-spec <command> [arguments] [options]
                                  Impact of changing files before editing; path#sym1,sym2 limits symbols
   help | version
 
+Internal commands (started by Omni Studio, not for direct use):
+  studio-engine --pipe <name>   Omni Studio engine on a named pipe; the secret is read from stdin
+
 init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-components
   --lang en|es sets the installation language; one workflow for every experience level.
   --plain disables terminal UI; pipes, TERM=dumb, CI and JSON retain plain output.
@@ -277,6 +281,12 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       return 0;
     }
     const command = aliases[raw] || raw;
+    // Exit codes 2/3/70 belong to the Studio supervisor contract, so the command parses its own arguments.
+    if (command === 'studio-engine')
+      return await studioEngineCommand(args.slice(1), {
+        root: await findProjectRoot(workingDir),
+        version: await getCliVersion(),
+      });
     const { flags, positionals } = parse(args.slice(1));
     json = Boolean(flags.json);
     if (flags.dryRun && !['update', 'clean'].includes(command))

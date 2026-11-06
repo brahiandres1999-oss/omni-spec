@@ -61,6 +61,29 @@
       },
       "additionalProperties": false
     },
+    "studio": {
+      "type": "object",
+      "description": "Omni Studio preferences shared through Git.",
+      "properties": {
+        "contextBudgetTokens": {
+          "type": "integer",
+          "minimum": 1000,
+          "description": "Context window budget the Skill Hub compares active skill weight against (default 200000)."
+        },
+        "skills": {
+          "type": "object",
+          "properties": {
+            "disabled": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Skills disabled in the Skill Hub."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "active_spec": {
       "type": ["string", "null"],
       "description": "Slug of the currently focused specification, or null when none is active."
@@ -105,6 +128,12 @@
           "branch": {
             "type": "string",
             "description": "Assigned Git branch for the specification work."
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Optional person responsible for the specification (Omni Studio board filter)."
           }
         },
         "additionalProperties": true

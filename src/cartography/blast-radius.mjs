@@ -138,7 +138,11 @@ function readJson(root, path) {
 }
 
 /** D-2: a contract covers F when its evidence cites F or a directory containing F. */
-function contractLevels(root, warnings) {
+/**
+ * ContractLevel(F) lookup from specs/contracts.json (D-2); unreadable registries add CONTRACTS_UNREADABLE.
+ * @returns {(file: string) => number}
+ */
+export function contractLevels(root, warnings) {
   const read = readJson(root, 'specs/contracts.json');
   if (read.missing) return () => 0;
   if (read.error || !Array.isArray(read.value?.contracts)) {

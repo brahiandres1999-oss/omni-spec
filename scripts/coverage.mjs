@@ -24,6 +24,8 @@ const result = spawnSync(
     '--test-reporter=lcov',
     '--test-reporter-destination=stdout',
     `--test-reporter-destination=${lcovPath}`,
+    // Same scope as `npm test`: apps/studio has its own runners (Vitest, cargo, Playwright).
+    'test/**/*.test.mjs',
   ],
   { cwd: root, stdio: 'inherit', windowsHide: true },
 );

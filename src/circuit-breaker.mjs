@@ -332,6 +332,9 @@ export function openBreakerStore(memory, options = {}) {
   };
   const save = breaker =>
     upsert.run(breaker.taskId, breaker.state, JSON.stringify(breaker), new Date(breaker.now()).toISOString());
+  const insertEvent = db.prepare(
+    'INSERT INTO token_usage_events (task_id, tokens, source, provider, recorded_at_ms) VALUES (?, ?, ?, ?, ?)',
+  );
   return {
     load,
     save,
@@ -341,25 +344,33 @@ export function openBreakerStore(memory, options = {}) {
      * @param {string} taskId
      * @param {(breaker: AutonomousCircuitBreaker) => T} action
      * @param {Partial<typeof BREAKER_DEFAULTS>} [config] Limits used only when the task is new.
+     * @param {{source?: string, provider?: string}} [meta] Labels of the token usage events this update records.
      * @returns {T}
      */
-    update(taskId, action, config = {}) {
+    update(taskId, action, config = {}, meta = {}) {
       db.exec('BEGIN IMMEDIATE');
       let breaker;
       try {
         breaker = load(taskId, config);
         const before = JSON.stringify(breaker);
+        const tokensBefore = breaker.consumedTokens;
+        // Tokens consumed by this update become one FinOps event, committed with the snapshot or not at all.
+        const persist = () => {
+          save(breaker);
+          const tokens = breaker.consumedTokens - tokensBefore;
+          if (tokens > 0)
+            insertEvent.run(breaker.taskId, tokens, meta.source ?? null, meta.provider ?? null, breaker.now());
+          db.exec('COMMIT');
+        };
         let result;
         try {
           result = action(breaker);
         } catch (error) {
           if (!(error instanceof CircuitBreakerError) || JSON.stringify(breaker) === before) throw error;
-          save(breaker);
-          db.exec('COMMIT');
+          persist();
           throw error;
         }
-        save(breaker);
-        db.exec('COMMIT');
+        persist();
         return result;
       } catch (error) {
         if (db.isTransaction) db.exec('ROLLBACK');

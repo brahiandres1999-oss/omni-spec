@@ -1,0 +1,487 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omnispec.dev/schema/studio-ipc.schema.json",
+  "title": "Omni Studio IPC",
+  "description": "Generated from STUDIO_METHODS in src/studio/protocol.mjs. Frames: uint32 little-endian byte length + UTF-8 JSON-RPC 2.0.",
+  "type": "object",
+  "properties": {
+    "protocolVersion": {
+      "const": 1
+    },
+    "maxFrameBytes": {
+      "const": 8388608
+    }
+  },
+  "methods": {
+    "blastRadius.heat": {
+      "direction": "host->engine",
+      "description": "Blast radius of one target, per impacted node (heatmap).",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "minLength": 1
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "board.get": {
+      "direction": "host->engine",
+      "description": "Specification board: lanes for one ceremony route, unrouted specs and counts.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "enum": [
+              "light",
+              "standard",
+              "full"
+            ]
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "risk": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "owner": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "cartography.graph": {
+      "direction": "host->engine",
+      "description": "Module graph projection with compact integer ids.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "diff.get": {
+      "direction": "host->engine",
+      "description": "Working tree diff (tracked and untracked); paged by file above maxBytes.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "maxBytes": {
+            "type": "integer",
+            "minimum": 1024
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "diff.getFile": {
+      "direction": "host->engine",
+      "description": "Diff of one file.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "files.tree": {
+      "direction": "host->engine",
+      "description": "Project file tree with Git status.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "under": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "finops.snapshot": {
+      "direction": "host->engine",
+      "description": "Token usage, rate and circuit breaker budgets.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "finops.tick": {
+      "direction": "engine->host",
+      "description": "Live FinOps update pushed by the engine.",
+      "paramsSchema": {
+        "type": "object"
+      },
+      "notification": true
+    },
+    "fs.changed": {
+      "direction": "host->engine",
+      "description": "Debounced batch of changed paths.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "notification": true
+    },
+    "fs.rescan": {
+      "direction": "host->engine",
+      "description": "The OS watcher overflowed: refresh everything.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "notification": true
+    },
+    "gate.approve": {
+      "direction": "host->engine",
+      "description": "Approve human gate 1 or 2 when its governance conditions hold.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Spec id or slug; defaults to the active spec."
+          },
+          "gate": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "gate"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "project.changed": {
+      "direction": "engine->host",
+      "description": "Areas whose data changed since the last request.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "areas": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "board",
+                "graph",
+                "diff",
+                "files",
+                "finops",
+                "skills"
+              ]
+            }
+          }
+        },
+        "required": [
+          "areas"
+        ],
+        "additionalProperties": false
+      },
+      "notification": true
+    },
+    "project.snapshot": {
+      "direction": "host->engine",
+      "description": "Whole shell state for the first paint.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "review.addRemark": {
+      "direction": "host->engine",
+      "description": "Store an inline correction for the next agent turn.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Spec id or slug; defaults to the active spec."
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "side": {
+            "enum": [
+              "old",
+              "new"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "line",
+          "side",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "review.decideHunk": {
+      "direction": "host->engine",
+      "description": "Approve or reject one hunk.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Spec id or slug; defaults to the active spec."
+          },
+          "hunkId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decision": {
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "hunkId",
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "review.stageApproved": {
+      "direction": "host->engine",
+      "description": "Stage exactly the approved hunks.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Spec id or slug; defaults to the active spec."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "skills.list": {
+      "direction": "host->engine",
+      "description": "Installed and project skills with estimated weight.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "skills.toggle": {
+      "direction": "host->engine",
+      "description": "Enable or disable one skill.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "enabled"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "studio.challenge": {
+      "direction": "host->engine",
+      "description": "Handshake step 1: the host challenges the engine.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer"
+          },
+          "nonce": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "nonce"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer"
+          },
+          "proof": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "nonce": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "versions": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "proof",
+          "nonce",
+          "pid",
+          "versions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "studio.hello": {
+      "direction": "host->engine",
+      "description": "Handshake step 3: the host proves it knows the secret.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "proof": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "proof"
+        ],
+        "additionalProperties": false
+      },
+      "notification": true
+    }
+  }
+}

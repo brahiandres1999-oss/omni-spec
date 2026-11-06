@@ -33,6 +33,7 @@ import {
   writeFileAtomicSync,
 } from '../src/memory.mjs';
 import { SPECS_GITIGNORE } from '../src/assets.mjs';
+import { V3_SCHEMA } from '../test-support/memory-legacy-schemas.mjs';
 
 const WORKER = fileURLToPath(new URL('../test-support/memory-worker.mjs', import.meta.url));
 const UUIDV7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -698,5 +699,94 @@ describe('G. Self-healing, EARS acceptance and decision recording', () => {
     assert.ok(!readdirSync(join(root, 'specs', 'decisions')).some(name => name.includes('.tmp.')));
     const report = await syncFromGit(memory, root);
     assert.deepEqual({ updated: report.updated, hydrated: report.hydrated }, { updated: 0, hydrated: 0 });
+  });
+});
+
+describe('H. Schema v4 (Phase 4 Studio: token events, review decisions, review remarks)', () => {
+  const columns = (memory, table) =>
+    memory.db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .map(row => row.name);
+
+  function legacyV3() {
+    mkdirSync(join(workDir, 'specs', '.omni'), { recursive: true });
+    const legacy = new DatabaseSync(dbFile());
+    legacy.exec(V3_SCHEMA);
+    legacy.exec(`INSERT INTO decisions VALUES ('d1', 'keep-me', 'approved', 'Survives the v4 migration intact.', '[]', '2026-01-01', NULL, 'specs/decisions/x.json');
+      INSERT INTO observations VALUES ('o1', NULL, 'pattern', 'src', 'kept observation', NULL, '2026-01-01');
+      INSERT INTO memory_fts (source_type, source_id, content) VALUES ('observation', 'o1', 'src kept observation');
+      INSERT INTO modules_graph (module_path, last_analyzed_at, language, has_opaque_deps) VALUES ('src/a.ts', '2026-01-01', 'typescript', 0);`);
+    legacy.close();
+  }
+
+  test('MEM-01 new databases are v4 with token_usage_events, review_decisions and review-remark observations', () => {
+    const memory = track(openMemory(dbFile()));
+    assert.equal(MEMORY_SCHEMA_VERSION, 4);
+    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.deepEqual(columns(memory, 'token_usage_events'), [
+      'id',
+      'task_id',
+      'tokens',
+      'source',
+      'provider',
+      'recorded_at_ms',
+    ]);
+    const indexes = memory.db
+      .prepare('PRAGMA index_list(token_usage_events)')
+      .all()
+      .map(row => row.name);
+    assert.ok(indexes.includes('idx_token_events_task_time'), indexes.join());
+    assert.deepEqual(columns(memory, 'review_decisions'), ['spec_id', 'hunk_id', 'decision', 'actor', 'decided_at']);
+    const pk = memory.db
+      .prepare('PRAGMA table_info(review_decisions)')
+      .all()
+      .filter(row => row.pk > 0)
+      .sort((a, b) => a.pk - b.pk)
+      .map(row => row.name);
+    assert.deepEqual(pk, ['spec_id', 'hunk_id']);
+    const [id] = memory.addObservations([
+      { category: 'review-remark', scope: 'src/a.ts', summary: 'Extract a helper' },
+    ]);
+    assert.ok(id);
+    assert.throws(() => memory.addObservations([{ category: 'rumour', scope: 's', summary: 'x' }]), /CHECK/);
+  });
+
+  test('MEM-02 a v3 database migrates to v4 inside BEGIN IMMEDIATE and keeps its data', () => {
+    legacyV3();
+    const memory = track(openMemory(dbFile()));
+    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(memory.db.prepare('SELECT basis FROM decisions').get().basis, 'Survives the v4 migration intact.');
+    assert.equal(
+      memory.db.prepare('SELECT summary FROM observations WHERE id = ?').get('o1').summary,
+      'kept observation',
+    );
+    assert.equal(memory.db.prepare('SELECT language FROM modules_graph').get().language, 'typescript');
+    assert.equal(memory.searchContext('kept').length, 1, 'FTS rows still join the rebuilt observations table');
+    memory.addObservations([{ category: 'review-remark', scope: 'src/a.ts', summary: 'after migration' }]);
+  });
+
+  test('MEM-03 concurrent openers migrate a v3 database exactly once', async () => {
+    legacyV3();
+    const script = `import(${JSON.stringify(new URL('../src/memory.mjs', import.meta.url).href)}).then(m => m.openMemory(process.argv[1]).close())`;
+    const run = () =>
+      new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, ['-e', script, dbFile()], { stdio: ['ignore', 'ignore', 'pipe'] });
+        let stderr = '';
+        child.stderr.on('data', chunk => (stderr += chunk));
+        child.on('exit', code => (code === 0 ? resolve() : reject(new Error(stderr))));
+      });
+    await Promise.all([run(), run(), run()]);
+    const memory = track(openMemory(dbFile()));
+    assert.equal(memory.db.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(memory.db.prepare('SELECT count(*) AS n FROM observations').get().n, 1);
+  });
+
+  test('MEM-04 version 5 is refused', () => {
+    mkdirSync(join(workDir, 'specs', '.omni'), { recursive: true });
+    const future = new DatabaseSync(dbFile());
+    future.exec('PRAGMA user_version = 5');
+    future.close();
+    assert.throws(() => openMemory(dbFile()), /Unsupported memory schema version 5/);
   });
 });

@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
 
-export const MEMORY_SCHEMA_VERSION = 3;
+export const MEMORY_SCHEMA_VERSION = 4;
 
 const SQLITE_IOERR = 10;
 const SQLITE_CANTOPEN = 14;
@@ -122,7 +122,47 @@ CREATE TABLE cartography_state (
   value TEXT NOT NULL
 );
 `;
-const MIGRATIONS = new Map([[2, MIGRATION_V3]]);
+/**
+ * Version 4 (Phase 4 Omni Studio): append-only token usage events for the FinOps view, per-hunk
+ * review decisions, and observations that accept inline review remarks. SQLite cannot alter a
+ * CHECK constraint, so observations is rebuilt; nothing references it by foreign key and the FTS
+ * rows join it by id, which the copy preserves.
+ */
+const MIGRATION_V4 = `
+CREATE TABLE token_usage_events (
+  id INTEGER PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  tokens INTEGER NOT NULL CHECK(tokens >= 0),
+  source TEXT,
+  provider TEXT,
+  recorded_at_ms INTEGER NOT NULL
+);
+CREATE INDEX idx_token_events_task_time ON token_usage_events(task_id, recorded_at_ms);
+CREATE TABLE review_decisions (
+  spec_id TEXT NOT NULL,
+  hunk_id TEXT NOT NULL,
+  decision TEXT NOT NULL CHECK(decision IN ('approve', 'reject')),
+  actor TEXT NOT NULL,
+  decided_at TEXT NOT NULL,
+  PRIMARY KEY (spec_id, hunk_id)
+);
+CREATE TABLE observations_v4 (
+  id TEXT PRIMARY KEY,
+  session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+  category TEXT NOT NULL CHECK(category IN ('pattern', 'gotcha', 'convention', 'constraint', 'review-remark')),
+  scope TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  evidence TEXT,
+  created_at TEXT NOT NULL
+);
+INSERT INTO observations_v4 SELECT id, session_id, category, scope, summary, evidence, created_at FROM observations;
+DROP TABLE observations;
+ALTER TABLE observations_v4 RENAME TO observations;
+`;
+const MIGRATIONS = new Map([
+  [2, MIGRATION_V3],
+  [3, MIGRATION_V4],
+]);
 
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 const CLEAN_STATUS_HASH = sha256('');

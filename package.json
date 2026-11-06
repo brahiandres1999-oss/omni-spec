@@ -21,7 +21,7 @@
     "omni-spec": "bin/omni-spec.mjs"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 --import ./test-support/isolated-home.mjs",
+    "test": "node --test --test-concurrency=1 --import ./test-support/isolated-home.mjs \"test/**/*.test.mjs\"",
     "test:coverage": "node scripts/coverage.mjs",
     "bench:cartography": "node scripts/bench-cartography.mjs",
     "lint": "biome ci .",
@@ -33,6 +33,7 @@
     "release:pack": "node scripts/release-assets.mjs",
     "pack:dev": "node scripts/pack-dev.mjs",
     "build:skills": "node scripts/build-plugin-skills.mjs",
+    "build:studio-schema": "node scripts/build-studio-schema.mjs",
     "sync:plugin": "node scripts/sync-plugin.mjs"
   },
   "files": [
