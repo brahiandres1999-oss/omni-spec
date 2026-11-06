@@ -19,6 +19,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import {
+  MEMORY_SCHEMA_VERSION,
   decisionFileName,
   memoryPath,
   openMemory,
@@ -149,7 +150,7 @@ describe('A. Multiprocess concurrency (BEGIN IMMEDIATE + busy_timeout)', () => {
     assert.equal(pragma('busy_timeout'), 5000);
     assert.equal(pragma('foreign_keys'), 1);
     assert.equal(pragma('temp_store'), 2);
-    assert.equal(pragma('user_version'), 2);
+    assert.equal(pragma('user_version'), MEMORY_SCHEMA_VERSION);
   });
 
   test('BEGIN DEFERRED promotion fails at once despite busy_timeout while write() locks before its first statement', () => {

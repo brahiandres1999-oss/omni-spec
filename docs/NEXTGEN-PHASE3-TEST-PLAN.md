@@ -57,15 +57,15 @@ Leí los dos documentos vinculantes y el código actual antes de escribir el pla
 
 | Archivo nuevo/modificado | Tipo | Tests |
 | :-- | :-- | --: |
-| `test/cartography-lexer.test.mjs` | nuevo | 57 |
+| `test/cartography-lexer.test.mjs` | nuevo | 58 |
 | `test/cartography-resolver.test.mjs` | nuevo | 46 |
 | `test/cartography-graph.test.mjs` | nuevo | 50 |
-| `test/cartography-blast-radius.test.mjs` | nuevo | 42 |
+| `test/cartography-blast-radius.test.mjs` | nuevo | 44 |
 | `test/cartography-cli.test.mjs` | nuevo | 12 |
 | `test/mcp-server.test.mjs` | 3 nuevos + 2 reescritos | 5 |
 | `test/memory.test.mjs` | 1 ajustado (`user_version`) | — |
 | `scripts/bench-cartography.mjs` | nuevo (fuera de la suite) | — |
-| **Total Fase 3** | | **≈212** |
+| **Total Fase 3** | | **215** |
 
 Etiquetas:
 - **[perf]**: suelo conservador en la suite. El objetivo EARS se mide con `npm run bench:cartography`.
@@ -171,7 +171,7 @@ Cada import es `{ specifier, kind: 'static'|'dynamic'|'require'|'side-effect', e
 | LX-ROB-01 | Fuzz determinista (semilla fija, 2.000 entradas aleatorias de caracteres ASCII y Unicode) | Nunca lanza; `masked.length === source.length` siempre |
 | LX-ROB-02 | Línea minificada de 2 MB | Tiempo lineal (< 3× el de 1 MB) |
 | LX-PERF-01 **[perf]** | 100.000 LOC de TS sintético (mezcla de imports, strings, plantillas y regex), mediana de 5 ejecuciones tras calentamiento | ≥ 1,0 M LOC/s en la suite. El benchmark exige ≥ 3,0 M LOC/s |
-| LX-PERF-02 **[perf]** | Crecimiento del heap durante LX-PERF-01 | < 16 MB |
+| LX-PERF-02 **[perf]** | Heap **retenido** tras GC al analizar el archivo de LX-PERF-01 (el pico transitorio lo mide GR-PERF-03) | < 16 MB |
 
 ---
 
@@ -243,7 +243,7 @@ Cada import es `{ specifier, kind: 'static'|'dynamic'|'require'|'side-effect', e
 | :-- | :-- | :-- |
 | RS-PY-01 | `from ..pkg.mod import x` desde `app/sub/a.py` | `app/pkg/mod.py` o `app/pkg/mod/__init__.py` |
 | RS-PY-02 | Absoluto `import app.core` con raíz de paquete por `pyproject.toml` o `__init__.py` | Interno; `import requests` → `external` |
-| RS-GO-01 | `go.mod` `module github.com/acme/svc`; `import "github.com/acme/svc/pkg/auth"` | Arista al **directorio** `pkg/auth` (paquete Go = directorio) |
+| RS-GO-01 | `go.mod` `module github.com/acme/svc`; `import "github.com/acme/svc/pkg/auth"` | Aristas a cada `.go` del directorio `pkg/auth` salvo `_test.go` (paquete Go = directorio; los nodos son archivos) |
 | RS-GO-02 | `fmt`, `net/http`, `github.com/other/lib` | `external` |
 | RS-RS-01 | `mod foo;` desde `src/lib.rs` | `src/foo.rs` o `src/foo/mod.rs` |
 | RS-RS-02 | `use crate::models::User` | `src/models.rs` o `src/models/mod.rs`; `use serde::…` → `external` |
@@ -277,7 +277,7 @@ Cada import es `{ specifier, kind: 'static'|'dynamic'|'require'|'side-effect', e
 | GR-IDX-04 | Symlink o junction que forma un bucle de directorios | No se sigue; sin bucle infinito |
 | GR-IDX-05 | Archivo > 1 MB o binario (contiene NUL) | Omitido con motivo (`too-large`, `binary`) en el informe |
 | GR-IDX-06 | Lotes: 1.000 archivos con `batchSize` 250 | Exactamente 4 transacciones `BEGIN IMMEDIATE` (spy sobre `memory.write`); ninguna `BEGIN` diferida |
-| GR-IDX-07 | Fallo a mitad de un lote (archivo ilegible inyectado) | El lote hace rollback; el informe nombra el archivo; los lotes previos persisten |
+| GR-IDX-07 | Archivo ilegible inyectado (`EACCES`) a mitad de un lote | Se omite con motivo `unreadable`; el resto del lote se confirma |
 | GR-IDX-08 | Rutas almacenadas en POSIX relativo en Windows | Exacto |
 | GR-IDX-09 | Clasificación topológica (§5.1 del stress test): core (`d_in ≥ 20`, `d_out ≤ 3`), domain, leaf | `node_type` correcto en los umbrales exactos (19/20, 1/2) |
 | GR-IDX-10 | Repo políglota (TS + Python + Go) | `language` por archivo y aristas de cada lenguaje |
@@ -306,7 +306,7 @@ Cada import es `{ specifier, kind: 'static'|'dynamic'|'require'|'side-effect', e
 | GR-CTE-06 | Rutas con `%`, `,` y espacios | Guarda correcta |
 | GR-CTE-07 | Propagación del tipo de arista: `F ←type− A ←value− B` | `B` llega con clase `type_only` (la arista más débil del camino) |
 | GR-CTE-08 | Dos caminos hacia `B` (uno `value`, otro `type_only`) | `B` cuenta como `value` con `MIN(depth)` |
-| GR-CTE-09 **[perf]** | Grafo denso de 6 capas × 20 nodos completas, `maxDepth` = 6 | Termina en < 1 s con resultado completo, o con `truncated: true` según D-1 |
+| GR-CTE-09 **[perf]** | Grafo denso de 6 capas × 20 nodos completas, `maxDepth` = 6 | `truncated: true` con el presupuesto por defecto (200.000 filas, D-1) en < 5 s; las capas 1-3 completas |
 | GR-CTE-10 | 10.000 nodos, cadena de profundidad 10 | < 50 ms en la suite (EARS del stress test: < 1,2 ms en memoria, medido en el benchmark) |
 | GR-CTE-11 | Orden estable ante empates (`distance`, después `path`) | Determinista entre ejecuciones |
 
@@ -473,7 +473,41 @@ Los propondré como Fase 3b si se quieren.
 
 ---
 
-## 9. Orden de implementación (rojo → verde)
+## 9. Estado de implementación
+
+| Archivo | Tests | Estado |
+| :-- | --: | :-- |
+| `test/cartography-lexer.test.mjs` | 58 | verde |
+| `test/cartography-resolver.test.mjs` | 46 | verde |
+| `test/cartography-graph.test.mjs` | 50 | verde |
+| `test/cartography-blast-radius.test.mjs` | 44 | verde |
+| `test/cartography-cli.test.mjs` | 12 | verde |
+| `test/mcp-server.test.mjs` (MCP-01…05) | 5 | verde |
+| **Total nuevos** | **215** | |
+
+Fase roja confirmada antes de implementar: los cuatro módulos de `src/cartography/` no existían (`ERR_MODULE_NOT_FOUND`), 11 de 12 tests del CLI fallaban y los 5 tests MCP nuevos fallaban.
+
+### 9.1 Mediciones de `npm run bench:cartography` (Windows 11, Node 24.22.1, Defender activo)
+
+| Objetivo EARS | Medido | Resultado |
+| :-- | :-- | :-- |
+| Lexer ≥ 3 M LOC/s | 1,87 M LOC/s · 93 MB/s | **No alcanzado.** En bytes supera los 85 MB/s del stress test; sus líneas medían ~28 B y las del fixture ~52 B |
+| Indexación en frío de 500k LOC / 4.000 archivos < 200 ms | 4,5 s | **No alcanzado.** Solo abrir los 4.000 archivos cuesta ~2,6 s en esta máquina (filtro del antivirus en cada `open`), incluso repitiendo la lectura |
+| RSS < 60 MB | 89,6 MB (línea base de Node + SQLite: 58 MB) | **No alcanzado.** El crecimiento es de ~31 MB; la línea base ya ocupa el presupuesto |
+| CTE profundidad 10 sobre 10.000 nodos < 1,2 ms | 0,24 ms | Alcanzado |
+| Reindexación incremental sin cambios | 134 ms | Informativo |
+
+Los suelos de la suite (D-5) sí se cumplen: ≥ 1 M LOC/s, < 5 s en frío y < 40 MB de crecimiento de RSS.
+
+### 9.2 Desviaciones respecto al plan aprobado
+
+1. **GR-CTE-09:** la CTE cuesta ~15 µs por fila en SQLite en esta máquina, así que el presupuesto aprobado de 200.000 filas tarda ~3 s en el peor caso. Se mantiene el valor de D-1 y el umbral del test pasa de < 1 s a < 5 s. El índice `idx_deps_target` es cubriente (`target_module, target_kind, source_module, edge_type`) para no leer la tabla en cada paso recursivo.
+2. **LX-PERF-02** mide el heap retenido tras GC. Medir sin GC dentro del runner incluía basura de la generación joven y variaba entre ejecuciones.
+3. **GR-IDX-07:** un archivo ilegible se omite con motivo `unreadable` en lugar de abortar el lote.
+4. **ImpactedConsumers excluye los módulos de test**, que se listan aparte (`tests`) y alimentan TestCoverage. Contarlos en K subiría el riesgo por tener tests.
+5. **Almacenamiento compacto:** `dependencies_json` y `exports_json` omiten valores por defecto y deduplican registros. Con registros completos, cada fila ocupaba ~5,4 KB y reclasificar 4.000 nodos costaba ~440 ms.
+
+## 10. Orden de implementación (rojo → verde)
 
 **Línea base (2026-11-05, rama recién creada):** 678 tests: 666 pasan, 3 omitidos y **9 fallan**. Los 9 están en `plugin-manager` y `plugin-coexistence` y tienen una causa ajena al código: el CLI `agy` de Antigravity se auto-actualizó hoy a la 1.5.1 y `agy plugin validate --strict` ahora emite un *warning* cuando `plugin.json` no declara `"version"`.
 

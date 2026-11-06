@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { decisionFileName, memoryPath, openMemory, uuidv7 } from '../src/memory.mjs';
+import { decisionFileName, memoryPath, uuidv7 } from '../src/memory.mjs';
 import { SPECS_GITIGNORE } from '../src/assets.mjs';
 
 const CLI = fileURLToPath(new URL('../bin/omni-spec.mjs', import.meta.url));
@@ -202,34 +202,76 @@ describe('omni-spec mcp (JSON-RPC over stdio)', () => {
     assert.deepEqual(active, { activeSpec: spec, acceptance });
   });
 
-  test('omni_check_blast_radius reports an uninitialized cartography explicitly', async () => {
+  const BLAST_FILES = {
+    'src/utils.ts': 'export const slugify = s => s;\nexport const formatDate = d => d;',
+    'src/a.ts': "import { slugify } from './utils';\nexport const a = 1;",
+    'src/b.ts': "import { formatDate } from './utils';",
+    'src/c.ts': "import { a } from './a';",
+  };
+  const writeSources = () => {
+    for (const [path, content] of Object.entries(BLAST_FILES)) {
+      mkdirSync(join(root, ...path.split('/').slice(0, -1)), { recursive: true });
+      writeFileSync(join(root, ...path.split('/')), content);
+    }
+  };
+
+  test('MCP-01 omni_check_blast_radius returns the engine report, identical to the CLI', async () => {
     createProject();
+    writeSources();
     const server = startServer();
-    const result = await server.call('omni_check_blast_radius', { files: ['src/memory.mjs'] });
-    assert.equal(result.isError, true);
-    assert.match(result.content[0].text, /Cartography index is empty/);
+    const report = payload(await server.call('omni_check_blast_radius', { files: ['src/utils.ts'] }));
+    const cli = JSON.parse(
+      execFileSync(process.execPath, [CLI, 'blast-radius', 'src/utils.ts', '--json'], { cwd: root, encoding: 'utf8' }),
+    );
+    assert.deepEqual(report, cli);
+    assert.equal(report.schemaVersion, 1);
   });
 
-  test('omni_check_blast_radius returns direct dependents from modules_graph', async () => {
+  test('MCP-02 path#symbols narrows the changed symbols', async () => {
     createProject();
-    const memory = openMemory(memoryPath(root));
-    const insert = memory.db.prepare(
-      'INSERT INTO modules_graph (module_path, dependencies_json, last_analyzed_at) VALUES (?, ?, ?)',
-    );
-    memory.write(() => {
-      insert.run('src/memory.mjs', '[]', 'now');
-      insert.run('src/mcp-server.mjs', '["src/memory.mjs","src/manifest.mjs"]', 'now');
-      insert.run('src/cli.mjs', '["src/mcp-server.mjs","src/memory.mjs"]', 'now');
-    });
-    memory.close();
+    writeSources();
     const server = startServer();
-    const report = payload(await server.call('omni_check_blast_radius', { files: ['src/memory.mjs', 'docs/x.md'] }));
-    assert.deepEqual(report, {
-      files: [
-        { file: 'src/memory.mjs', indexed: true, dependents: ['src/cli.mjs', 'src/mcp-server.mjs'] },
-        { file: 'docs/x.md', indexed: false, dependents: [] },
+    const report = payload(await server.call('omni_check_blast_radius', { files: ['src/utils.ts#slugify'] }));
+    assert.deepEqual(report.files[0].symbols, ['slugify']);
+    assert.deepEqual(
+      report.files[0].impactedConsumers.map(item => item.path),
+      ['src/a.ts', 'src/c.ts'],
+    );
+  });
+
+  test('MCP-03 an empty cartography index is built on demand', async () => {
+    createProject();
+    writeSources();
+    const server = startServer();
+    const result = await server.call('omni_check_blast_radius', { files: ['src/utils.ts'] });
+    assert.equal(result.isError, false);
+    assert.equal(payload(result).files[0].indexed, true);
+  });
+
+  test('MCP-04 consumers, level and score come from real imports', async () => {
+    createProject();
+    writeSources();
+    const server = startServer();
+    const report = payload(await server.call('omni_check_blast_radius', { files: ['src/utils.ts', 'docs/x.md'] }));
+    assert.deepEqual(
+      report.files[0].impactedConsumers.map(item => [item.path, item.distance]),
+      [
+        ['src/a.ts', 1],
+        ['src/b.ts', 1],
+        ['src/c.ts', 2],
       ],
-    });
+    );
+    assert.equal(typeof report.files[0].score, 'number');
+    assert.ok(['low', 'medium', 'high'].includes(report.files[0].level));
+    assert.deepEqual([report.files[1].indexed, report.files[1].score], [false, 0]);
+  });
+
+  test('MCP-05 paths outside the project are refused', async () => {
+    createProject();
+    const server = startServer();
+    const result = await server.call('omni_check_blast_radius', { files: ['../outside.ts'] });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /PATH_OUTSIDE_ROOT/);
   });
 
   test('stdin EOF truncates the WAL, closes the memory and exits 0', async () => {

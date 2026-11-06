@@ -26,6 +26,9 @@ import { fileURLToPath } from 'node:url';
 import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
 import { installationProgress } from './terminal-ui.mjs';
 import { runMcpServer } from './mcp-server.mjs';
+import { memoryPath, openMemory } from './memory.mjs';
+import { indexRepository, summarizeGraph } from './cartography/graph.mjs';
+import { checkBlastRadius, normalizeTargets } from './cartography/blast-radius.mjs';
 import { approveGate, gateStatus } from './gates.mjs';
 import { migrateTasks } from './tasks.mjs';
 import { inspectStaged, installHooks, uninstallHooks } from './guardian.mjs';
@@ -47,6 +50,8 @@ const mutating = new Set([
   'mcp',
   'approve',
   'tasks',
+  'cartography',
+  'blast-radius',
 ]);
 const aliases = {
   switch: 'focus',
@@ -81,6 +86,8 @@ const valueFlags = new Set([
   'gate',
   'actor',
   'provider',
+  'depth',
+  'fail-on',
 ]);
 const booleanFlags = new Set([
   'yes',
@@ -237,6 +244,9 @@ omni-spec <command> [arguments] [options]
   guardian <install|uninstall|check> [--replace]  Omni-Guardian pre-commit hook (conflicts, anti-slop)
   login --provider <claude|gh|gcloud>  Use an existing CLI session (delegated passthrough)
   auth status [--json]           Show stored and delegated credentials without secrets
+  cartography [--json]           Index the module graph (polyglot, incremental) into specs/.omni/memory.db
+  blast-radius <files...> [--json] [--depth 1..10] [--fail-on low|medium|high]
+                                 Impact of changing files before editing; path#sym1,sym2 limits symbols
   help | version
 
 init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-components
@@ -287,6 +297,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (flags.active && (command !== 'contracts' || positionals.length))
       throw new Error('--active is supported only by contracts without an ID.');
     if (flags.preset !== undefined && command !== 'fit') throw new Error('--preset is supported only by fit.');
+    if ((flags.depth !== undefined || flags['fail-on'] !== undefined) && command !== 'blast-radius')
+      throw new Error('--depth and --fail-on are supported only by blast-radius.');
     if (flags.preset !== undefined && !['light', 'standard', 'full'].includes(flags.preset.toLowerCase()))
       throw new Error('--preset must be light, standard or full.');
     if (flags.route !== undefined && !['create', 'fit'].includes(command))
@@ -312,6 +324,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         guardian: 1,
         auth: 1,
         tasks: 2,
+        'blast-radius': Number.POSITIVE_INFINITY,
       }[command] || 0;
     if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
     const emit = (value, human) =>
@@ -322,6 +335,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       throw new Error(
         `Already inside an OmniSpec project (root: ${root}). Run init from its root; nested projects are not initialized implicitly.`,
       );
+    // Paths given to blast-radius are relative to where the user ran the command, not the root.
+    const invocationDir = resolve(workingDir);
     if (command !== 'init' && root) workingDir = root;
     if (mutating.has(command) && !root) throw new Error('No OmniSpec project found. Run omni-spec init first.');
     switch (command) {
@@ -817,6 +832,79 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           `Store: ${report.store.path} (${report.store.status})\nSessions: ${report.store.providers.join(', ') || 'none'}\nAPI keys: ${report.store.apiKeys.join(', ') || 'none'}\n${report.passthrough.map(item => `${item.provider}: ${item.available ? item.version || 'available' : 'not installed'}`).join('\n')}`,
         );
         return 0;
+      }
+      case 'cartography': {
+        const memory = openMemory(memoryPath(workingDir));
+        try {
+          const index = indexRepository(workingDir, memory);
+          const summary = summarizeGraph(memory);
+          const report = {
+            schemaVersion: 1,
+            files: index.files,
+            nodes: summary.nodes,
+            edges: summary.edges,
+            languages: summary.languages,
+            nodeTypes: summary.nodeTypes,
+            core: summary.core,
+            cycles: summary.cycles,
+            incremental: index.incremental,
+            parsed: index.parsed,
+            unchanged: index.unchanged,
+            removed: index.removed,
+            skipped: index.skipped,
+            warnings: index.warnings.map(warning => `${warning.code}: ${warning.message}`),
+            timings: { durationMs: Math.round(index.durationMs) },
+          };
+          const languages = Object.entries(report.languages)
+            .map(([language, count]) => `${language}: ${count}`)
+            .join(', ');
+          const cycleText = `${report.cycles.count} cycle${report.cycles.count === 1 ? '' : 's'}`;
+          emit(
+            report,
+            [
+              `Cartography: ${report.files} files (${languages || 'no sources'}) · ${report.edges} edges · ${cycleText} · core: ${report.core.length} · ${report.timings.durationMs} ms`,
+              `Incremental: ${report.incremental ? 'yes' : 'no'} · parsed ${report.parsed} · unchanged ${report.unchanged} · removed ${report.removed}`,
+              ...report.cycles.samples.map(cycle => `[CYCLE] ${cycle.join(' <-> ')}`),
+              ...report.skipped.map(item => `[SKIPPED] ${item.path} (${item.reason})`),
+              ...report.warnings.map(warning => `[WARN] ${warning}`),
+            ].join('\n'),
+          );
+        } finally {
+          memory.close();
+        }
+        return 0;
+      }
+      case 'blast-radius': {
+        if (!positionals.length)
+          throw new Error('Usage: blast-radius <files...> [--json] [--depth 1..10] [--fail-on low|medium|high]');
+        const depth = flags.depth === undefined ? 3 : Number(flags.depth);
+        if (!Number.isInteger(depth) || depth < 1 || depth > 10)
+          throw new Error('--depth must be an integer from 1 to 10.');
+        const levels = ['low', 'medium', 'high'];
+        const failOn = flags['fail-on'];
+        if (failOn !== undefined && !levels.includes(failOn)) throw new Error('--fail-on must be low, medium or high.');
+        const targets = normalizeTargets(workingDir, invocationDir, positionals);
+        const memory = openMemory(memoryPath(workingDir));
+        let report;
+        try {
+          report = await checkBlastRadius(workingDir, memory, targets, { maxDepth: depth });
+        } finally {
+          memory.close();
+        }
+        const human = [
+          `Blast radius (depth ${report.maxDepth}): overall ${report.overall.level.toUpperCase()} ${report.overall.score} (${report.overall.gate})`,
+          ...report.files.flatMap(item => [
+            `${item.file}  ${item.level.toUpperCase()} ${item.score}  gate ${item.gate} · ${item.impactedConsumers.length} consumers${item.rootAnchor ? ' · ROOT_ANCHOR' : ''}${item.symbols ? ` · symbols ${item.symbols.join(', ')}` : ''}`,
+            ...item.impactedConsumers.map(
+              consumer => `  - ${consumer.path} (${consumer.distance}, ${consumer.edgeClass})`,
+            ),
+            ...item.tests.map(test => `  [TEST] ${test}`),
+            ...item.warnings.map(warning => `  [WARN] ${warning}`),
+          ]),
+          ...report.warnings.map(warning => `[WARN] ${warning}`),
+        ].join('\n');
+        emit(report, human);
+        return failOn !== undefined && levels.indexOf(report.overall.level) >= levels.indexOf(failOn) ? 2 : 0;
       }
       case 'mcp': {
         await runMcpServer({ root: workingDir, version: await getCliVersion() });

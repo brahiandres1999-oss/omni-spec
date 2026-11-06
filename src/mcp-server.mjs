@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { openProjectMemory, startCheckpointSupervisor, syncFromGit } from './memory.mjs';
 import { getActiveSpec } from './manifest.mjs';
+import { checkBlastRadius, normalizeTargets } from './cartography/blast-radius.mjs';
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -84,7 +85,8 @@ function toolHandlers(root, memory) {
       return { activeSpec, acceptance: activeSpec ? readAcceptance(root, activeSpec) : null };
     },
     async omni_check_blast_radius({ files }) {
-      return { files: memory.blastRadius(files) };
+      // Paths are project-relative (or absolute inside the project); `path#sym` limits symbols (D-4).
+      return checkBlastRadius(root, memory, normalizeTargets(root, root, files));
     },
     async omni_record_decision({ topic, basis, sources }) {
       return memory.recordDecision(root, { topic, basis, sources });

@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
 
-export const MEMORY_SCHEMA_VERSION = 2;
+export const MEMORY_SCHEMA_VERSION = 3;
 
 const SQLITE_IOERR = 10;
 const SQLITE_CANTOPEN = 14;
@@ -82,6 +82,47 @@ CREATE TABLE IF NOT EXISTS _git_sync_state (
   last_sync_mtime INTEGER NOT NULL
 );
 `;
+
+/**
+ * Version 3 (Phase 3 cartography): incremental-cache columns on modules_graph, the typed edge table,
+ * barrel routes that keep the original symbol and ambiguity, and resolver state. barrel_symbol_routes
+ * is recreated because version 2 never wrote it and its primary key cannot hold ambiguous routes.
+ */
+const MIGRATION_V3 = `
+ALTER TABLE modules_graph ADD COLUMN language TEXT;
+ALTER TABLE modules_graph ADD COLUMN node_type TEXT;
+ALTER TABLE modules_graph ADD COLUMN content_hash TEXT;
+ALTER TABLE modules_graph ADD COLUMN mtime_ms INTEGER;
+ALTER TABLE modules_graph ADD COLUMN size_bytes INTEGER;
+ALTER TABLE modules_graph ADD COLUMN has_opaque_deps INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE module_dependencies (
+  source_module TEXT NOT NULL REFERENCES modules_graph(module_path) ON DELETE CASCADE,
+  target_module TEXT NOT NULL,
+  edge_type TEXT NOT NULL CHECK(edge_type IN ('value', 'type_only', 'synthetic')),
+  target_kind TEXT NOT NULL CHECK(target_kind IN ('internal', 'external', 'unresolved')),
+  symbols_json TEXT NOT NULL,
+  PRIMARY KEY (source_module, target_module, edge_type)
+);
+-- Covering index: the recursive blast-radius step reads every column it needs from the index.
+CREATE INDEX idx_deps_target ON module_dependencies(target_module, target_kind, source_module, edge_type);
+CREATE INDEX idx_deps_source ON module_dependencies(source_module);
+DROP TABLE IF EXISTS barrel_symbol_routes;
+CREATE TABLE barrel_symbol_routes (
+  barrel_path TEXT NOT NULL REFERENCES modules_graph(module_path) ON DELETE CASCADE,
+  exported_symbol TEXT NOT NULL,
+  source_module TEXT NOT NULL,
+  source_symbol TEXT NOT NULL,
+  is_reexport INTEGER NOT NULL DEFAULT 1,
+  ambiguous INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (barrel_path, exported_symbol, source_module)
+);
+CREATE INDEX idx_barrel_source ON barrel_symbol_routes(source_module, source_symbol);
+CREATE TABLE cartography_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+`;
+const MIGRATIONS = new Map([[2, MIGRATION_V3]]);
 
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 const CLEAN_STATUS_HASH = sha256('');
@@ -196,13 +237,21 @@ export function openMemory(path) {
         PRAGMA foreign_keys = ON;
         PRAGMA temp_store = MEMORY;`);
       const { user_version: version } = db.prepare('PRAGMA user_version').get();
-      if (version === 0) {
+      if (version === 0 || MIGRATIONS.has(version)) {
+        // Re-read inside BEGIN IMMEDIATE: a concurrent opener may have created or migrated it first.
         db.exec('BEGIN IMMEDIATE');
         try {
-          if (db.prepare('PRAGMA user_version').get().user_version === 0) {
+          let current = db.prepare('PRAGMA user_version').get().user_version;
+          if (current === 0) {
             db.exec(SCHEMA);
-            db.exec(`PRAGMA user_version = ${MEMORY_SCHEMA_VERSION}`);
+            current = 2;
           }
+          while (MIGRATIONS.has(current)) db.exec(MIGRATIONS.get(current++));
+          if (current !== MEMORY_SCHEMA_VERSION)
+            throw new Error(
+              `Unsupported memory schema version ${current} in ${path}; expected ${MEMORY_SCHEMA_VERSION}.`,
+            );
+          db.exec(`PRAGMA user_version = ${MEMORY_SCHEMA_VERSION}`);
           db.exec('COMMIT');
         } catch (error) {
           if (db.isTransaction) db.exec('ROLLBACK');
@@ -397,10 +446,6 @@ class Memory {
         WHERE memory_fts MATCH :query
           AND (:scope IS NULL OR substr(o.scope, 1, length(:scope)) = :scope OR instr(d.sources_json, :scope) > 0)
         ORDER BY f.rank LIMIT :limit`),
-      graphSize: db.prepare('SELECT count(*) AS n FROM modules_graph'),
-      graphNode: db.prepare('SELECT module_path FROM modules_graph WHERE module_path = ?'),
-      dependents: db.prepare(`SELECT g.module_path FROM modules_graph g, json_each(g.dependencies_json) d
-        WHERE d.value = ? ORDER BY g.module_path`),
     };
   }
 
@@ -524,18 +569,6 @@ class Memory {
     const treeOid = this.statements.specsState.get(SPECS_STATE_KEY)?.tree_oid ?? '';
     this.write(() => this.#upsertDecision(path, record, sha256(content), treeOid));
     return { ...record, file_path: path };
-  }
-
-  blastRadius(files) {
-    if (this.statements.graphSize.get().n === 0)
-      throw new Error(
-        'Cartography index is empty: modules_graph has no rows. Brownfield cartography (Phase 3) must index the repository before blast radius can be computed.',
-      );
-    return files.map(file => ({
-      file,
-      indexed: Boolean(this.statements.graphNode.get(file)),
-      dependents: this.statements.dependents.all(file).map(row => row.module_path),
-    }));
   }
 
   #upsertDecision(path, record, hash, treeOid) {

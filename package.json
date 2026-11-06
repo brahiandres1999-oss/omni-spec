@@ -23,6 +23,7 @@
   "scripts": {
     "test": "node --test --test-concurrency=1 --import ./test-support/isolated-home.mjs",
     "test:coverage": "node scripts/coverage.mjs",
+    "bench:cartography": "node scripts/bench-cartography.mjs",
     "lint": "biome ci .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
