@@ -4,7 +4,7 @@
  */
 import { createStore } from 'zustand/vanilla';
 import type { StudioClient } from '@/ipc/client';
-import type { RecentProject, SnapshotPayload } from '@/ipc/types';
+import type { BreakerState, RecentProject, SnapshotPayload } from '@/ipc/types';
 import { createBoardStore } from './board';
 import { createFilesStore } from './files';
 import { createFinopsStore } from './finops';
@@ -37,6 +37,29 @@ export function reviewFor(client: StudioClient, project: ProjectStores, spec: st
   return store;
 }
 
+const BREAKER_SEVERITY: BreakerState[] = ['CLOSED', 'HALF_OPEN', 'OPEN', 'DEAD_LETTER'];
+
+/** Worst breaker state of the snapshot (the engine sends one entry per task). */
+export function worstBreaker(snapshot: SnapshotPayload): BreakerState {
+  const states = Array.isArray(snapshot.breakers)
+    ? snapshot.breakers.map(entry => entry.state)
+    : [snapshot.breakers.state];
+  return states.reduce<BreakerState>(
+    (worst, state) => (BREAKER_SEVERITY.indexOf(state) > BREAKER_SEVERITY.indexOf(worst) ? state : worst),
+    'CLOSED',
+  );
+}
+
+/** Revalidates every resource of a project (the engine came back after a restart). */
+export function refreshProject(project: ProjectStores): void {
+  void project.board.getState().resource.getState().refresh();
+  void project.graph.getState().resource.getState().refresh();
+  void project.finops.getState().resource.getState().refresh();
+  void project.skills.getState().resource.getState().refresh();
+  void project.files.getState().resource.getState().refresh();
+  for (const review of project.reviews.values()) void review.getState().resource.getState().refresh();
+}
+
 export function createSnapshotStore(client: StudioClient) {
   return createResourceStore<SnapshotPayload>(() => client.call('project.snapshot', {}));
 }
@@ -55,6 +78,9 @@ export interface UiState {
   settingsOpen: boolean;
   dock: { mode: string | null; draft: string; focusNonce: number };
   diffFocus: { path: string; nonce: number } | null;
+  /** Engine lifecycle shown by the shell banner. */
+  engine: { status: 'ok' | 'restarting' | 'dead' | 'error'; message?: string };
+  setEngine(engine: UiState['engine']): void;
   setPaletteOpen(open: boolean): void;
   setSettingsOpen(open: boolean): void;
   setDockMode(mode: string): void;
@@ -70,6 +96,8 @@ export function createUiStore() {
     settingsOpen: false,
     dock: { mode: null, draft: '', focusNonce: 0 },
     diffFocus: null,
+    engine: { status: 'ok' },
+    setEngine: engine => set({ engine }),
     setPaletteOpen: paletteOpen =>
       set(
         paletteOpen && !get().paletteOpen

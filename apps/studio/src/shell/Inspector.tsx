@@ -13,6 +13,7 @@ import { BreakerPill } from '@/components/ui/status-pill';
 import { ErrorState, rowHeightClass, SkeletonRow } from '@/components/ui/view-state';
 import { rowHeights } from '@/design/tokens';
 import { formatBytes, formatInt, messages } from '@/i18n/messages.es';
+import { worstBreaker } from '@/stores/app';
 import { flattenTree } from '@/stores/files';
 import { useLiveFinops, credentialLabel, Sparkline } from '@/views/FinopsView';
 import { TerminalPanel } from './TerminalPanel';
@@ -28,7 +29,12 @@ export function Inspector() {
       tab={tab}
       onTabChange={value => layout.getState().setInspectorTab(value)}
       panels={[
-        { value: 'terminal', label: labels.terminal, content: <TerminalPanel />, keepMounted: true },
+        {
+          value: 'terminal',
+          label: labels.terminal,
+          content: <TerminalPanel visible={tab === 'terminal' && !collapsed} />,
+          keepMounted: true,
+        },
         { value: 'overview', label: labels.overview, content: <OverviewPanel /> },
         { value: 'finops', label: labels.finops, content: <FinopsPanel /> },
         { value: 'files', label: labels.files, content: <FilesPanel /> },
@@ -38,9 +44,13 @@ export function Inspector() {
 }
 
 function OverviewPanel() {
-  const { snapshot } = useStudio();
+  const { snapshot, project } = useStudio();
   useEnsureLoaded(snapshot);
   const data = useStore(snapshot, state => state.data);
+  const board = useStore(
+    useStore(project.board, state => state.resource),
+    state => state.data,
+  );
   if (!data)
     return (
       <div className="space-y-2 p-3">
@@ -49,12 +59,14 @@ function OverviewPanel() {
         ))}
       </div>
     );
-  const tasks = data.activeSpec?.tasks;
+  const activeId = data.activeSpec?.id;
+  const card = board?.lanes.flatMap(lane => lane.cards).find(entry => entry.id === activeId);
+  const tasks = data.activeSpec?.tasks ?? card?.tasks ?? undefined;
   return (
     <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 p-4 text-xs">
       <dt className="text-fg-muted">{messages.overview.breaker}</dt>
       <dd className="justify-self-end">
-        <BreakerPill state={data.breakers.state} />
+        <BreakerPill state={worstBreaker(data)} />
       </dd>
       <dt className="text-fg-muted">{messages.overview.wal}</dt>
       <dd className={cn('justify-self-end text-fg', mono)}>{formatBytes(data.memory.walBytes)}</dd>

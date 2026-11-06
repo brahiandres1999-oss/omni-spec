@@ -69,6 +69,10 @@ impl RecentProjects {
     /// # Errors
     /// [`StudioError::RecentUnreadable`] when `APPDATA` is not set.
     pub fn default_path() -> Result<PathBuf> {
+        // E2E isolation: OMNI_STUDIO_USER_DATA replaces every per-user location.
+        if let Some(dir) = crate::window::user_data_override() {
+            return Ok(dir.join("recent.json"));
+        }
         let appdata = std::env::var_os("APPDATA").ok_or(StudioError::RecentUnreadable)?;
         Ok(PathBuf::from(appdata)
             .join("OmniStudio")

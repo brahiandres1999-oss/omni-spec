@@ -92,17 +92,22 @@ export function TitleBar() {
       >
         <Icon icon={Sparkles} className="text-accent" />
         <span className="font-semibold text-fg">{messages.app.name}</span>
-        <span aria-hidden="true" className="text-fg-muted">
-          /
-        </span>
-        <span className="truncate text-fg">{data ? projectName(data.root) : '…'}</span>
-        <span aria-hidden="true" className="text-fg-muted">
-          /
-        </span>
-        <span className="inline-flex min-w-0 items-center gap-1 text-fg-muted">
-          <Icon icon={GitBranch} className="size-3.5" />
-          <span className={cn('truncate', mono)}>{data ? messages.shell.branch(data.branch) : ''}</span>
-        </span>
+        {/* Project and branch appear together once known: inserting them shifts nothing (CLS = 0). */}
+        {data ? (
+          <>
+            <span aria-hidden="true" className="text-fg-muted">
+              /
+            </span>
+            <span className="truncate text-fg">{projectName(data.root)}</span>
+            <span aria-hidden="true" className="text-fg-muted">
+              /
+            </span>
+            <span className="inline-flex min-w-0 items-center gap-1 text-fg-muted">
+              <Icon icon={GitBranch} className="size-3.5" />
+              <span className={cn('truncate', mono)}>{messages.shell.branch(data.branch)}</span>
+            </span>
+          </>
+        ) : null}
       </nav>
       <div data-tauri-drag-region className="h-full min-w-6 flex-1" />
       <button

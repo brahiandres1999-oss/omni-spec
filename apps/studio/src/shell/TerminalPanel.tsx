@@ -12,12 +12,25 @@ import { messages } from '@/i18n/messages.es';
 import type { TerminalSession } from '@/stores/terminal';
 import { attachXterm } from '@/terminal/xterm-adapter';
 
-export function TerminalPanel() {
-  const { terminal } = useStudio();
+export function TerminalPanel({ visible }: { visible: boolean }) {
+  const { terminal, terminalFactory } = useStudio();
   const sessions = useStore(terminal, state => state.sessions);
   const activeId = useStore(terminal, state => state.activeId);
   const opening = useStore(terminal, state => state.opening);
   const list = Object.values(sessions);
+  const autoOpened = useRef(false);
+
+  // Showing the tab with a real renderer and no session opens one, like any IDE terminal pane.
+  // Headless (no renderer, as in unit tests) there would be nothing to show the shell in.
+  useEffect(() => {
+    if (!visible || !terminalFactory || autoOpened.current) return;
+    if (Object.keys(terminal.getState().sessions).length > 0 || terminal.getState().opening) return;
+    autoOpened.current = true;
+    void terminal
+      .getState()
+      .open()
+      .catch(() => undefined);
+  }, [terminal, terminalFactory, visible]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -82,7 +95,6 @@ export function TerminalPanel() {
       </div>
       <div
         data-scroll-region="terminal"
-        data-testid="terminal"
         className="relative min-h-0 flex-1 overflow-hidden overscroll-contain bg-canvas"
       >
         {list.length === 0 ? (
@@ -110,6 +122,7 @@ function SessionHost({ session, active }: { session: TerminalSession; active: bo
     // The store owns the PTY lifetime (close button, exit); the bridge only renders it.
     const bridge = attachXterm({ client, sessionId: session.id, container: element, closeOnDispose: false, ...parts });
     handle.current = bridge;
+    parts.terminal.focus?.();
     return () => {
       handle.current = null;
       void bridge.dispose();
@@ -119,10 +132,11 @@ function SessionHost({ session, active }: { session: TerminalSession; active: bo
   useEffect(() => {
     if (active) handle.current?.fit();
   }, [active]);
+  const hasRenderer = terminalFactory !== null;
 
   return (
     <div className={cn('absolute inset-0 p-2', !active && 'hidden')}>
-      <div ref={container} className="size-full" />
+      <div ref={container} data-testid={active && hasRenderer ? 'terminal' : undefined} className="size-full" />
       {session.status === 'exited' ? (
         <p className="absolute inset-x-2 bottom-2 rounded-md border border-divider bg-floating px-2 py-1 text-[11px] text-fg-muted">
           {messages.terminal.exited(session.exitCode)}

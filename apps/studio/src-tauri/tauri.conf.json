@@ -28,14 +28,38 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../../../bin/": "omni-spec/bin/",
+      "../../../src/": "omni-spec/src/",
+      "../../../schema/": "omni-spec/schema/",
+      "../../../skills/": "omni-spec/skills/",
+      "../../../assets/": "omni-spec/assets/",
+      "../../../agents/": "omni-spec/agents/",
+      "../../../rules/": "omni-spec/rules/",
+      "../../../package.json": "omni-spec/package.json",
+      "../../../plugin.json": "omni-spec/plugin.json",
+      "../../../plugin.extra.json": "omni-spec/plugin.extra.json",
+      "../../../LICENSE": "omni-spec/LICENSE"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
   },
   "mainBinaryName": "omni-studio"
 }

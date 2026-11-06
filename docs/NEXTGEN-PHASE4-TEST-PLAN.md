@@ -976,3 +976,52 @@ Pendiente para pasos posteriores:
 - **Verificación visual en la app real:** el paso se validó con Vitest y `vite build`; falta abrirlo en Tauri con un proyecto real (forma parte de E2E, paso 4).
 - **E2E-10** usa un `combobox` «Riesgo»; el tablero expone los filtros como botones conmutables (VB-03). Hay que alinear uno de los dos antes de ejecutar E2E.
 - **Chunk principal de 878 kB** (xterm, Radix, d3-force): conviene cargar la terminal y la cartografía bajo demanda.
+
+### 16.7 Fase verde — Paso 4: E2E, empaquetado y CI (2026-11-06)
+
+| Bloque | Tests | Estado |
+| :-- | --: | :-- |
+| E2E (`apps/studio/e2e`, Playwright por CDP sobre el *build debug*) | 11 | verde (2 ejecuciones seguidas) |
+| PK (`apps/studio/tests/packaging.test.ts`, *build release* + NSIS) | 7 | 6 verdes + PK-07 solo en CI (`onCi`); la mitad de PK-02 que instala también corre solo en CI |
+| Vitest / Rust / núcleo Node | 97 / 61 (+1 manual) / sin cambios | verde |
+
+Cifras medidas (Windows 11, *build debug*, arranque en caliente):
+
+| Medida | Resultado | Suelo |
+| :-- | --: | --: |
+| E2E-01 inicio del proceso → `studio:hydrated` | 776–802 ms | < 1.500 ms (objetivo del *bench*: 500 ms) |
+| E2E-03 edición externa → diff visible | 112–123 ms | ≤ 500 ms |
+| E2E-04 p95 de fotograma, diff de 10.000 líneas | 17,0–17,2 ms | ≤ 33 ms |
+| E2E-07 hijos terminados tras cerrar | ≈ 490 ms | < 3 s |
+| E2E-08 huérfanos eliminados por el Job Object | ≈ 500–550 ms | < 2 s |
+| PK-06 tamaño del instalador NSIS | 2,39 MiB | 15 MB (informativo) |
+
+Cambios en el host (Rust):
+1. **Marca de arranque.** La ventana inyecta `__OMNI_STUDIO_BOOT__.processStartEpochMs` (hora de creación del proceso, `GetProcessTimes`) con un *initialization script*; el frontend añade `hydratedEpochMs`.
+2. **Ciclo de vida del motor visible.** El supervisor publica `engine.state { state: 'restarting' | 'running' | 'dead' }` junto a las notificaciones del motor. El shell muestra «Reiniciando el motor…» (al menos 1,2 s) y, al volver, revalida todos los recursos en sitio: vista y filtros se conservan (E2E-10).
+3. **Proyecto abierto desde fuera.** Abrir por argumentos o por una segunda instancia emite `project:opened { snapshot }`; el frontend lo adopta (E2E-11). Sin carpeta en la línea de comandos se abre el reciente más nuevo que exista. El motor arranca antes de crear la ventana, así que arranca mientras WebView2 carga la página.
+4. **`OMNI_STUDIO_USER_DATA`** sustituye todas las ubicaciones por usuario: `recent.json` y el perfil de WebView2, incluido `localStorage`. Sin esto, las ejecuciones E2E heredaban la pestaña y los recientes de la anterior.
+5. **Empaquetado** (`tauri.conf.json`): destino `nsis`, `installMode: currentUser`, `webviewInstallMode: downloadBootstrapper`, *hooks* `windows/hooks.nsh` (menú contextual «Abrir con Omni Studio» en carpetas y fondo de carpeta, en HKCU; se borran al desinstalar) y el núcleo como recurso `omni-spec/{bin,src,schema,skills,assets,agents,rules}` más `package.json`, sin `node_modules`, tests ni mapas (D-4).
+
+Cambios en el frontend al conectarlo con el motor real:
+1. **Ruta del tablero.** Por defecto no se envía `route`: el motor elige la ruta de la spec activa (antes se forzaba `standard` y una spec `--light` no aparecía). El selector refleja la ruta mostrada.
+2. **Filtro de riesgo.** Siempre ofrece los niveles de Blast Radius (`low`, `medium`, `high`), aunque ninguna tarjeta tenga riesgo todavía.
+3. **Formas reales del *snapshot*.** `breakers` llega por tarea (se muestra el peor estado) y la spec activa es la entrada del manifiesto (las tareas de Overview salen de su tarjeta).
+4. **Compuerta 2 conocida.** Si la spec exige la Compuerta 2 y la verificación no está atestada, el Diff muestra el banner *Protected* sin esperar a pulsar (E2E-09). El motor sigue siendo la autoridad (RV-11).
+5. **Terminal.** Con *renderer* real, mostrar la pestaña abre una sesión si no hay ninguna. xterm usa el *renderer* DOM por defecto: deja el texto en el DOM (lectores de pantalla, E2E-06) y no consume uno de los contextos WebGL limitados de WebView2 por terminal. WebGL queda como opción (`createXtermFactory({ webgl: true })`).
+6. **Columnas elásticas.** Rail `clamp(13rem, 16vw, 16rem)` e Inspector `clamp(18rem, 28vw, 30rem)`: la terminal sigue el tamaño de la ventana (E2E-06).
+7. **CLS = 0 real** (E2E-02 midió 0,0001 antes de corregirlo): el *breadcrumb* inserta proyecto y rama a la vez, y cada cambio de estado de una vista monta nodos nuevos (`<Fragment key={state}>`). Reutilizar los nodos del *skeleton* para otro contenido contaba como desplazamiento.
+
+Correcciones de los E2E escritos en rojo (fixtures, no expectativas):
+- **E2E-10** se alinea con VB-03: pulsa el botón `high` del grupo «Riesgo» de la barra «Filtros» y comprueba `aria-pressed` antes y después del reinicio (antes buscaba un `combobox`).
+- **`view()`** se limita a la barra de pestañas «Vistas»: SH-03 y SH-07 exigen una pestaña «FinOps» en el escenario y otra en el Inspector, y `getByRole('tab', { name: /FinOps/ })` era ambiguo.
+- **`stop()`** ignora el fallo de `taskkill /T` con los procesos *sandbox* de WebView2, que rechazan `TerminateProcess` y mueren con su proceso navegador.
+- **E2E-05** crea una spec: las decisiones de hunks pertenecen a una spec (PK de `review_decisions`) y sin ella el motor responde `NO_ACTIVE_SPEC`.
+- **E2E-11** detiene Studio antes de borrar el segundo proyecto, que el motor tiene abierto (`memory.db`, directorio de trabajo).
+
+CI (`.github/workflows/studio.yml`): typecheck, Vitest, `cargo fmt`/`clippy`/`test` y *build debug* en cada *push* o PR que toque Studio. E2E, *build release* y empaquetado (con `CI=true`, que instala y desinstala por usuario en el *runner*) corren cada noche o a mano. Hay concurrencia por rama, límite de 75 min y artefactos de Playwright si algo falla.
+
+Pendiente:
+- **WN-04** (Snap Layouts sobre el botón maximizar) sigue siendo evidencia manual.
+- **PK-07** y la parte de instalación de PK-02 solo se han verificado en su diseño: la primera ejecución real será la del *workflow* nocturno o manual.
+- **Chunk principal de 878 kB:** cargar terminal y cartografía bajo demanda.

@@ -24,8 +24,12 @@ export interface GateAttempt {
   error?: StudioError;
 }
 
+/** Blast Radius levels (`evaluateBlastRadius`): always offered, in severity order. */
+export const RISK_LEVELS = ['low', 'medium', 'high'] as const;
+
 export interface BoardState {
-  route: BoardRoute;
+  /** Route chosen by the user; `null` lets the engine pick the active spec's route. */
+  route: BoardRoute | null;
   filters: BoardFilters;
   /** Every tag, risk level and owner seen in this project, so options never vanish while filtering. */
   options: BoardFilters;
@@ -48,7 +52,7 @@ export function createBoardStore(client: StudioClient, options: { projectId: str
     const resource = createResourceStore<BoardPayload>(
       () => {
         const { route, filters } = get();
-        return client.call('board.get', { route, filters });
+        return client.call('board.get', route ? { route, filters } : { filters });
       },
       {
         isEmpty: data =>
@@ -65,9 +69,9 @@ export function createBoardStore(client: StudioClient, options: { projectId: str
     };
 
     return {
-      route: options.route ?? 'standard',
+      route: options.route ?? null,
       filters: readJson(key, EMPTY_FILTERS, isFilters),
-      options: EMPTY_FILTERS,
+      options: { ...EMPTY_FILTERS, risk: [...RISK_LEVELS] },
       gateAttempts: {},
       focusRequest: null,
       resource,
@@ -113,13 +117,21 @@ export function createBoardStore(client: StudioClient, options: { projectId: str
   // Accumulate filter options from every payload (union, sorted).
   const merge = (current: string[], incoming: Iterable<string>) =>
     [...new Set([...current, ...incoming])].sort((a, b) => a.localeCompare(b, 'es'));
+  const severity = (value: string) => {
+    const rank = (RISK_LEVELS as readonly string[]).indexOf(value);
+    return rank < 0 ? RISK_LEVELS.length : rank;
+  };
+  const mergeRisk = (current: string[], incoming: Iterable<string>) =>
+    [...new Set([...RISK_LEVELS, ...current, ...incoming])].sort(
+      (a, b) => severity(a) - severity(b) || a.localeCompare(b, 'es'),
+    );
   store.getState().resource.subscribe(state => {
     if (!state.data) return;
     const cards: BoardCard[] = [...state.data.lanes.flatMap(lane => lane.cards), ...state.data.unrouted];
     const { options: seen, filters } = store.getState();
     const next: BoardFilters = {
       tags: merge(seen.tags, [...cards.flatMap(card => card.tags), ...filters.tags]),
-      risk: merge(seen.risk, [...cards.flatMap(card => (card.risk ? [card.risk] : [])), ...filters.risk]),
+      risk: mergeRisk(seen.risk, [...cards.flatMap(card => (card.risk ? [card.risk] : [])), ...filters.risk]),
       owner: merge(seen.owner, [...cards.flatMap(card => (card.owner ? [card.owner] : [])), ...filters.owner]),
     };
     const same = (a: string[], b: string[]) => a.length === b.length && a.every((item, index) => item === b[index]);

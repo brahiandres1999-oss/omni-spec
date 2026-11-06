@@ -162,12 +162,15 @@ export interface SnapshotPayload {
   root: string;
   branch: string;
   versions: { engine: string; node: string; protocol: number };
-  activeSpec: (SpecSummary & { tasks: { done: number; total: number } }) | null;
+  /** The manifest entry of the active spec; `tasks` only when the engine adds it. */
+  activeSpec: (SpecSummary & { tasks?: { done: number; total: number } }) | null;
   specs: SpecSummary[];
   routes: Record<string, BoardRoute | null>;
-  gates: Record<string, unknown>;
-  breakers: { state: BreakerState };
-  cartography: { indexed: boolean; summary: Record<string, unknown> };
+  /** Gate status by spec slug. */
+  gates: Record<string, { required: boolean; 1: GateStatus; 2: GateStatus } | undefined>;
+  /** Per-task breaker states (engine) or a single worst state. */
+  breakers: { state: BreakerState } | Array<{ taskId: string; state: BreakerState }>;
+  cartography: { indexed: boolean; summary: Record<string, unknown> | null };
   memory: { walBytes: number; specsTreeOid: string };
 }
 
@@ -218,5 +221,10 @@ export interface HostEventPayloads {
   'pty.output': { id: string; data: string };
   'pty.exit': { id: string; code: number | null };
   'watcher.error': { code: string };
-  'engine.state': { code: number; message: string; data?: { code: string; detail: string; retryable: boolean } };
+  /** Supervisor lifecycle (`{ state }`) or a host error while opening a project (JSON-RPC error). */
+  'engine.state':
+    | { state: 'restarting' | 'running' | 'dead' }
+    | { code: number; message: string; data?: { code: string; detail: string; retryable: boolean } };
+  /** A project opened by the host (command line, second instance). */
+  'project.opened': { snapshot: SnapshotPayload };
 }

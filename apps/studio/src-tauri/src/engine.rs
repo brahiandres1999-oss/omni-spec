@@ -257,7 +257,7 @@ mod supervisor {
     use std::sync::{Arc, Mutex, MutexGuard, Weak};
     use std::time::{Duration, Instant};
 
-    use serde_json::Value;
+    use serde_json::{Value, json};
     use tokio::sync::{broadcast, watch};
 
     use super::{Backoff, StderrRing};
@@ -351,6 +351,16 @@ mod supervisor {
             self.shared
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
+        }
+
+        /// Publishes a lifecycle change as an `engine.state` notification, next to the engine's own
+        /// notifications, so the UI can show "restarting" and refresh when the engine is back.
+        fn announce(&self, state: &str) {
+            let _ = self.events.send(json!({
+                "jsonrpc": "2.0",
+                "method": "engine.state",
+                "params": { "state": state },
+            }));
         }
     }
 
@@ -588,12 +598,16 @@ mod supervisor {
                     }
                     Err(_) => {
                         shared.state = EngineState::Dead;
+                        drop(shared);
+                        inner.announce("dead");
                         return;
                     }
                 }
             };
+            inner.announce("restarting");
             tokio::time::sleep(delay).await;
             if launch(&inner).await.is_ok() {
+                inner.announce("running");
                 return;
             }
         }

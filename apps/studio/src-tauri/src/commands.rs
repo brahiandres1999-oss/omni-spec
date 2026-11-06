@@ -198,21 +198,59 @@ fn start_watcher(app: &AppHandle, root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Opens `root` in the background and tells the frontend with `project:opened { snapshot }` (the
+/// window may already be showing another project: single-instance relaunch, E2E-11).
+fn open_in_background(app: &AppHandle, root: PathBuf) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let opened = async {
+            open_project(&app, &root).await?;
+            app.state::<StudioState>()
+                .current()
+                .await?
+                .call("project.snapshot", json!({}))
+                .await
+        };
+        match opened.await {
+            Ok(snapshot) => {
+                let _ = app.emit("project:opened", json!({ "snapshot": snapshot }));
+            }
+            Err(error) => {
+                let _ = app.emit("engine:state", error.to_rpc_error());
+            }
+        }
+    });
+}
+
 /// Opens the project requested on the command line, if any.
 pub fn open_from_args(app: &AppHandle, args: &[String], cwd: &Path) {
     match project_from_args(args, cwd) {
-        Ok(Some(root)) => {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = open_project(&app, &root).await {
-                    let _ = app.emit("engine:state", error.to_rpc_error());
-                }
-            });
-        }
+        Ok(Some(root)) => open_in_background(app, root),
         Ok(None) => {}
         Err(error) => {
             let _ = app.emit("engine:state", error.to_rpc_error());
         }
+    }
+}
+
+/// First launch: the folder on the command line, otherwise the most recent project that still
+/// exists. Without either, the UI shows the engine-disconnected error with its retry.
+pub fn open_initial(app: &AppHandle, args: &[String], cwd: &Path) {
+    if !matches!(project_from_args(args, cwd), Ok(None)) {
+        open_from_args(app, args, cwd);
+        return;
+    }
+    let recent = {
+        let state = app.state::<StudioState>();
+        let entries = lock(&state.recent);
+        entries
+            .entries()
+            .iter()
+            .find(|entry| !entry.missing)
+            .map(|entry| entry.path.clone())
+    };
+    if let Some(root) = recent {
+        open_in_background(app, root);
     }
 }
 

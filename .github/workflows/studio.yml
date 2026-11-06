@@ -1,0 +1,68 @@
+name: Omni Studio
+on:
+  push:
+    branches: [main, master, 'next/**', 'feat/nextgen-phase4-**']
+    paths: ['apps/studio/**', 'src/studio/**', 'schema/studio-ipc.schema.json', '.github/workflows/studio.yml']
+  pull_request:
+    paths: ['apps/studio/**', 'src/studio/**', 'schema/studio-ipc.schema.json', '.github/workflows/studio.yml']
+  schedule:
+    # Nightly E2E and packaging (D-16): slow, and the installer writes per-user state on the runner.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      e2e:
+        description: Run the E2E and packaging suites (slow, installs per-user)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: studio-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  studio:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      SLOW_SUITES: ${{ github.event_name == 'schedule' || inputs.e2e == true }}
+    defaults:
+      run:
+        working-directory: apps/studio
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run typecheck
+      # Vitest: IPC client, stores, 4-state contract, views, shell and design system (plan §11).
+      - run: npm test
+      - name: Rust format and lints
+        working-directory: apps/studio/src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+      - name: Rust tests
+        working-directory: apps/studio/src-tauri
+        run: cargo test
+      - run: npm run tauri build -- --debug --no-bundle
+      # E2E over CDP against the debug build (plan §12, D-15).
+      - if: env.SLOW_SUITES == 'true'
+        run: npx playwright test --config e2e/playwright.config.ts
+      # Release build with the NSIS installer, then the packaging checks; CI=true lets PK-02 and
+      # PK-07 install and uninstall per user on the runner (plan §13).
+      - if: env.SLOW_SUITES == 'true'
+        run: npm run tauri build
+      - if: env.SLOW_SUITES == 'true'
+        run: npm run test:package
+        env:
+          CI: 'true'
+      - if: failure() && env.SLOW_SUITES == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: studio-e2e-results
+          path: apps/studio/test-results
+          if-no-files-found: ignore

@@ -61,6 +61,8 @@ export function allDecided(data: DiffPayload | undefined, decisions: Record<stri
 }
 
 export function createReviewStore(client: StudioClient, options: { spec: string }) {
+  // Without a spec the engine falls back to the active one (`specRef` is optional in the schema).
+  const specParam: { spec?: string } = options.spec ? { spec: options.spec } : {};
   const store = createStore<ReviewState>()((set, get) => {
     const resource = createResourceStore<DiffPayload>(() => client.call('diff.get', {}), {
       isEmpty: data => data.files.length === 0,
@@ -76,7 +78,7 @@ export function createReviewStore(client: StudioClient, options: { spec: string 
         const previous = get().decisions[hunkId];
         set({ decisions: { ...get().decisions, [hunkId]: { status: 'pending', decision } } });
         try {
-          await client.call('review.decideHunk', { spec: options.spec, hunkId, decision });
+          await client.call('review.decideHunk', { ...specParam, hunkId, decision });
           set({ decisions: { ...get().decisions, [hunkId]: { status: 'confirmed', decision } } });
         } catch (reason) {
           const { [hunkId]: _attempt, ...rest } = get().decisions;
@@ -87,7 +89,7 @@ export function createReviewStore(client: StudioClient, options: { spec: string 
       async stageApproved() {
         set({ staging: { status: 'pending' } });
         try {
-          const result = (await client.call('review.stageApproved', { spec: options.spec })) as { staged?: number };
+          const result = (await client.call('review.stageApproved', specParam)) as { staged?: number };
           set({ staging: { status: 'done', staged: result?.staged ?? 0 } });
         } catch (reason) {
           set({ staging: { status: 'failed', error: StudioError.from(reason) } });
@@ -96,7 +98,7 @@ export function createReviewStore(client: StudioClient, options: { spec: string 
       async approveGate() {
         set({ gate: { status: 'pending' } });
         try {
-          await client.call('gate.approve', { spec: options.spec, gate: 2 });
+          await client.call('gate.approve', { ...specParam, gate: 2 });
           set({ gate: { status: 'approved' } });
         } catch (reason) {
           const error = StudioError.from(reason);
@@ -105,7 +107,7 @@ export function createReviewStore(client: StudioClient, options: { spec: string 
       },
       async addRemark(input) {
         if (!remarkIsValid(input.text)) throw new RangeError('remark text must be 1–2000 characters');
-        await client.call('review.addRemark', { spec: options.spec, ...input });
+        await client.call('review.addRemark', { ...specParam, ...input });
       },
     };
   });

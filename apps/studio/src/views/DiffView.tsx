@@ -79,6 +79,28 @@ export function DiffView({ spec }: { spec: string }) {
   );
 }
 
+/**
+ * Gate 2 of `spec` is known to be locked before anyone presses the button: it is required and the
+ * verification is not attested (E2E-09). The engine stays the authority (RV-11): this only avoids
+ * offering an approval that cannot succeed.
+ */
+function useKnownGate2Lock(spec: string): string | null {
+  const { project, snapshot } = useStudio();
+  const board = useStore(
+    useStore(project.board, state => state.resource),
+    state => state.data,
+  );
+  const snap = useStore(snapshot, state => state.data);
+  if (!spec) return null;
+  const card = board
+    ? [...board.lanes.flatMap(lane => lane.cards), ...board.unrouted].find(c => c.id === spec)
+    : undefined;
+  const slug = card?.slug ?? snap?.specs.find(entry => entry.id === spec)?.slug;
+  const gates = card?.gates ?? (slug ? snap?.gates[slug] : undefined);
+  if (!gates?.required || gates[2] === 'approved') return null;
+  return card?.attestation === 'valid' ? null : messages.diff.gate2Unattested;
+}
+
 function Review({ review, data }: { review: ReviewStore; data: DiffPayload }) {
   const { client, ui } = useStudio();
   const decisions = useStore(review, state => state.decisions);
@@ -90,6 +112,8 @@ function Review({ review, data }: { review: ReviewStore; data: DiffPayload }) {
   const [loaded, setLoaded] = useState<Record<string, DiffFile>>({});
   const [failure, setFailure] = useState<StudioError | null>(null);
   const viewer = useRef<DiffViewerHandle | null>(null);
+  const knownLock = useKnownGate2Lock(review.getState().spec);
+  const gateReason = gate.status === 'locked' ? (gate.error?.detail ?? '') : knownLock;
 
   const files = data.files.map(file => loaded[file.path] ?? file);
   const hunkTotal = files.reduce((sum, file) => sum + (file.hunks?.length ?? 0), 0);
@@ -172,7 +196,7 @@ function Review({ review, data }: { review: ReviewStore; data: DiffPayload }) {
         >
           {messages.diff.stage}
         </Button>
-        {gate.status === 'locked' ? null : (
+        {gateReason !== null ? null : (
           <Button
             size="sm"
             variant="primary"
@@ -185,7 +209,7 @@ function Review({ review, data }: { review: ReviewStore; data: DiffPayload }) {
         )}
       </div>
       <div className="flex min-h-0 flex-col">
-        {gate.status === 'locked' ? <GateBanner reason={gate.error?.detail ?? ''} /> : null}
+        {gateReason !== null ? <GateBanner reason={gateReason} /> : null}
         <DiffViewer
           files={files}
           mode={mode}

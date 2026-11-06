@@ -205,3 +205,12 @@ pub fn force_dark(hwnd: windows::Win32::Foundation::HWND) -> crate::error::Resul
     }
     .map_err(|e| crate::error::StudioError::win32("DwmSetWindowAttribute", &e))
 }
+
+/// `OMNI_STUDIO_USER_DATA`: a folder that replaces every per-user location (recent projects and the
+/// WebView2 profile, hence `localStorage`). The E2E suite gives each run its own folder so runs never
+/// see each other's layout or recent list.
+pub fn user_data_override() -> Option<std::path::PathBuf> {
+    std::env::var_os("OMNI_STUDIO_USER_DATA")
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+}

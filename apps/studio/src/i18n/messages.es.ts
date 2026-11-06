@@ -16,7 +16,7 @@ export const messages = {
   },
   errors: {
     ENGINE_TIMEOUT: 'El motor no respondió a tiempo. Puede que esté ocupado indexando el proyecto.',
-    ENGINE_RESTARTING: 'Reiniciando el motor… Tus filtros y la vista se conservan.',
+    ENGINE_RESTARTING: 'El motor se está reiniciando. Reintenta en un momento.',
     ENGINE_EXITED: 'El motor se detuvo inesperadamente y se está reiniciando.',
     ENGINE_DISCONNECTED: 'Se perdió la conexión con el motor. Reintenta en unos segundos.',
     ENGINE_MISSING: 'No se encontró el motor de OmniSpec junto a la aplicación.',
@@ -120,6 +120,7 @@ export const messages = {
     cancelRemark: 'Cancelar',
     remarkInvalid: 'La corrección debe tener entre 1 y 2.000 caracteres.',
     remarkSaved: 'Corrección guardada para el próximo turno del agente.',
+    gate2Unattested: 'La verificación de la spec no tiene una atestación HMAC válida.',
     decided: (decided: number, total: number) => `${decided}/${total}`,
     decidedLabel: 'decididos',
     decision: {
@@ -218,6 +219,10 @@ export const messages = {
     sessions: 'Sesiones',
     empty: 'No hay terminales abiertas. Abre una para trabajar con tu agente (claude, gemini, agy…).',
     exited: (code: number | null) => `Proceso terminado (código ${code ?? '?'})`,
+  },
+  engine: {
+    restarting: 'Reiniciando el motor… Tus filtros y la vista se conservan.',
+    dead: 'El motor se detuvo varias veces seguidas. Reabre el proyecto desde el rail para volver a intentarlo.',
   },
   dock: {
     region: 'Dock',

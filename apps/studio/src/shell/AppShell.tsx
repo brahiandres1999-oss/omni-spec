@@ -5,7 +5,7 @@
  * Shortcuts: Ctrl+1…Ctrl+5 stage tabs, Ctrl+J Inspector, Ctrl+K palette.
  */
 import { Dialog } from 'radix-ui';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useEnsureLoaded, useRefreshOn, useStudio } from '@/app/studio-context';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,8 @@ import {
 } from '@/components/ui/icon';
 import { cn, mono } from '@/components/ui/interaction';
 import { messages } from '@/i18n/messages.es';
+import { StudioError } from '@/ipc/client';
+import { refreshProject } from '@/stores/app';
 import { allFiles } from '@/stores/files';
 import { STAGE_TABS } from '@/stores/layout';
 import { Inspector } from './Inspector';
@@ -41,7 +43,9 @@ declare global {
 }
 
 export function AppShell() {
-  const { layout, snapshot, project, projectId, adoptSnapshot, dispatch, ui } = useStudio();
+  const { client, layout, snapshot, project, projectId, adoptSnapshot, dispatch, ui } = useStudio();
+  const projectRef = useRef(project);
+  projectRef.current = project;
   const collapsed = useStore(layout, state => state.inspectorCollapsed);
   useEnsureLoaded(snapshot);
   useRefreshOn(['board'], snapshot);
@@ -66,6 +70,48 @@ export function AppShell() {
     boot.hydratedEpochMs = performance.timeOrigin + performance.now();
   }, [boardStatus, projectId]);
 
+  // Host events: a project opened from outside (argv, second instance) and the engine lifecycle.
+  useEffect(() => {
+    const stopOpened = client.subscribe('project.opened', ({ snapshot: opened }) => {
+      const resource = snapshot.getState();
+      if (resource.status === 'ready') resource.setData(opened);
+      else void resource.load();
+      adoptSnapshot(opened);
+      if (ui.getState().engine.status === 'error') ui.getState().setEngine({ status: 'ok' });
+    });
+    let restartedAt = 0;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const stopEngine = client.subscribe('engine.state', payload => {
+      clearTimeout(settle);
+      if ('state' in payload) {
+        if (payload.state === 'restarting') {
+          restartedAt = Date.now();
+          ui.getState().setEngine({ status: 'restarting', message: messages.engine.restarting });
+        } else if (payload.state === 'dead') {
+          ui.getState().setEngine({ status: 'dead', message: messages.engine.dead });
+        } else {
+          // Keep the notice up long enough to be read, then revalidate everything in place.
+          settle = setTimeout(
+            () => {
+              ui.getState().setEngine({ status: 'ok' });
+              void snapshot.getState().refresh();
+              refreshProject(projectRef.current);
+            },
+            Math.max(0, 1_200 - (Date.now() - restartedAt)),
+          );
+        }
+        return;
+      }
+      ui.getState().setEngine({ status: 'error', message: StudioError.from(payload).message });
+      void snapshot.getState().refresh();
+    });
+    return () => {
+      clearTimeout(settle);
+      stopOpened();
+      stopEngine();
+    };
+  }, [adoptSnapshot, client, snapshot, ui]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!event.ctrlKey || event.altKey || event.metaKey) return;
@@ -88,7 +134,8 @@ export function AppShell() {
       <div
         data-inspector={collapsed ? 'collapsed' : 'expanded'}
         className={cn(
-          'grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_22rem] data-[inspector=collapsed]:grid-cols-[15rem_minmax(0,1fr)_0rem]',
+          'grid min-h-0 flex-1 grid-cols-[clamp(13rem,16vw,16rem)_minmax(0,1fr)_clamp(18rem,28vw,30rem)]',
+          'data-[inspector=collapsed]:grid-cols-[clamp(13rem,16vw,16rem)_minmax(0,1fr)_0rem]',
           'motion-safe:transition-[grid-template-columns] motion-safe:duration-200 motion-safe:ease-out',
         )}
       >
@@ -96,8 +143,30 @@ export function AppShell() {
         <Stage />
         <Inspector />
       </div>
+      <EngineNotice />
       <Palette />
       <SettingsDialog />
+    </div>
+  );
+}
+
+/** Floating notice while the engine restarts or after it gave up (E2E-10). */
+function EngineNotice() {
+  const { ui } = useStudio();
+  const engine = useStore(ui, state => state.engine);
+  if (engine.status === 'ok') return null;
+  return (
+    <div
+      role="status"
+      className={cn(
+        'fixed start-1/2 top-12 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-floating px-3.5 py-1.5 text-xs',
+        engine.status === 'restarting' ? 'border-accent/50 text-fg' : 'border-breach/50 text-breach',
+      )}
+    >
+      {engine.status === 'restarting' ? (
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-accent motion-safe:animate-pulse" />
+      ) : null}
+      {engine.message}
     </div>
   );
 }

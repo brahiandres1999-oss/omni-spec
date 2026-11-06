@@ -5,7 +5,7 @@
  * skeleton and the ready content share the grid template (CLS = 0). Rows declare their height token in
  * `data-row-height`, identical in the skeleton and in the ready rows.
  */
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { StudioError } from '@/ipc/client';
 import { messages } from '@/i18n/messages.es';
 import type { ResourceStatus } from '@/stores/resource';
@@ -34,7 +34,9 @@ export function ViewFrame({ view, state, layout, className, children }: ViewFram
       aria-busy={state === 'loading' ? true : undefined}
       className={className}
     >
-      {children}
+      {/* A new state mounts new nodes: reusing the skeleton's nodes for other content would count as
+          a layout shift. */}
+      <Fragment key={state}>{children}</Fragment>
     </div>
   );
 }

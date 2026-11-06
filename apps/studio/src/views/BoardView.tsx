@@ -51,7 +51,8 @@ export function BoardView({ route }: { route?: BoardRoute }) {
   const status = useStore(resource, state => state.status);
   const data = useStore(resource, state => state.data);
   const error = useStore(resource, state => state.error);
-  const currentRoute = useStore(board, state => state.route);
+  const chosenRoute = useStore(board, state => state.route);
+  const currentRoute = chosenRoute ?? data?.route ?? 'standard';
 
   const frameState = status === 'idle' ? 'loading' : status;
 
@@ -71,7 +72,7 @@ export function BoardView({ route }: { route?: BoardRoute }) {
         </>
       ) : (
         <>
-          <BoardToolbar counts={data?.counts} />
+          <BoardToolbar counts={data?.counts} shownRoute={data?.route ?? null} />
           {frameState === 'ready' && data ? (
             <Lanes data={data} />
           ) : frameState === 'empty' ? (
@@ -101,12 +102,18 @@ export function BoardView({ route }: { route?: BoardRoute }) {
   );
 }
 
-function BoardToolbar({ counts }: { counts: BoardPayload['counts'] | undefined }) {
+function BoardToolbar({
+  counts,
+  shownRoute,
+}: {
+  counts: BoardPayload['counts'] | undefined;
+  shownRoute: BoardRoute | null;
+}) {
   const { project } = useStudio();
   const board = project.board;
   const filters = useStore(board, state => state.filters);
   const options = useStore(board, state => state.options);
-  const route = useStore(board, state => state.route);
+  const route = useStore(board, state => state.route) ?? shownRoute;
 
   return (
     <div className="flex min-h-12 flex-wrap items-center gap-x-4 gap-y-2 border-b border-divider px-4 py-2">

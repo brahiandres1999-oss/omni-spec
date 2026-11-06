@@ -92,6 +92,15 @@ mod app {
         {
             builder = builder.additional_browser_args(&format!("{WEBVIEW2_DEFAULT_ARGS} {debug}"));
         }
+        // E2E-01 measures hydration from process creation; the page reads it at startup.
+        if let Some(started) = process_start_epoch_ms() {
+            builder = builder.initialization_script(format!(
+                "window.__OMNI_STUDIO_BOOT__ = Object.assign(window.__OMNI_STUDIO_BOOT__ || {{}}, {{ processStartEpochMs: {started} }});"
+            ));
+        }
+        if let Some(dir) = crate::window::user_data_override() {
+            builder = builder.data_directory(dir.join("webview"));
+        }
         let window = builder.build()?;
         if let Ok(hwnd) = window.hwnd() {
             let _ = force_dark(hwnd);
@@ -110,6 +119,33 @@ mod app {
             }
         }
         Ok(())
+    }
+
+    /// Creation time of this process in Unix epoch milliseconds (`GetProcessTimes`).
+    fn process_start_epoch_ms() -> Option<u64> {
+        use windows::Win32::Foundation::FILETIME;
+        use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+        let (mut creation, mut exit, mut kernel, mut user) = (
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+            FILETIME::default(),
+        );
+        // SAFETY: the pseudo-handle of the current process is always valid; the out-pointers
+        // reference live locals.
+        unsafe {
+            GetProcessTimes(
+                GetCurrentProcess(),
+                &mut creation,
+                &mut exit,
+                &mut kernel,
+                &mut user,
+            )
+        }
+        .ok()?;
+        let ticks = (u64::from(creation.dwHighDateTime) << 32) | u64::from(creation.dwLowDateTime);
+        // FILETIME counts 100 ns intervals since 1601-01-01; the Unix epoch is 11 644 473 600 s later.
+        (ticks / 10_000).checked_sub(11_644_473_600_000)
     }
 
     fn create_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -144,11 +180,12 @@ mod app {
             .manage(state)
             .setup(|app| {
                 let handle = app.handle().clone();
-                create_main_window(&handle)?;
-                create_tray(&handle)?;
+                // Start the engine first: it boots while WebView2 loads the page.
                 let args: Vec<String> = std::env::args().collect();
                 let cwd = std::env::current_dir().unwrap_or_default();
-                commands::open_from_args(&handle, &args, &cwd);
+                commands::open_initial(&handle, &args, &cwd);
+                create_main_window(&handle)?;
+                create_tray(&handle)?;
                 Ok(())
             })
             .on_window_event(|window, event| {
