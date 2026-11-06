@@ -1,0 +1,238 @@
+/**
+ * Omni Studio shell (STUDIO-DESIGN-SYSTEM.md §1–§2, plan §11.5): seamless title bar over three elastic
+ * columns — rail, stage with the floating cockpit dock, collapsible Inspector — plus the command palette.
+ *
+ * Shortcuts: Ctrl+1…Ctrl+5 stage tabs, Ctrl+J Inspector, Ctrl+K palette.
+ */
+import { Dialog } from 'radix-ui';
+import { useEffect, useMemo } from 'react';
+import { useStore } from 'zustand';
+import { useEnsureLoaded, useRefreshOn, useStudio } from '@/app/studio-context';
+import { Button } from '@/components/ui/button';
+import { CommandPalette, type PaletteItem } from '@/components/ui/command-palette';
+import {
+  File,
+  FileDiff,
+  Gauge,
+  Icon,
+  KanbanSquare,
+  Network,
+  PanelRight,
+  Plus,
+  ScanSearch,
+  Settings,
+  Sparkles,
+  SquareTerminal,
+  X,
+} from '@/components/ui/icon';
+import { cn, mono } from '@/components/ui/interaction';
+import { messages } from '@/i18n/messages.es';
+import { allFiles } from '@/stores/files';
+import { STAGE_TABS } from '@/stores/layout';
+import { Inspector } from './Inspector';
+import { Rail } from './Rail';
+import { Stage } from './Stage';
+import { TitleBar } from './TitleBar';
+
+declare global {
+  interface Window {
+    __OMNI_STUDIO_BOOT__?: { processStartEpochMs?: number; hydratedEpochMs?: number };
+  }
+}
+
+export function AppShell() {
+  const { layout, snapshot, project, projectId, adoptSnapshot, dispatch, ui } = useStudio();
+  const collapsed = useStore(layout, state => state.inspectorCollapsed);
+  useEnsureLoaded(snapshot);
+  useRefreshOn(['board'], snapshot);
+  const current = useStore(snapshot, state => state.data);
+
+  // The first snapshot decides the project root (filters, stores) of this window.
+  useEffect(() => {
+    if (current && projectId === null) adoptSnapshot(current);
+  }, [adoptSnapshot, current, projectId]);
+
+  // E2E-01: mark the moment the board is painted with real data.
+  const boardStatus = useStore(
+    useStore(project.board, state => state.resource),
+    state => state.status,
+  );
+  useEffect(() => {
+    if (projectId === null || boardStatus !== 'ready') return;
+    if (performance.getEntriesByName('studio:hydrated').length > 0) return;
+    performance.mark('studio:hydrated');
+    const boot = window.__OMNI_STUDIO_BOOT__ ?? {};
+    window.__OMNI_STUDIO_BOOT__ = boot;
+    boot.hydratedEpochMs = performance.timeOrigin + performance.now();
+  }, [boardStatus, projectId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey) return;
+      const key = event.key.toLowerCase();
+      if (key === 'j') dispatch({ type: 'inspector.toggle' });
+      else if (key === 'k') ui.getState().setPaletteOpen(!ui.getState().paletteOpen);
+      else if (/^[1-5]$/.test(key)) {
+        const tab = STAGE_TABS[Number(key) - 1];
+        if (tab) dispatch({ type: 'stage.open', tab });
+      } else return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dispatch, ui]);
+
+  return (
+    <div className="flex h-dvh flex-col bg-canvas text-fg">
+      <TitleBar />
+      <div
+        data-inspector={collapsed ? 'collapsed' : 'expanded'}
+        className={cn(
+          'grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_22rem] data-[inspector=collapsed]:grid-cols-[15rem_minmax(0,1fr)_0rem]',
+          'motion-safe:transition-[grid-template-columns] motion-safe:duration-200 motion-safe:ease-out',
+        )}
+      >
+        <Rail />
+        <Stage />
+        <Inspector />
+      </div>
+      <Palette />
+      <SettingsDialog />
+    </div>
+  );
+}
+
+const VIEW_ICONS = {
+  kanban: KanbanSquare,
+  cartography: Network,
+  diffs: FileDiff,
+  finops: Gauge,
+  skills: Sparkles,
+} as const;
+
+function Palette() {
+  const { ui, snapshot, project, dispatch } = useStudio();
+  const open = useStore(ui, state => state.paletteOpen);
+  const origin = useStore(ui, state => state.paletteOrigin);
+  const specs = useStore(snapshot, state => state.data?.specs);
+  const filesResource = useStore(project.files, state => state.resource);
+  const tree = useStore(filesResource, state => state.data);
+
+  useEffect(() => {
+    if (open && filesResource.getState().status === 'idle') void filesResource.getState().load();
+  }, [filesResource, open]);
+
+  const items = useMemo<PaletteItem[]>(() => {
+    const views = STAGE_TABS.map<PaletteItem>(tab => ({
+      id: `view:${tab}`,
+      group: 'view',
+      label: messages.shell.tabs[tab],
+      icon: VIEW_ICONS[tab],
+      run: () => dispatch({ type: 'stage.open', tab }),
+    }));
+    const specItems = (specs ?? []).map<PaletteItem>(spec => ({
+      id: `spec:${spec.id}`,
+      group: 'spec',
+      label: spec.slug,
+      hint: spec.title,
+      icon: KanbanSquare,
+      run: () => dispatch({ type: 'spec.focus', id: spec.id }),
+    }));
+    const fileItems = allFiles(tree).map<PaletteItem>(path => ({
+      id: `file:${path}`,
+      group: 'file',
+      label: path,
+      icon: File,
+      run: () => dispatch({ type: 'file.open', path }),
+    }));
+    const actions: PaletteItem[] = [
+      {
+        id: 'action:spec.new',
+        group: 'action',
+        label: messages.shell.newSpec,
+        icon: Plus,
+        run: () => dispatch({ type: 'spec.new' }),
+      },
+      {
+        id: 'action:terminal.new',
+        group: 'action',
+        label: messages.terminal.new,
+        icon: SquareTerminal,
+        run: () => dispatch({ type: 'terminal.new' }),
+      },
+      {
+        id: 'action:inspector.toggle',
+        group: 'action',
+        label: messages.shell.toggleInspector,
+        icon: PanelRight,
+        run: () => dispatch({ type: 'inspector.toggle' }),
+      },
+      {
+        id: 'action:project.scan',
+        group: 'action',
+        label: messages.board.ctaScan,
+        icon: ScanSearch,
+        run: () => dispatch({ type: 'project.scan' }),
+      },
+      {
+        id: 'action:settings',
+        group: 'action',
+        label: messages.shell.settings,
+        icon: Settings,
+        run: () => dispatch({ type: 'settings.open' }),
+      },
+    ];
+    return [...views, ...actions, ...specItems, ...fileItems];
+  }, [dispatch, specs, tree]);
+
+  return (
+    <CommandPalette
+      open={open}
+      onOpenChange={next => ui.getState().setPaletteOpen(next)}
+      items={items}
+      returnFocusTo={origin}
+      labels={{
+        title: messages.shell.palette,
+        empty: messages.shell.paletteEmpty,
+        groups: messages.shell.paletteGroups,
+      }}
+    />
+  );
+}
+
+function SettingsDialog() {
+  const { ui, snapshot } = useStudio();
+  const open = useStore(ui, state => state.settingsOpen);
+  const data = useStore(snapshot, state => state.data);
+  return (
+    <Dialog.Root open={open} onOpenChange={next => ui.getState().setSettingsOpen(next)}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-canvas/70" />
+        <Dialog.Content
+          aria-modal="true"
+          aria-describedby={undefined}
+          className="fixed start-1/2 top-1/2 z-50 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-floating-border bg-floating p-5 text-fg"
+        >
+          <div className="flex items-center justify-between">
+            <Dialog.Title className="text-sm font-semibold">{messages.shell.settings}</Dialog.Title>
+            <Dialog.Close asChild>
+              <Button size="icon-sm" variant="ghost" aria-label={messages.board.close}>
+                <Icon icon={X} />
+              </Button>
+            </Dialog.Close>
+          </div>
+          {data ? (
+            <dl className="mt-4 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
+              <dt className="text-fg-muted">{messages.shell.root}</dt>
+              <dd className={cn('break-all', mono)}>{data.root}</dd>
+              <dt className="text-fg-muted">{messages.shell.versions}</dt>
+              <dd className={mono}>
+                engine {data.versions.engine} · node {data.versions.node} · ipc v{data.versions.protocol}
+              </dd>
+            </dl>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}

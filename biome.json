@@ -23,7 +23,8 @@
       "apps/studio/tests/**/*.ts",
       "apps/studio/vite.config.ts",
       "apps/studio/scripts/**/*.mjs",
-      "!schema/studio-ipc.schema.json"
+      "!schema/studio-ipc.schema.json",
+      "!apps/studio/src/ipc/generated.ts"
     ]
   },
   "formatter": {

@@ -941,3 +941,38 @@ Pendiente para pasos posteriores:
 - **Snap Layouts:** `hit_test` y el comando `window_set_caption_layout` existen, pero falta subclasificar la ventana (`SetWindowSubclass` sobre `WM_NCHITTEST`). Con WebView2 la ventana hija recibe el *hit-test* del área cliente, así que hay que validarlo a mano con el frontend real (WN-04).
 - **Estado de la bandeja y toasts:** `tray_state` y `ToastPolicy` no están conectados a los datos del motor; la bandeja muestra Emerald fijo.
 - **Empaquetado del núcleo** como recurso (`bundle.resources`, D-4): en *debug* el host usa `bin/omni-spec.mjs` del repositorio u `OMNI_STUDIO_ENGINE_ENTRY`.
+
+### 16.6 Fase verde — Paso 3: frontend React 19 (2026-11-06)
+
+| Bloque | Tests | Estado |
+| :-- | --: | :-- |
+| IC (`src/ipc/{transport,client,generated}.ts`, `scripts/gen-ipc-types.mjs`) | 4 | verde |
+| ST (`src/stores/*`) | 8 | verde |
+| FS (contrato de 4 estados, `components/ui/view-state.tsx`) | 20 | verde |
+| VB, VC, VD, VF, VS, VT (`src/views/*`, `src/terminal/xterm-adapter.ts`) | 39 | verde |
+| SH (`src/shell/*`, dock `components/ui/cockpit-input.tsx`) | 12 | verde |
+| DS (*tokens*, escaneo estático y CSS compilado) | 14 | verde |
+| **Total del paso** | **97** | **verde** (3 ejecuciones seguidas, sin intermitencias) |
+
+`tsc --noEmit`, `biome ci .` y `vite build` limpios.
+
+Decisiones de implementación:
+1. **D-6 resuelta a favor de la alternativa.** `@git-diff-view/react` 0.1.8 no virtualiza filas y su hoja de estilos trae reglas `:hover` fuera de `@media (hover: hover)` y sombras (incumple DS-02 y DS-10). El visor (`components/ui/diff-viewer.tsx`) pinta los hunks del motor con filas de alto fijo virtualizadas con `@tanstack/react-virtual`; el contenedor de scroll no se desmonta al cambiar de modo (VD-02).
+2. **Hoja de xterm curada** (`src/design/xterm.css`): la original tiene sombras interiores y `#000`. Se copian solo las reglas estructurales, con colores de los *tokens*.
+3. **Tailwind solo escanea código de producción** (`@source not` para tests y `src/test`; `@source not inline('ring shadow')`): los tests contienen a propósito clases prohibidas como literales y acababan compiladas en el CSS.
+4. **Almacenes por proyecto.** El contexto (`src/app/studio-context.tsx`) crea los *stores* de dominio por raíz de proyecto; cambiar de proyecto crea *stores* nuevos y todas las vistas vuelven a *Loading* (SH-05). El valor del contexto solo cambia en ese momento, por lo que los *ticks* de FinOps no re-renderizan otras vistas (ST-06).
+5. **Ticks de FinOps** a ≤ 4 Hz con *throttle* de 250 ms y *tick* final garantizado; el `sparkline` guarda 60 s de muestras.
+6. **Dock (D-19).** Envía `/omni-<modo> <instrucción>\r` a la sesión ConPTY activa; las líneas de una instrucción multilínea se unen con espacios porque un `\n` enviaría la instrucción a medias a la CLI del agente. Los modos salen del catálogo de skills (`omni-*`).
+7. **Tablero.** Navegación con *roving tabindex*; el foco que pide el rail se consume una vez (`focusRequest`). El carril «Sin ruta» solo aparece si hay specs sin ruta. Las opciones de filtro acumulan los valores vistos para que no desaparezcan al filtrar.
+8. **Generador IPC sin descripciones.** `generated.ts` solo lleva tipos: la descripción de `gate.approve` contiene «governance» y DS-05 restringe esa palabra a una lista blanca de archivos. El archivo se excluye de Biome, igual que el esquema.
+9. **Barra de título.** Envía a Rust los rectángulos con ambas formas (`x/y/width/height` y `left/top/right/bottom`, que es lo que deserializa `window::Rect`) dentro de `CaptionLayout` en *camelCase*.
+10. **Ganchos E2E preparados:** `data-testid` `diff-scroll`, `diff-row`, `hunk` y `terminal`, la marca `studio:hydrated` y `__OMNI_STUDIO_BOOT__.hydratedEpochMs`.
+
+Correcciones de infraestructura de tests escritos en rojo (no de expectativas):
+- **`vite.config.ts`:** en Vitest, el plugin `vitest:normalize-url` sustituye `import.meta.url` por `self.location` en `new URL('…', import.meta.url)`, así que `client.test.tsx` y `design-system.test.tsx` obtenían `http://localhost:3000/@fs/…` y `fileURLToPath` fallaba al cargar el archivo. Un plugin `pre`, activo solo con `VITEST` y solo en archivos `*.test.*`, pasa la base como `String(import.meta.url)`.
+- **`src/test/setup.ts`:** `localStorage.clear()` fallaba en el entorno `node` de `design-system.test.ts` (ahora `globalThis.localStorage?.clear()`), y happy-dom no implementa la propiedad IDL `draggable` que lee VB-05 (se añade el reflejo estándar del atributo).
+
+Pendiente para pasos posteriores:
+- **Verificación visual en la app real:** el paso se validó con Vitest y `vite build`; falta abrirlo en Tauri con un proyecto real (forma parte de E2E, paso 4).
+- **E2E-10** usa un `combobox` «Riesgo»; el tablero expone los filtros como botones conmutables (VB-03). Hay que alinear uno de los dos antes de ejecutar E2E.
+- **Chunk principal de 878 kB** (xterm, Radix, d3-force): conviene cargar la terminal y la cartografía bajo demanda.

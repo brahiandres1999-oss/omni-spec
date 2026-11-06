@@ -1,0 +1,85 @@
+/*
+ * Omni Studio design tokens — STUDIO-DESIGN-SYSTEM.md §2.1 (Obsidian Titanium), the single source of colour.
+ * `src/design/tokens.ts` mirrors these values for canvas drawing and contrast checks (DS-04, DS-06).
+ *
+ * Tailwind only scans production sources: test files carry forbidden class names as literals on purpose
+ * (DS-02, DS-09), and scanning them would compile those utilities into the app.
+ */
+@import 'tailwindcss' source(none);
+@import './xterm.css';
+
+@source '../';
+@source not '../**/*.test.ts';
+@source not '../**/*.test.tsx';
+@source not '../test';
+/* Never compile the shadow utilities the design system forbids, even if the bare word shows up in prose (DS-02). */
+@source not inline('ring shadow');
+
+@theme {
+  --color-*: initial;
+  --color-canvas: #121213;
+  --color-surface: #18181a;
+  --color-floating: #1e1e21;
+  --color-floating-border: #2a2a2e;
+  --color-divider: #262628;
+  --color-accent: #06b6d4;
+  --color-accent-bright: #22d3ee;
+  --color-governance: #f59e0b;
+  --color-attested: #10b981;
+  --color-breach: #f43f5e;
+  --color-fg: #ededef;
+  --color-fg-muted: #a1a1aa;
+  --color-heat-low: #0e7490;
+  --color-heat-high: #a5f3fc;
+
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+  --font-sans: "Segoe UI Variable", "Segoe UI", system-ui;
+
+  /* Fixed row heights shared by skeletons and ready rows (CLS = 0, plan §11.3). */
+  --row-board-card: 108px;
+  --row-list: 28px;
+  --row-diff-line: 20px;
+  --row-file: 26px;
+  --row-skill: 64px;
+  --row-finops-task: 88px;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    overflow: hidden;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  }
+}
+
+/* DS-11: with reduced motion every transition collapses to an instant opacity change, press scale included. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-property: opacity !important;
+    transition-duration: 0s !important;
+    animation: none !important;
+    scale: none !important;
+  }
+}
