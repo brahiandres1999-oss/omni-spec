@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Typed tasks and gates:** an optional `tasks.json` (`schema/tasks.schema.json`) is the canonical task state, and `tasks migrate <id>` converts `tasks.md`. Acceptance criteria accept `tests` to trace automated criteria as data. With `governance.humanGates: "full"`, full-route specs need `approve <id> --gate 1` before `verify` and `--gate 2` before `complete`. Approvals are bound to what was approved and signed.
 - **Auth broker (`src/auth.mjs`):** DPAPI store at `%LOCALAPPDATA%\OmniSpec\auth.dat` with application entropy. `NTE_BAD_KEY_STATE` purges it and asks for a new login. A `Global\OmniSpec_Auth_Mutex` (falling back to `Local\`) plus a re-read after locking guarantees a single refresh-token rotation across processes. `login --provider claude|gh|gcloud` delegates to existing CLI sessions, and `auth status` never prints secrets.
 
+### Fixed
+- The Antigravity plugin manifest declares `version` (kept equal to `package.json` by `release:check`). Antigravity CLI 1.5.1 reports a missing version as a warning, so `agy plugin validate --strict` failed and `plugin install` aborted.
+
 ### Changed (breaking)
 - Checks and gates no longer run through a shell. Commands that chain with `&&`, `|` or `;` or redirect output fail validation (`GUARDIAN_SHELL_OPERATOR`); split them into separate checks. Binaries outside the whitelist need `guardian.allowedBinaries`. On Windows, a non-Node batch tool such as `mvn.cmd` reports `GUARDIAN_SHELL_REQUIRED`.
 - Version 3 verification records require a new `verify` before `complete`.

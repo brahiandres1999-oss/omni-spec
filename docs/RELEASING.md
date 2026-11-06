@@ -57,7 +57,7 @@ El workflow existe pero no se ejecuta al crear una release: se inicia manualment
 
 La generación automática de provenance de npm tiene requisitos propios, entre ellos la visibilidad del repositorio; comprobarlos para la publicación concreta. Publicación, checksum y provenance son comprobaciones distintas.
 
-Mantener versión y canal alineados: `0.8.0-preview.N` → `preview`; otras prereleases → `next`; versiones normales → `latest`. Para cada versión actualizar paquete, lockfile, README/banner, changelog y `docs/releases/<version>.md`. `release:check` rechaza inconsistencias. Las publicaciones npm no permiten reutilizar nombre/versión.
+Mantener versión y canal alineados: `0.8.0-preview.N` → `preview`; otras prereleases → `next`; versiones normales → `latest`. Para cada versión actualizar paquete, lockfile, `plugin.json` (`version`), README/banner, changelog y `docs/releases/<version>.md`. `release:check` rechaza inconsistencias. Las publicaciones npm no permiten reutilizar nombre/versión.
 
 ## Uso desde npm una vez publicado
 
