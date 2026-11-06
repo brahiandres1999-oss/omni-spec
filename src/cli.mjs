@@ -285,6 +285,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (command === 'studio-engine')
       return await studioEngineCommand(args.slice(1), {
         root: await findProjectRoot(workingDir),
+        cwd: workingDir,
         version: await getCliVersion(),
       });
     const { flags, positionals } = parse(args.slice(1));

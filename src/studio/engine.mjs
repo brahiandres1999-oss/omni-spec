@@ -11,13 +11,14 @@ import { specRoute } from '../fit.mjs';
 import { GateError, approveGate, gateStatus } from '../gates.mjs';
 import { getActiveSpec, loadManifest } from '../manifest.mjs';
 import {
-  memoryPath,
+  openMemory,
   openProjectMemory,
   readSpecsGitState,
   startCheckpointSupervisor,
   syncFromGit,
 } from '../memory.mjs';
 import { SecureStoreError } from '../secure-store.mjs';
+import { createAgentHub } from './agents/index.mjs';
 import { collectBoardInputs, projectBoard } from './projections/board.mjs';
 import { fileTree } from './projections/files.mjs';
 import { projectFinops, pruneTokenEvents } from './projections/finops.mjs';
@@ -34,6 +35,7 @@ import {
   STUDIO_METHODS,
 } from './protocol.mjs';
 import { addRemark, approveGate2, decideHunk, getDiff, getDiffFile, stageApproved } from './review.mjs';
+import { resolveWorkspace } from './workspace.mjs';
 
 /**
  * `omni-spec studio-engine`: the Node side of Omni Studio (plan §5). It connects as a client to the
@@ -80,9 +82,9 @@ async function currentBranch(root) {
   return stdout.trim();
 }
 
-function walBytes(root) {
+function walBytes(path) {
   try {
-    return statSync(`${memoryPath(root)}-wal`).size;
+    return statSync(`${path}-wal`).size;
   } catch (error) {
     if (error.code === 'ENOENT') return 0;
     throw error;
@@ -94,7 +96,44 @@ function domainGate(error) {
   return error;
 }
 
-function createHandlers(root, memory, { version, actor, credentials, notify }) {
+const NOT_INSTALLED =
+  'OmniSpec no está instalado en este proyecto: Omni Studio trabaja sin escribir en el repositorio, así que esta vista no está disponible.';
+
+/**
+ * Studio mode (no specs/manifest.json): views that need specs answer OMNISPEC_NOT_INSTALLED instead of writing
+ * to the repository, and any other failure becomes a domain error so a plain folder never crashes the engine.
+ */
+function studioModeHandlers(handlers) {
+  const notInstalled = () => {
+    throw new StudioError('OMNISPEC_NOT_INSTALLED', NOT_INSTALLED);
+  };
+  const soft =
+    handler =>
+    async (...args) => {
+      try {
+        return await handler(...args);
+      } catch (error) {
+        if (error instanceof StudioError) throw error;
+        throw new StudioError('STUDIO_VIEW_UNAVAILABLE', error.message, { retryable: true });
+      }
+    };
+  const guarded = { ...handlers };
+  for (const name of [
+    'board.get',
+    'gate.approve',
+    'review.decideHunk',
+    'review.stageApproved',
+    'review.addRemark',
+    'skills.toggle',
+  ])
+    guarded[name] = notInstalled;
+  for (const name of ['cartography.graph', 'blastRadius.heat', 'diff.get', 'diff.getFile', 'files.tree', 'skills.list'])
+    guarded[name] = soft(handlers[name]);
+  return guarded;
+}
+
+function createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents }) {
+  const studio = workspace.mode === 'studio';
   const activeSpecId = async spec => {
     if (spec) return spec;
     const active = await getActiveSpec(root);
@@ -107,8 +146,26 @@ function createHandlers(root, memory, { version, actor, credentials, notify }) {
     return changes;
   };
 
-  return {
+  const handlers = {
     async 'project.snapshot'() {
+      if (studio) {
+        const indexed = memory.db.prepare('SELECT count(*) AS n FROM modules_graph').get().n > 0;
+        return {
+          schemaVersion: 1,
+          root,
+          branch: await currentBranch(root).catch(() => ''),
+          versions: { engine: version, node: process.version, protocol: STUDIO_PROTOCOL_VERSION },
+          mode: 'studio',
+          workspace: workspace.dir,
+          activeSpec: null,
+          specs: [],
+          routes: {},
+          gates: {},
+          breakers: projectFinops(memory).tasks.map(task => ({ taskId: task.taskId, state: task.state })),
+          cartography: { indexed, summary: indexed ? summarizeGraph(memory) : null },
+          memory: { walBytes: walBytes(workspace.memoryPath), specsTreeOid: '' },
+        };
+      }
       const manifest = await loadManifest(root);
       const [branch, gitState, activeSpec] = await Promise.all([
         currentBranch(root),
@@ -130,13 +187,15 @@ function createHandlers(root, memory, { version, actor, credentials, notify }) {
         root,
         branch,
         versions: { engine: version, node: process.version, protocol: STUDIO_PROTOCOL_VERSION },
+        mode: 'project',
+        workspace: workspace.dir,
         activeSpec,
         specs: manifest.specs,
         routes,
         gates,
         breakers: projectFinops(memory).tasks.map(task => ({ taskId: task.taskId, state: task.state })),
         cartography: { indexed, summary: indexed ? summarizeGraph(memory) : null },
-        memory: { walBytes: walBytes(root), specsTreeOid: gitState.treeOid },
+        memory: { walBytes: walBytes(workspace.memoryPath), specsTreeOid: gitState.treeOid },
       };
     },
     async 'board.get'({ route, filters }) {
@@ -176,17 +235,23 @@ function createHandlers(root, memory, { version, actor, credentials, notify }) {
     'fs.changed': ({ paths }) =>
       enqueue(async () => {
         const areas = areasForPaths(paths);
-        if (areas.includes('board')) await syncFromGit(memory, root);
+        if (areas.includes('board') && !studio) await syncFromGit(memory, root);
         if (areas.includes('graph')) indexRepository(root, memory);
         if (areas.length) await notify('project.changed', { areas });
       }),
     'fs.rescan': () =>
       enqueue(async () => {
-        await syncFromGit(memory, root);
+        if (!studio) await syncFromGit(memory, root);
         indexRepository(root, memory);
         await notify('project.changed', { areas: AREA_ORDER });
       }),
+    'agent.status': () => agents.status(),
+    'agent.prompt': params => agents.prompt(params),
+    'agent.cancel': () => agents.cancel(),
+    'agent.permission': params => agents.permission(params),
+    'agent.reset': () => agents.reset(),
   };
+  return studio ? studioModeHandlers(handlers) : handlers;
 }
 
 /** Credential label computed once in the background: probing CLIs and DPAPI takes seconds. */
@@ -213,7 +278,12 @@ function lazyCredentials(select) {
  *   log?: (line: string) => void,
  *   onSession?: (session: {notify: (method: string, params: object) => Promise<void>}) => void,
  *   handlerOverrides?: Record<string, Function>,
- *   deps?: {openProjectMemory?: typeof openProjectMemory, selectCredentialSource?: typeof selectCredentialSource},
+ *   deps?: {
+ *     openProjectMemory?: typeof openProjectMemory,
+ *     selectCredentialSource?: typeof selectCredentialSource,
+ *     resolveWorkspace?: typeof resolveWorkspace,
+ *     createAgentHub?: typeof createAgentHub,
+ *   },
  *   stdin?: import('node:stream').Readable,
  * }} options
  */
@@ -231,7 +301,14 @@ export function runStudioEngine({
   return new Promise(resolveExit => {
     const socket = connect(pipePath);
     const decoder = createFrameDecoder();
-    const memoryReady = (deps.openProjectMemory ?? openProjectMemory)(root);
+    const workspaceReady = (deps.resolveWorkspace ?? resolveWorkspace)(root);
+    // Studio mode keeps memory outside the repository and has no specs/ tree to sync from Git.
+    const memoryReady = workspaceReady.then(workspace =>
+      workspace.mode === 'project'
+        ? (deps.openProjectMemory ?? openProjectMemory)(root)
+        : { memory: openMemory(workspace.memoryPath), quarantined: null, sync: null },
+    );
+    let agents = null;
     const credentials = lazyCredentials(deps.selectCredentialSource ?? selectCredentialSource);
     let phase = 'challenge';
     let engineNonce = null;
@@ -253,6 +330,7 @@ export function runStudioEngine({
       if (finished) return;
       finished = true;
       if (supervisor) clearInterval(supervisor);
+      agents?.dispose();
       stdin?.off('end', onStdinEnd);
       memoryReady.then(
         result => {
@@ -284,11 +362,13 @@ export function runStudioEngine({
 
     const openSession = async () => {
       ({ memory } = await memoryReady);
+      const workspace = await workspaceReady;
       supervisor = startCheckpointSupervisor(memory);
       pruneTokenEvents(memory);
       const actor = userInfo().username;
+      agents = (deps.createAgentHub ?? createAgentHub)({ root, workspace, notify, log });
       const handlers = {
-        ...createHandlers(root, memory, { version, actor, credentials, notify }),
+        ...createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents }),
         ...handlerOverrides,
       };
       dispatcher = createRpcDispatcher({ direction: 'host->engine', handlers, onFatal: fatal });
@@ -423,7 +503,7 @@ function readSecretLine(stdin) {
  *   stderr?: (line: string) => void}} context
  * @returns {Promise<number>} Exit code.
  */
-export async function studioEngineCommand(args, { root, version, stdin = process.stdin, stderr }) {
+export async function studioEngineCommand(args, { root, cwd = process.cwd(), version, stdin = process.stdin, stderr }) {
   const log = stderr ?? (line => process.stderr.write(`${line}\n`));
   let pipePath = null;
   for (let index = 0; index < args.length; index++) {
@@ -448,10 +528,9 @@ export async function studioEngineCommand(args, { root, version, stdin = process
     log(`Invalid --pipe ${pipePath}. ${USAGE}`);
     return EXIT.USAGE;
   }
-  if (!root) {
-    log('No OmniSpec project found (specs/manifest.json). Run omni-spec init first.');
-    return 1;
-  }
+  // Without specs/manifest.json the engine serves the folder it was started in (the host sets the working
+  // directory to the project root) in studio mode, keeping Omni's state outside the repository.
+  const projectRoot = root ?? cwd;
   const secret = await readSecretLine(stdin);
   if (secret === null) {
     log('Missing secret: write it as the first line of stdin.');
@@ -461,5 +540,5 @@ export async function studioEngineCommand(args, { root, version, stdin = process
     log('Invalid secret: it must be 64 hex characters (256 bits).');
     return EXIT.USAGE;
   }
-  return runStudioEngine({ root, pipePath, secret, version, log, stdin });
+  return runStudioEngine({ root: projectRoot, pipePath, secret, version, log, stdin });
 }

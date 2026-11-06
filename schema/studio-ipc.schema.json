@@ -13,6 +13,107 @@
     }
   },
   "methods": {
+    "agent.cancel": {
+      "direction": "host->engine",
+      "description": "Interrupt the running agent turn.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "agent.event": {
+      "direction": "engine->host",
+      "description": "Provider-independent agent event (text, tool, permission, result).",
+      "paramsSchema": {
+        "type": "object"
+      },
+      "notification": true
+    },
+    "agent.permission": {
+      "direction": "host->engine",
+      "description": "Answer one permission request of the agent.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decision": {
+            "enum": [
+              "allow",
+              "deny"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "requestId",
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "agent.prompt": {
+      "direction": "host->engine",
+      "description": "Send one user message to the agent; the answer arrives as agent.event notifications.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "agent.reset": {
+      "direction": "host->engine",
+      "description": "End the conversation and start a new one on the next prompt.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "agent.status": {
+      "direction": "host->engine",
+      "description": "Available agents, conversation state and workspace mode.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
     "blastRadius.heat": {
       "direction": "host->engine",
       "description": "Blast radius of one target, per impacted node (heatmap).",

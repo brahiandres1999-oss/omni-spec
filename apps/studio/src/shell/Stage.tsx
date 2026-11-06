@@ -5,7 +5,16 @@
 import { useStore } from 'zustand';
 import { useStudio } from '@/app/studio-context';
 import { Button } from '@/components/ui/button';
-import { FileDiff, Gauge, Icon, KanbanSquare, Network, PanelRight, Sparkles } from '@/components/ui/icon';
+import {
+  FileDiff,
+  Gauge,
+  Icon,
+  KanbanSquare,
+  MessageSquare,
+  Network,
+  PanelRight,
+  Sparkles,
+} from '@/components/ui/icon';
 import { ProtectedState } from '@/components/ui/ProtectedState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorState, SkeletonBar } from '@/components/ui/view-state';
@@ -13,6 +22,7 @@ import { messages } from '@/i18n/messages.es';
 import { STAGE_TABS, type StageTab } from '@/stores/layout';
 import { BoardView } from '@/views/BoardView';
 import { CartographyView } from '@/views/CartographyView';
+import { ChatView } from '@/views/ChatView';
 import { DiffView } from '@/views/DiffView';
 import { FinopsView } from '@/views/FinopsView';
 import { SkillsView } from '@/views/SkillsView';
@@ -35,12 +45,21 @@ function InspectorToggle() {
   );
 }
 
-const ICONS = { kanban: KanbanSquare, cartography: Network, diffs: FileDiff, finops: Gauge, skills: Sparkles } as const;
+const ICONS = {
+  chat: MessageSquare,
+  kanban: KanbanSquare,
+  cartography: Network,
+  diffs: FileDiff,
+  finops: Gauge,
+  skills: Sparkles,
+} as const;
 
 function ActiveView({ tab }: { tab: StageTab }) {
   const { snapshot } = useStudio();
   const spec = useStore(snapshot, state => state.data?.activeSpec?.id ?? '');
   switch (tab) {
+    case 'chat':
+      return <ChatView />;
     case 'kanban':
       return <BoardView />;
     case 'cartography':
@@ -93,7 +112,8 @@ export function Stage() {
           </TabsContent>
         )}
       </Tabs>
-      <Dock />
+      {/* The chat has its own composer; the terminal dock stays for the other views. */}
+      {tab === 'chat' ? null : <Dock />}
     </main>
   );
 }

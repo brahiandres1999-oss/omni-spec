@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,14 +27,22 @@ describe('CLI-S studio-engine command', () => {
     assert.match(result.stderr, /--pipe/);
   });
 
-  test('CLI-S-03 studio-engine outside an OmniSpec project fails with a clear message', () => {
+  test('CLI-S-03 studio-engine outside an OmniSpec project runs in studio mode and writes nothing there', () => {
     const outside = mkdtempSync(join(tmpdir(), 'omni-no-project-'));
+    const home = mkdtempSync(join(tmpdir(), 'omni-studio-home-'));
     try {
-      const result = run(['studio-engine', '--pipe', newPipePath()], { cwd: outside, input: newSecret() + '\n' });
+      const result = run(['studio-engine', '--pipe', newPipePath()], {
+        cwd: outside,
+        input: newSecret() + '\n',
+        env: { ...process.env, OMNI_STUDIO_HOME: home },
+      });
+      // Nobody listens on the pipe, so the engine cannot connect; it must not refuse the folder itself.
       assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /manifest|omni-spec init/i);
+      assert.doesNotMatch(result.stderr, /omni-spec init/i);
+      assert.deepEqual(readdirSync(outside), []);
     } finally {
       rmSync(outside, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

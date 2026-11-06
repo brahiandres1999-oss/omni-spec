@@ -2,7 +2,7 @@
 import { createStore } from 'zustand/vanilla';
 import { readJson, writeJson } from './storage';
 
-export const STAGE_TABS = ['kanban', 'cartography', 'diffs', 'finops', 'skills'] as const;
+export const STAGE_TABS = ['chat', 'kanban', 'cartography', 'diffs', 'finops', 'skills'] as const;
 export const INSPECTOR_TABS = ['terminal', 'overview', 'finops', 'files'] as const;
 export type StageTab = (typeof STAGE_TABS)[number];
 export type InspectorTab = (typeof INSPECTOR_TABS)[number];
@@ -20,8 +20,9 @@ export interface LayoutState extends PersistedLayout {
   setStageTab(tab: StageTab): void;
 }
 
-const KEY = 'layout';
-const DEFAULTS: PersistedLayout = { inspectorCollapsed: false, inspectorTab: 'overview', stageTab: 'kanban' };
+// v2: the agent chat became the first stage tab, so earlier layouts (opening on Kanban) start fresh.
+const KEY = 'layout.v2';
+const DEFAULTS: PersistedLayout = { inspectorCollapsed: false, inspectorTab: 'terminal', stageTab: 'chat' };
 
 function isLayout(value: unknown): value is PersistedLayout {
   const entry = value as Partial<PersistedLayout> | null;

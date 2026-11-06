@@ -8,6 +8,11 @@ use crate::error::{Result, StudioError};
 /// Engine methods the frontend may call (`host->engine` requests of `STUDIO_METHODS`, without the
 /// handshake). Notifications and anything else are refused in Rust (SEC-02).
 pub const ALLOWED_ENGINE_METHODS: &[&str] = &[
+    "agent.cancel",
+    "agent.permission",
+    "agent.prompt",
+    "agent.reset",
+    "agent.status",
     "blastRadius.heat",
     "board.get",
     "cartography.graph",

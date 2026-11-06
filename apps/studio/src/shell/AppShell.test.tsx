@@ -17,7 +17,7 @@ afterEach(() => {
   restoreLayout();
 });
 
-const STAGE_TABS = ['Kanban', 'Cartografía', 'Diffs', 'FinOps', 'Skills'];
+const STAGE_TABS = ['Chat', 'Kanban', 'Cartografía', 'Diffs', 'FinOps', 'Skills'];
 
 function stageTabs(): HTMLElement {
   return screen.getByRole('tablist', { name: 'Vistas' });
@@ -96,7 +96,7 @@ describe('SH three-column shell', () => {
     expect(fake.calls('board.get').length).toBeGreaterThanOrEqual(2);
   });
 
-  test('SH-07 stage tabs switch with Ctrl+1…Ctrl+5 and the active tab persists', async () => {
+  test('SH-07 stage tabs switch with Ctrl+1…Ctrl+6 and the active tab persists', async () => {
     const { fake, user, view } = await mountShell();
     expect(
       within(stageTabs())
@@ -106,11 +106,12 @@ describe('SH three-column shell', () => {
     expect(selectedStageTab()).toBe('Kanban');
 
     for (const [key, name] of [
-      ['2', 'Cartografía'],
-      ['5', 'Skills'],
-      ['3', 'Diffs'],
-      ['1', 'Kanban'],
-      ['4', 'FinOps'],
+      ['3', 'Cartografía'],
+      ['6', 'Skills'],
+      ['1', 'Chat'],
+      ['4', 'Diffs'],
+      ['2', 'Kanban'],
+      ['5', 'FinOps'],
     ] as const) {
       await user.keyboard(`{Control>}${key}{/Control}`);
       expect(selectedStageTab(), `Ctrl+${key}`).toBe(name);

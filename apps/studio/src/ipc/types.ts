@@ -162,6 +162,10 @@ export interface SnapshotPayload {
   root: string;
   branch: string;
   versions: { engine: string; node: string; protocol: number };
+  /** `studio`: OmniSpec is not installed in the repository and Omni keeps its state outside it. */
+  mode?: 'project' | 'studio';
+  /** Folder that holds Omni's state for this project. */
+  workspace?: string;
   /** The manifest entry of the active spec; `tasks` only when the engine adds it. */
   activeSpec: (SpecSummary & { tasks?: { done: number; total: number } }) | null;
   specs: SpecSummary[];

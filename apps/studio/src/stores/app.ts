@@ -11,6 +11,7 @@ import { createFinopsStore } from './finops';
 import { createGraphStore } from './graph';
 import { createResourceStore } from './resource';
 import { createReviewStore } from './review';
+import { createChatStore } from './chat';
 import { createSkillsStore } from './skills';
 
 export function createProjectStores(client: StudioClient, projectId: string) {
@@ -21,6 +22,7 @@ export function createProjectStores(client: StudioClient, projectId: string) {
     finops: createFinopsStore(client),
     skills: createSkillsStore(client),
     files: createFilesStore(client),
+    chat: createChatStore(client, { projectId }),
     /** Review stores by spec (the diff view is per spec; the diff itself is the working tree). */
     reviews: new Map<string, ReturnType<typeof createReviewStore>>(),
   };

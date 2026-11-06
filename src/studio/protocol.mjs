@@ -168,6 +168,29 @@ const ENGINE = 'engine->host';
 
 /** Every Studio IPC method, frozen. Sorted by name so the generated schema is stable. */
 export const STUDIO_METHODS = Object.freeze({
+  'agent.cancel': method(HOST, object(), anyObject, 'Interrupt the running agent turn.'),
+  'agent.event': method(ENGINE, anyObject, null, 'Provider-independent agent event (text, tool, permission, result).'),
+  'agent.permission': method(
+    HOST,
+    object(
+      {
+        requestId: string({ minLength: 1 }),
+        decision: { enum: ['allow', 'deny'] },
+        message: string(),
+      },
+      ['requestId', 'decision'],
+    ),
+    anyObject,
+    'Answer one permission request of the agent.',
+  ),
+  'agent.prompt': method(
+    HOST,
+    object({ text: string({ minLength: 1 }), model: string({ minLength: 1 }) }, ['text']),
+    anyObject,
+    'Send one user message to the agent; the answer arrives as agent.event notifications.',
+  ),
+  'agent.reset': method(HOST, object(), anyObject, 'End the conversation and start a new one on the next prompt.'),
+  'agent.status': method(HOST, object(), anyObject, 'Available agents, conversation state and workspace mode.'),
   'blastRadius.heat': method(
     HOST,
     object(

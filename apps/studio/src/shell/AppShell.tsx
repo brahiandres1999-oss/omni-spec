@@ -16,6 +16,7 @@ import {
   Gauge,
   Icon,
   KanbanSquare,
+  MessageSquare,
   Network,
   PanelRight,
   Plus,
@@ -118,7 +119,7 @@ export function AppShell() {
       const key = event.key.toLowerCase();
       if (key === 'j') dispatch({ type: 'inspector.toggle' });
       else if (key === 'k') ui.getState().setPaletteOpen(!ui.getState().paletteOpen);
-      else if (/^[1-5]$/.test(key)) {
+      else if (/^[1-6]$/.test(key)) {
         const tab = STAGE_TABS[Number(key) - 1];
         if (tab) dispatch({ type: 'stage.open', tab });
       } else return;
@@ -172,6 +173,7 @@ function EngineNotice() {
 }
 
 const VIEW_ICONS = {
+  chat: MessageSquare,
   kanban: KanbanSquare,
   cartography: Network,
   diffs: FileDiff,
