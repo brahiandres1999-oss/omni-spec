@@ -1,7 +1,8 @@
 /**
  * Agent chat (docs/STUDIO-AGENT-COCKPIT.md): the user talks to their own Claude Code. Answers render as
  * Markdown, every tool call is a card, edits show a line diff, and edits or commands wait for Aprobar /
- * Rechazar. The composer carries the model and effort for the next turns; the header shows context and cost.
+ * Rechazar. The composer carries the model and effort for the next turns and says when they differ from the
+ * running ones; ChatHeader (on the stage tab bar) shows the agent, its model, context and cost.
  */
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
@@ -28,7 +29,7 @@ import { LineDiff } from '@/components/ui/line-diff';
 import { Markdown } from '@/components/ui/markdown';
 import { type MenuOption, OptionMenu } from '@/components/ui/option-menu';
 import { formatInt, messages } from '@/i18n/messages.es';
-import type { AgentUsage, ChatItem, ChatStore, ToolInput } from '@/stores/chat';
+import type { AgentOptions, AgentUsage, ChatItem, ChatStore, ToolInput } from '@/stores/chat';
 
 const t = messages.chat;
 const DEFAULT = '';
@@ -197,6 +198,43 @@ const compact = (value: number) =>
       ? `${Math.round(value / 1000)}k`
       : formatInt(value);
 
+/** `claude-opus-5-5` → `Opus 5.5`; an id of another shape is shown as the CLI wrote it. */
+export function modelName(id: string): string {
+  const match = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id);
+  if (!match) return id;
+  const [, family = '', major, minor] = match;
+  const name = t.models[family] ?? family;
+  return minor ? `${name} ${major}.${minor}` : `${name} ${major}`;
+}
+
+const effortName = (effort: string | null) => (effort ? (t.efforts[effort] ?? effort) : t.defaultOption).toLowerCase();
+
+/**
+ * What changes with the next message when the composer differs from what the conversation runs with, as in
+ * «Opus 5.5 ahora → Haiku desde tu próximo mensaje». `null` when nothing is pending.
+ */
+export function pendingChange(
+  running: string | null,
+  applied: AgentOptions | null,
+  options: AgentOptions,
+): { text: string; modelChanges: boolean } | null {
+  if (!running || !applied) return null;
+  const now: string[] = [];
+  const next: string[] = [];
+  const modelChanges = options.model !== applied.model;
+  if (modelChanges) {
+    now.push(modelName(running));
+    next.push(options.model ? (t.models[options.model] ?? options.model) : t.defaultModel);
+  }
+  if (options.effort !== applied.effort) {
+    now.push(t.effortPhrase(effortName(applied.effort)));
+    next.push(t.effortPhrase(effortName(options.effort)));
+  }
+  if (now.length === 0) return null;
+  const text = t.nextTurn(now.join(', '), next.join(', '));
+  return { text: text.charAt(0).toUpperCase() + text.slice(1), modelChanges };
+}
+
 /** Context occupancy and cost of the conversation, from what the CLI reported after the last turn. */
 function ContextMeter({ usage }: { usage: AgentUsage }) {
   if (usage.contextTokens === null) return null;
@@ -222,7 +260,7 @@ function ContextMeter({ usage }: { usage: AgentUsage }) {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(share * 100)}
-          className="h-1.5 w-20 overflow-hidden rounded-full bg-divider"
+          className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-divider @2xl:block"
         >
           <span
             className={cn('block h-full rounded-full transition-[width] duration-300 ease-out', tone)}
@@ -234,7 +272,57 @@ function ContextMeter({ usage }: { usage: AgentUsage }) {
         {compact(usage.contextTokens)}
         {usage.contextWindow ? ` / ${compact(usage.contextWindow)}` : ''}
       </span>
-      {cost ? <span className="hidden xl:inline">· ≈ US$ {cost}</span> : null}
+      {cost ? <span>· ≈ US$ {cost}</span> : null}
+    </div>
+  );
+}
+
+/**
+ * Agent, model, context and cost of the conversation. It lives on the stage tab bar (one row instead of
+ * two), so it reads the chat store of the open project rather than ChatView's props.
+ */
+export function ChatHeader() {
+  const { project } = useStudio();
+  const chat = project.chat;
+  const hasItems = useStore(chat, state => state.items.length > 0);
+  const agentState = useStore(chat, state => state.agentState);
+  const model = useStore(chat, state => state.model);
+  const status = useStore(chat, state => state.status);
+  const usage = useStore(chat, state => state.usage);
+  const busy = agentState === 'busy' || agentState === 'starting';
+  const agent = status?.agents.find(entry => entry.id === status.active);
+  const available = agent?.available ?? true;
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a labelled group of status items, not a form fieldset
+    <div role="group" aria-label={t.statusRegion} className="flex min-w-0 items-center gap-2.5 text-[13px]">
+      <span
+        aria-hidden="true"
+        className={cn(
+          'size-2 shrink-0 rounded-full',
+          !available ? 'bg-breach' : busy ? 'bg-accent motion-safe:animate-pulse' : 'bg-attested',
+        )}
+      />
+      <span className="hidden shrink-0 font-medium text-fg @xl:inline">{agent?.label ?? t.agent}</span>
+      {model ? (
+        <span className="hidden truncate text-fg-muted @3xl:inline" title={model}>
+          {modelName(model)}
+        </span>
+      ) : null}
+      {/* "Listo" is what the green dot already says; only work in progress and problems take room. */}
+      <span className={cn('truncate text-fg-muted', available && !busy && 'sr-only')}>
+        {available ? (t.states[agentState] ?? '') : t.unavailable}
+      </span>
+      <ContextMeter usage={usage} />
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label={t.reset}
+        title={t.reset}
+        disabled={!hasItems || busy}
+        onClick={() => void chat.getState().reset()}
+      >
+        <Icon icon={RotateCcw} />
+      </Button>
     </div>
   );
 }
@@ -249,13 +337,14 @@ export function ChatView() {
   const draft = useStore(chat, state => state.draft);
   const error = useStore(chat, state => state.error);
   const options = useStore(chat, state => state.options);
-  const usage = useStore(chat, state => state.usage);
+  const applied = useStore(chat, state => state.applied);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const pinned = useRef(true);
   const busy = agentState === 'busy' || agentState === 'starting';
   const agent = status?.agents.find(entry => entry.id === status.active);
   const available = agent?.available ?? true;
+  const pending = pendingChange(model, applied, options);
 
   const modelOptions: MenuOption[] = [
     { value: DEFAULT, label: t.defaultOption },
@@ -289,32 +378,7 @@ export function ChatView() {
   };
 
   return (
-    <section aria-label={t.region} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
-      <header className="flex h-11 min-w-0 items-center gap-2.5 border-b border-divider px-4 text-[13px]">
-        <span
-          aria-hidden="true"
-          className={cn(
-            'size-2 shrink-0 rounded-full',
-            !available ? 'bg-breach' : busy ? 'bg-accent motion-safe:animate-pulse' : 'bg-attested',
-          )}
-        />
-        <span className="font-medium text-fg">{agent?.label ?? t.agent}</span>
-        <span className="truncate text-fg-muted">{available ? (t.states[agentState] ?? '') : t.unavailable}</span>
-        {model ? <span className={cn(mono, 'hidden truncate text-xs text-fg-muted md:inline')}>{model}</span> : null}
-        <span className="flex-1" />
-        <ContextMeter usage={usage} />
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label={t.reset}
-          title={t.reset}
-          disabled={items.length === 0 || busy}
-          onClick={() => void chat.getState().reset()}
-        >
-          <Icon icon={RotateCcw} />
-        </Button>
-      </header>
-
+    <section aria-label={t.region} className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto]">
       <div
         ref={scroller}
         onScroll={event => {
@@ -389,7 +453,18 @@ export function ChatView() {
               )}
               onChange={value => chat.getState().setOptions({ effort: value || null })}
             />
-            <span className="flex-1" />
+            {/* Always mounted so the change is announced when it appears. */}
+            <span
+              aria-live="polite"
+              className="min-w-0 flex-1 truncate px-2 text-xs text-fg-muted"
+              title={
+                pending
+                  ? [t.appliesNext, pending.modelChanges ? t.modelSwitchCost : null].filter(Boolean).join(' ')
+                  : undefined
+              }
+            >
+              {pending?.text}
+            </span>
             {busy ? (
               <Button
                 variant="secondary"

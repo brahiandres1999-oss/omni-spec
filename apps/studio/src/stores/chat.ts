@@ -52,7 +52,7 @@ export interface AgentOptions {
 export interface AgentUsage {
   contextTokens: number | null;
   contextWindow: number | null;
-  /** Sum of every turn of this conversation; with a subscription it is a list-price estimate, not a charge. */
+  /** Cost of the whole conversation; with a subscription it is a list-price estimate, not a charge. */
   costUsd: number;
   costBasis: string | null;
 }
@@ -82,6 +82,8 @@ export interface AgentStatus {
   state: AgentState;
   model: string | null;
   sessionId: string | null;
+  /** Model and effort the running CLI was started with. */
+  options?: AgentOptions;
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -171,7 +173,10 @@ export interface ChatState {
   status: AgentStatus | null;
   draft: string;
   error: StudioError | null;
+  /** Model and effort for the next message. */
   options: AgentOptions;
+  /** Model and effort the conversation runs with; `options` differ from it until the next message. */
+  applied: AgentOptions | null;
   usage: AgentUsage;
   setOptions(patch: Partial<AgentOptions>): void;
   loadStatus(): Promise<void>;
@@ -210,7 +215,8 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           usage: {
             contextTokens: num(event.contextTokens) ?? usage.contextTokens,
             contextWindow: num(event.contextWindow) ?? usage.contextWindow,
-            costUsd: usage.costUsd + (num(event.costUsd) ?? 0),
+            // The driver sends the conversation total; a driver that only knows the turn cost adds up.
+            costUsd: num(event.sessionCostUsd) ?? usage.costUsd + (num(event.costUsd) ?? 0),
             costBasis: str(event.costBasis) || usage.costBasis,
           },
         });
@@ -228,6 +234,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       draft: '',
       error: null,
       options: readJson<AgentOptions>(OPTIONS_KEY, { model: null, effort: null }, isOptions),
+      applied: null,
       usage: EMPTY_USAGE,
       setOptions(patch) {
         const options = { ...get().options, ...patch };
@@ -238,7 +245,12 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         attach();
         try {
           const status = (await client.call('agent.status', {})) as AgentStatus;
-          set({ status, agentState: status.state, model: status.model ?? get().model });
+          set({
+            status,
+            agentState: status.state,
+            model: status.model ?? get().model,
+            applied: status.model && isOptions(status.options) ? status.options : get().applied,
+          });
         } catch (reason) {
           fail(reason);
         }
@@ -261,6 +273,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             ...(model ? { model } : {}),
             ...(effort ? { effort: effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } : {}),
           });
+          set({ applied: { model, effort } });
         } catch (reason) {
           set({ agentState: 'idle', draft: message });
           fail(reason);
@@ -283,7 +296,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       async reset() {
         try {
           await client.call('agent.reset', {});
-          set({ items: [], model: null, error: null, usage: EMPTY_USAGE });
+          set({ items: [], model: null, applied: null, error: null, usage: EMPTY_USAGE });
         } catch (reason) {
           fail(reason);
         }

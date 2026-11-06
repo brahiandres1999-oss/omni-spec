@@ -302,6 +302,30 @@ describe('AG model, effort and context', () => {
     assert.equal(result.contextWindow, 1_000_000);
     assert.equal(result.costBasis, 'list');
   });
+
+  test('AG-15 the CLI reports the session total: a turn costs the difference and the total never goes back', () => {
+    const state = fresh();
+    const turn = total => translateClaudeMessage({ type: 'result', is_error: false, total_cost_usd: total }, state)[0];
+    const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≈ ${expected}`);
+    // Totals seen from Claude Code 2.1.318: two turns, then a third after --resume (the total carries over).
+    let result = turn(0.009);
+    close(result.costUsd, 0.009);
+    close(result.sessionCostUsd, 0.009);
+    result = turn(0.0128);
+    close(result.costUsd, 0.0038);
+    close(result.sessionCostUsd, 0.0128);
+    result = turn(0.0137);
+    close(result.costUsd, 0.0009);
+    // A process that counts from zero again keeps the earlier total as its base.
+    result = turn(0.002);
+    close(result.costUsd, 0.002);
+    close(result.sessionCostUsd, 0.0157);
+    assert.deepEqual(
+      translateClaudeMessage({ type: 'result', is_error: false }, state)[0].costUsd,
+      null,
+      'no total, no cost',
+    );
+  });
 });
 
 describe('AG locate and workspace', () => {

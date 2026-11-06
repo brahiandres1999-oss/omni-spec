@@ -1,6 +1,7 @@
 /**
  * Central stage (SH-01, SH-07): Chat and Diffs on the tab bar, the other views under "Más vistas" (all on
- * Ctrl+1…Ctrl+6, persisted), and the floating dock outside the chat.
+ * Ctrl+1…Ctrl+6, persisted), and the floating dock outside the chat. On the chat, the same row carries the
+ * agent status, so the chat starts right under the tabs.
  * Only the active view is mounted; its data stays in the stores, so switching back is instant.
  */
 import { useStore } from 'zustand';
@@ -25,7 +26,7 @@ import { messages } from '@/i18n/messages.es';
 import { STAGE_TABS, type StageTab } from '@/stores/layout';
 import { BoardView } from '@/views/BoardView';
 import { CartographyView } from '@/views/CartographyView';
-import { ChatView } from '@/views/ChatView';
+import { ChatHeader, ChatView } from '@/views/ChatView';
 import { DiffView } from '@/views/DiffView';
 import { FinopsView } from '@/views/FinopsView';
 import { SkillsView } from '@/views/SkillsView';
@@ -89,7 +90,8 @@ export function Stage() {
   return (
     <main className="relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] bg-canvas">
       <Tabs value={tab} onValueChange={value => layout.getState().setStageTab(value as StageTab)} className="contents">
-        <div className="flex h-11 items-center gap-2 border-b border-divider px-3">
+        {/* A size container: the chat status drops detail as this row narrows, not the window. */}
+        <div className="@container flex h-11 min-w-0 items-center gap-2 border-b border-divider px-3">
           <TabsList aria-label={messages.shell.stageTabs}>
             {STAGE_TABS.filter(value => PRIMARY_TABS.includes(value) || value === tab).map(value => (
               <TabsTrigger key={value} value={value} className="ps-2.5 pe-3.5">
@@ -108,6 +110,12 @@ export function Stage() {
             onChange={value => layout.getState().setStageTab(value as StageTab)}
           />
           <span className="flex-1" />
+          {tab === 'chat' && projectId !== null ? (
+            <>
+              <ChatHeader />
+              <span aria-hidden="true" className="h-5 w-px shrink-0 bg-divider" />
+            </>
+          ) : null}
           <InspectorToggle />
         </div>
         {projectId === null ? (

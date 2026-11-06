@@ -7,7 +7,15 @@ import { applyAgentEvent, type ChatItem } from '@/stores/chat';
 import { FakeTransport } from '@/test/fake-transport';
 import { installLayoutStub, scriptStudio, stubCanvas, stubWorker } from '@/test/fixtures';
 import { renderWithStudio } from '@/test/render';
-import { ChatView } from './ChatView';
+import { ChatHeader, ChatView, modelName, pendingChange } from './ChatView';
+
+/** The chat as the stage shows it: the status row on the tab bar, the transcript under it. */
+const ChatWithHeader = () => (
+  <>
+    <ChatHeader />
+    <ChatView />
+  </>
+);
 
 const STATUS = {
   workspace: { mode: 'studio', dir: 'C:\\Users\\me\\AppData\\Local\\OmniStudio\\workspaces\\abc' },
@@ -151,7 +159,7 @@ describe('CH chat view', () => {
     globalThis.localStorage?.setItem('omni-studio:chat.options', JSON.stringify({ model: 'opus', effort: 'high' }));
     const user = userEvent.setup();
     const fake = chatTransport();
-    renderWithStudio(<ChatView />, { transport: fake });
+    renderWithStudio(<ChatWithHeader />, { transport: fake });
     await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
     expect(screen.getByRole('button', { name: 'Modelo: Opus' })).toBeInTheDocument();
     await user.type(screen.getByRole('textbox'), 'hola{Enter}');
@@ -168,6 +176,67 @@ describe('CH chat view', () => {
       });
     });
     expect(screen.getByRole('meter', { name: 'Contexto usado' })).toHaveAttribute('aria-valuenow', '25');
+  });
+
+  test('CH-09 the status row shows the conversation total; a new model waits for the next message', async () => {
+    globalThis.localStorage?.setItem('omni-studio:chat.options', JSON.stringify({ model: 'opus', effort: null }));
+    const user = userEvent.setup();
+    const fake = chatTransport();
+    renderWithStudio(<ChatWithHeader />, { transport: fake });
+    await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
+    await user.type(screen.getByRole('textbox'), 'hola{Enter}');
+    await waitFor(() => expect(fake.calls('agent.prompt')).toHaveLength(1));
+    // Two turns as the driver reports them: the turn cost and the conversation total (not their sum).
+    act(() => {
+      fake.emit('agent.event', { kind: 'init', model: 'claude-opus-5-5' });
+      for (const [costUsd, sessionCostUsd] of [
+        [0.0035, 0.0035],
+        [0.0041, 0.0076],
+      ])
+        fake.emit('agent.event', {
+          kind: 'result',
+          isError: false,
+          durationMs: 900,
+          costUsd,
+          sessionCostUsd,
+          contextTokens: 40_000,
+          contextWindow: 1_000_000,
+        });
+      fake.emit('agent.event', { kind: 'status', state: 'ready' });
+    });
+    const header = screen.getByRole('group', { name: 'Estado del agente' });
+    expect(header).toHaveTextContent('Opus 5.5');
+    expect(header).toHaveTextContent('US$ 0.0076');
+    expect(screen.getByText('Turno terminado en 0.9 s · ≈ US$ 0.0041')).toBeInTheDocument();
+    expect(screen.queryByText(/desde tu próximo mensaje/)).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Modelo: Opus' }));
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Haiku' }));
+    expect(screen.getByText('Opus 5.5 ahora → Haiku desde tu próximo mensaje')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox'), 'sigue{Enter}');
+    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'sigue', model: 'haiku' }));
+    await waitFor(() => expect(screen.queryByText(/desde tu próximo mensaje/)).toBeNull());
+  });
+
+  test('CH-10 model ids read as names; a pending change says what changes', () => {
+    expect(modelName('claude-opus-5-5')).toBe('Opus 5.5');
+    expect(modelName('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+    expect(modelName('claude-sonnet-4-20250514')).toBe('Sonnet 4');
+    expect(modelName('gpt-5')).toBe('gpt-5');
+    const applied = { model: 'opus', effort: 'low' };
+    expect(pendingChange('claude-opus-5-5', applied, applied)).toBeNull();
+    expect(pendingChange(null, applied, { model: 'haiku', effort: 'low' })).toBeNull();
+    expect(pendingChange('claude-opus-5-5', applied, { model: 'haiku', effort: 'low' })).toEqual({
+      text: 'Opus 5.5 ahora → Haiku desde tu próximo mensaje',
+      modelChanges: true,
+    });
+    expect(pendingChange('claude-opus-5-5', applied, { model: 'opus', effort: 'high' })?.text).toBe(
+      'Esfuerzo bajo ahora → esfuerzo alto desde tu próximo mensaje',
+    );
+    expect(pendingChange('claude-opus-5-5', applied, { model: null, effort: 'low' })?.text).toBe(
+      'Opus 5.5 ahora → el modelo predeterminado desde tu próximo mensaje',
+    );
   });
 });
 

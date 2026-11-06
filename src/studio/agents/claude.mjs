@@ -92,8 +92,24 @@ function contextOf(message, state) {
 }
 
 /**
+ * Cost of the turn and of the conversation. The CLI reports `total_cost_usd` as the running total of the
+ * session, and `--resume` carries it over (checked with Claude Code 2.1.318), so a turn costs the difference
+ * with the previous total. A lower total means a process that counted from zero again: the earlier total
+ * becomes the base, so the conversation total never goes back.
+ */
+function costOf(reported, state) {
+  if (typeof reported !== 'number') return { costUsd: null, sessionCostUsd: null };
+  if (reported < (state.reportedCost ?? 0)) state.costBase = (state.costBase ?? 0) + state.reportedCost;
+  state.reportedCost = reported;
+  const sessionCostUsd = (state.costBase ?? 0) + reported;
+  const costUsd = Math.max(0, sessionCostUsd - (state.sessionCost ?? 0));
+  state.sessionCost = sessionCostUsd;
+  return { costUsd, sessionCostUsd };
+}
+
+/**
  * Maps one stdout message of the CLI to provider-independent `agent.event` payloads. Pure: `state` carries
- * what has to be remembered between messages (the streamed message ids).
+ * what has to be remembered between messages (the streamed message ids, the model, context and cost).
  * @param {any} message
  * @param {{messageId?: string|null, streamed: Set<string>}} state
  * @returns {object[]}
@@ -174,7 +190,7 @@ export function translateClaudeMessage(message, state) {
           isError: Boolean(message.is_error),
           subtype: message.subtype ?? null,
           text: clip(text),
-          costUsd: typeof message.total_cost_usd === 'number' ? message.total_cost_usd : null,
+          ...costOf(message.total_cost_usd, state),
           durationMs: typeof message.duration_ms === 'number' ? message.duration_ms : null,
           numTurns: typeof message.num_turns === 'number' ? message.num_turns : null,
           ...contextOf(message, state),
@@ -298,12 +314,8 @@ export function createClaudeDriver({
       emit(event);
     }
     if (message.type === 'result') {
-      translation = {
-        messageId: null,
-        streamed: new Set(),
-        model: translation.model,
-        contextTokens: translation.contextTokens,
-      };
+      // Message ids are per turn; model, context and cost belong to the conversation and survive restarts.
+      translation = { ...translation, messageId: null, streamed: new Set() };
       setState('ready');
     }
   };
