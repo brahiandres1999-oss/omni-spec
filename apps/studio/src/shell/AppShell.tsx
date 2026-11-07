@@ -5,30 +5,23 @@
  *
  * Shortcuts: Ctrl+N new conversation, Ctrl+B left rail, Ctrl+J Resumen panel, Ctrl+K palette.
  */
-import { Dialog } from 'radix-ui';
 import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useEnsureLoaded, useRefreshOn, useStudio } from '@/app/studio-context';
-import { Button } from '@/components/ui/button';
 import { CommandPalette, type PaletteItem } from '@/components/ui/command-palette';
 import {
   Brain,
   File,
-  FileDiff,
   Gauge,
-  Icon,
   KanbanSquare,
   MessageSquare,
-  Network,
   PanelRight,
   Plus,
   ScanSearch,
   Settings,
-  Sparkles,
   SquareTerminal,
-  X,
 } from '@/components/ui/icon';
-import { cn, mono } from '@/components/ui/interaction';
+import { cn } from '@/components/ui/interaction';
 import { messages } from '@/i18n/messages.es';
 import { StudioError } from '@/ipc/client';
 import { refreshProject } from '@/stores/app';
@@ -36,6 +29,7 @@ import { allFiles } from '@/stores/files';
 import { STAGE_TABS } from '@/stores/layout';
 import { Inspector } from './Inspector';
 import { Rail } from './Rail';
+import { SettingsDialog } from './SettingsDialog';
 import { Stage } from './Stage';
 import { TitleBar } from './TitleBar';
 
@@ -182,10 +176,7 @@ const VIEW_ICONS = {
   chat: MessageSquare,
   kanban: KanbanSquare,
   memory: Brain,
-  cartography: Network,
-  diffs: FileDiff,
   finops: Gauge,
-  skills: Sparkles,
 } as const;
 
 function Palette() {
@@ -275,42 +266,5 @@ function Palette() {
         groups: messages.shell.paletteGroups,
       }}
     />
-  );
-}
-
-function SettingsDialog() {
-  const { ui, snapshot } = useStudio();
-  const open = useStore(ui, state => state.settingsOpen);
-  const data = useStore(snapshot, state => state.data);
-  return (
-    <Dialog.Root open={open} onOpenChange={next => ui.getState().setSettingsOpen(next)}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-canvas/70" />
-        <Dialog.Content
-          aria-modal="true"
-          aria-describedby={undefined}
-          className="fixed start-1/2 top-1/2 z-50 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-floating-border bg-floating p-5 text-fg"
-        >
-          <div className="flex items-center justify-between">
-            <Dialog.Title className="text-sm font-semibold">{messages.shell.settings}</Dialog.Title>
-            <Dialog.Close asChild>
-              <Button size="icon-sm" variant="ghost" aria-label={messages.board.close}>
-                <Icon icon={X} />
-              </Button>
-            </Dialog.Close>
-          </div>
-          {data ? (
-            <dl className="mt-4 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
-              <dt className="text-fg-muted">{messages.shell.root}</dt>
-              <dd className={cn('break-all', mono)}>{data.root}</dd>
-              <dt className="text-fg-muted">{messages.shell.versions}</dt>
-              <dd className={mono}>
-                engine {data.versions.engine} · node {data.versions.node} · ipc v{data.versions.protocol}
-              </dd>
-            </dl>
-          ) : null}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
   );
 }

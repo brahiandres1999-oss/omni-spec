@@ -82,7 +82,7 @@ async function manifestOf(root) {
  * @param {{bundledDir: string}} options Directory holding the installed omni-* skills.
  */
 export async function listSkills(root, { bundledDir }) {
-  const manifest = await manifestOf(root);
+  const manifest = (await loadManifest(root)) ?? {};
   const disabled = new Set(manifest.studio?.skills?.disabled ?? []);
   const items = (await catalogue(root, bundledDir)).map(skill => ({ ...skill, enabled: !disabled.has(skill.name) }));
   const activeTokens = items.filter(skill => skill.enabled).reduce((sum, skill) => sum + skill.weight.tokens, 0);

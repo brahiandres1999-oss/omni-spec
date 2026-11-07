@@ -5,6 +5,7 @@
 import { createStore } from 'zustand/vanilla';
 import { type StudioClient, StudioError } from '@/ipc/client';
 import { messages } from '@/i18n/messages.es';
+import { isPermissionLevel, type PermissionLevel, readSettings } from './settings';
 import { readJson, writeJson } from './storage';
 
 export type AgentState = 'idle' | 'starting' | 'ready' | 'busy';
@@ -49,6 +50,12 @@ export interface AgentOptions {
   effort: string | null;
 }
 
+/** A message waiting for the agent to finish its turn (Q17): visible, editable and cancelable. */
+export interface QueuedMessage {
+  id: string;
+  text: string;
+}
+
 /** Context and cost after the last turn, as the CLI reported them. */
 export interface AgentUsage {
   contextTokens: number | null;
@@ -68,6 +75,11 @@ const isOptions = (value: unknown): value is AgentOptions => {
   );
 };
 const EMPTY_USAGE: AgentUsage = { contextTokens: null, contextWindow: null, costUsd: 0, costBasis: null };
+
+// The last slash commands the agent reported, so the «/» list works before the first message starts it.
+const COMMANDS_KEY = 'chat.commands';
+const isCommands = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every(entry => typeof entry === 'string');
 
 /** One Claude Code session of the folder, as `agent.sessions` lists it («Retomar sesión de la terminal…»). */
 export interface AgentSession {
@@ -95,12 +107,14 @@ export interface AgentStatus {
     path: string | null;
     models: string[];
     efforts: string[];
+    /** Studio permission levels this agent has (Q25). */
+    permissions?: string[];
   }>;
   state: AgentState;
   model: string | null;
   sessionId: string | null;
-  /** Model and effort the running CLI was started with. */
-  options?: AgentOptions;
+  /** Model, effort and permission level the running CLI was started with. */
+  options?: AgentOptions & { permission?: string };
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -200,12 +214,26 @@ export interface ChatState {
   usage: AgentUsage;
   /** Id of the CLI session on screen; `null` before the first message of a new conversation. */
   sessionId: string | null;
+  /** Permission level of this conversation (Q25); a new conversation starts with the one set in Ajustes. */
+  permission: PermissionLevel;
+  /** Messages written while the agent works; the first one is sent when the turn ends. */
+  queue: QueuedMessage[];
+  /** Slash commands and skills the agent accepts, without the slash (the composer's «/» list). */
+  commands: string[];
   setOptions(patch: Partial<AgentOptions>): void;
+  setPermission(permission: PermissionLevel): void;
   loadStatus(): Promise<void>;
   /** Shows an earlier conversation; the next message continues it. */
   resume(sessionId: string): Promise<void>;
   setDraft(draft: string): void;
+  /** Sends the message, or queues it while the agent works. */
   send(text?: string): Promise<void>;
+  /** Ctrl+Enter: stops the running turn and sends this message first. */
+  interrupt(text?: string): Promise<void>;
+  /** Drops a queued message. */
+  unqueue(id: string): void;
+  /** Takes a queued message back into the composer to change it. */
+  editQueued(id: string): void;
   cancel(): Promise<void>;
   decide(requestId: string, decision: 'allow' | 'deny'): Promise<void>;
   reset(): Promise<void>;
@@ -229,11 +257,19 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       if (event.root && projectId !== 'default' && event.root !== projectId) return;
       if (event.kind === 'status') {
         const state = str(event.state) as AgentState;
+        const was = get().agentState;
         set({ agentState: state });
+        // The turn ended: the first queued message goes out. A process that died keeps the queue for the user.
+        if (was === 'busy' && state === 'ready') sendNext();
         return;
       }
-      if (event.kind === 'init')
+      if (event.kind === 'init') {
         set({ model: str(event.model) || null, sessionId: str(event.sessionId) || get().sessionId });
+        if (isCommands(event.commands) && event.commands.length > 0) {
+          set({ commands: event.commands });
+          writeJson(COMMANDS_KEY, event.commands);
+        }
+      }
       if (event.kind === 'result') {
         const usage = get().usage;
         set({
@@ -250,6 +286,13 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
     };
 
     const fail = (reason: unknown) => set({ error: StudioError.from(reason) });
+    const sendNext = () => {
+      const [next, ...rest] = get().queue;
+      if (!next) return;
+      set({ queue: rest });
+      void get().send(next.text);
+    };
+    const busyNow = () => get().agentState === 'busy' || get().agentState === 'starting';
 
     return {
       items: [],
@@ -262,6 +305,12 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       applied: null,
       usage: EMPTY_USAGE,
       sessionId: null,
+      permission: readSettings().defaultPermission,
+      queue: [],
+      commands: readJson<string[]>(COMMANDS_KEY, [], isCommands),
+      setPermission(permission) {
+        if (isPermissionLevel(permission)) set({ permission });
+      },
       setOptions(patch) {
         const options = { ...get().options, ...patch };
         set({ options });
@@ -303,6 +352,8 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             error: null,
             agentState: 'idle',
             usage: { ...EMPTY_USAGE, contextTokens: history.contextTokens, costUsd: history.costUsd ?? 0 },
+            queue: [],
+            permission: readSettings().defaultPermission,
           });
         } catch (reason) {
           fail(reason);
@@ -312,7 +363,11 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       async send(text = get().draft) {
         attach();
         const message = text.trim();
-        if (!message || get().agentState === 'busy' || get().agentState === 'starting') return;
+        if (!message) return;
+        if (busyNow()) {
+          set({ queue: [...get().queue, { id: nextId('queued'), text: message }], draft: '' });
+          return;
+        }
         set({
           items: [...get().items, { type: 'user', id: nextId('user'), text: message }],
           draft: '',
@@ -325,12 +380,29 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             text: message,
             ...(model ? { model } : {}),
             ...(effort ? { effort: effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } : {}),
+            permission: get().permission,
           });
           set({ applied: { model, effort } });
         } catch (reason) {
           set({ agentState: 'idle', draft: message });
           fail(reason);
         }
+      },
+      async interrupt(text = get().draft) {
+        const message = text.trim();
+        if (!busyNow()) return get().send(message);
+        if (message) set({ queue: [{ id: nextId('queued'), text: message }, ...get().queue], draft: '' });
+        await get().cancel();
+      },
+      unqueue: id => set({ queue: get().queue.filter(entry => entry.id !== id) }),
+      editQueued(id) {
+        const entry = get().queue.find(item => item.id === id);
+        if (!entry) return;
+        const draft = get().draft.trim();
+        set({
+          queue: get().queue.filter(item => item.id !== id),
+          draft: draft ? `${entry.text}\n${draft}` : entry.text,
+        });
       },
       async cancel() {
         try {
@@ -349,7 +421,16 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       async reset() {
         try {
           await client.call('agent.reset', {});
-          set({ items: [], model: null, applied: null, error: null, usage: EMPTY_USAGE, sessionId: null });
+          set({
+            items: [],
+            model: null,
+            applied: null,
+            error: null,
+            usage: EMPTY_USAGE,
+            sessionId: null,
+            queue: [],
+            permission: readSettings().defaultPermission,
+          });
         } catch (reason) {
           fail(reason);
         }

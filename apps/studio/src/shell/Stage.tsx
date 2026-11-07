@@ -1,8 +1,8 @@
 /**
- * Central stage (docs/STUDIO-AGENT-COCKPIT.md, Fase 3 vuelta 2a): one page at a time, chosen from the rail —
- * the conversation, or Specs, Memoria, Uso (Cartografía, Diffs and Skills stay reachable from Ctrl+K until
- * they move into the panel and Ajustes). The top row says where you are («Proyecto / Título») and, on the
- * conversation, carries the agent status; the last button folds the «Resumen» panel (Ctrl+J).
+ * Central stage (docs/STUDIO-AGENT-COCKPIT.md, Fase 3 vueltas 2a y 2b): one page at a time, chosen from the
+ * rail — the conversation, or Specs, Memoria, Uso. The top row says where you are («Proyecto / Título») and, on
+ * the conversation, carries the agent status; the last button folds the «Resumen» panel (Ctrl+J) and shows
+ * the +N −M this conversation changed.
  * Only the active page is mounted; its data stays in the stores, so switching back is instant.
  */
 import { useStore } from 'zustand';
@@ -15,12 +15,10 @@ import { messages } from '@/i18n/messages.es';
 import { rootKey } from '@/stores/conversations';
 import type { StageTab } from '@/stores/layout';
 import { BoardView } from '@/views/BoardView';
-import { CartographyView } from '@/views/CartographyView';
 import { ChatHeader, ChatView } from '@/views/ChatView';
-import { DiffView } from '@/views/DiffView';
+import { Counts, useConversationReview } from '@/views/ConversationReview';
 import { FinopsView } from '@/views/FinopsView';
 import { MemoryView } from '@/views/MemoryView';
-import { SkillsView } from '@/views/SkillsView';
 import { projectName } from './TitleBar';
 
 const t = messages.shell;
@@ -28,23 +26,25 @@ const t = messages.shell;
 function InspectorToggle() {
   const { layout, dispatch } = useStudio();
   const collapsed = useStore(layout, state => state.inspectorCollapsed);
+  const { added, removed } = useConversationReview();
+  const changed = added + removed > 0;
+  const label = changed ? messages.review.toggleWithCounts(added, removed) : t.toggleInspector;
   return (
     <Button
-      size="icon-sm"
+      size={changed ? 'sm' : 'icon-sm'}
       variant="ghost"
-      aria-label={t.toggleInspector}
+      aria-label={label}
       aria-expanded={!collapsed}
-      title={`${t.toggleInspector} (Ctrl+J)`}
+      title={`${label} (Ctrl+J)`}
       onClick={() => dispatch({ type: 'inspector.toggle' })}
     >
+      {changed ? <Counts added={added} removed={removed} /> : null}
       <Icon icon={PanelRight} />
     </Button>
   );
 }
 
 function ActivePage({ tab }: { tab: StageTab }) {
-  const { snapshot } = useStudio();
-  const spec = useStore(snapshot, state => state.data?.activeSpec?.id ?? '');
   switch (tab) {
     case 'chat':
       return <ChatView />;
@@ -54,12 +54,6 @@ function ActivePage({ tab }: { tab: StageTab }) {
       return <MemoryView />;
     case 'finops':
       return <FinopsView />;
-    case 'cartography':
-      return <CartographyView />;
-    case 'diffs':
-      return <DiffView spec={spec} />;
-    case 'skills':
-      return <SkillsView />;
   }
 }
 

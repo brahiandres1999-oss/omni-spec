@@ -23,7 +23,7 @@ describe('AG translate Claude Code stream-json', () => {
     const state = fresh();
     assert.deepEqual(
       translateClaudeMessage({ type: 'system', subtype: 'init', model: 'm', session_id: 's', tools: [1, 2] }, state),
-      [{ kind: 'init', model: 'm', sessionId: 's', permissionMode: null, tools: 2 }],
+      [{ kind: 'init', model: 'm', sessionId: 's', permissionMode: null, tools: 2, commands: [] }],
     );
     translateClaudeMessage({ type: 'stream_event', event: { type: 'message_start', message: { id: 'a' } } }, state);
     assert.deepEqual(
@@ -269,7 +269,7 @@ describe('AG model, effort and context', () => {
     assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', 'opus']);
     assert.deepEqual(args.slice(args.indexOf('--effort'), args.indexOf('--effort') + 2), ['--effort', 'max']);
     assert.deepEqual(args.slice(args.indexOf('--resume'), args.indexOf('--resume') + 2), ['--resume', 'S1']);
-    assert.deepEqual(driver.status().options, { model: 'opus', effort: 'max' });
+    assert.deepEqual(driver.status().options, { model: 'opus', effort: 'max', permission: 'ask' });
     await assert.rejects(createClaudeDriver({ cwd: '.', emit: () => undefined }).prompt('x', { effort: 'off' }), {
       code: 'INVALID_EFFORT',
     });
@@ -326,6 +326,62 @@ describe('AG model, effort and context', () => {
       null,
       'no total, no cost',
     );
+  });
+});
+
+describe('AG permission levels and commands', () => {
+  test('AG-22 each Studio permission level becomes a --permission-mode; a change restarts on the same session', async () => {
+    const spawned = [];
+    const procs = [];
+    const driver = createClaudeDriver({
+      cwd: '.',
+      emit: () => undefined,
+      locate: async () => ({ file: 'claude.exe', prefix: [], path: 'claude.exe' }),
+      spawnImpl: (_file, args) => {
+        spawned.push(args);
+        const proc = fakeProcess();
+        procs.push(proc);
+        return proc;
+      },
+    });
+    const modeOf = args => args[args.indexOf('--permission-mode') + 1];
+    await driver.prompt('uno');
+    assert.equal(modeOf(spawned[0]), 'manual', 'Studio starts asking for every edit and command');
+    assert.equal(spawned[0].filter(arg => arg === '--permission-mode').length, 1);
+    procs[0].send({ type: 'system', subtype: 'init', session_id: 'S1', model: 'claude-haiku-5-5' });
+    procs[0].send({ type: 'result', is_error: false, result: 'ok' });
+    await tick();
+    const expected = { default: 'acceptEdits', auto: 'auto', bypass: 'bypassPermissions', plan: 'plan' };
+    for (const [permission, mode] of Object.entries(expected)) {
+      await driver.prompt(permission, { permission });
+      const args = spawned.at(-1);
+      assert.equal(modeOf(args), mode);
+      assert.deepEqual(args.slice(args.indexOf('--resume'), args.indexOf('--resume') + 2), ['--resume', 'S1']);
+      procs.at(-1).send({ type: 'result', is_error: false, result: 'ok' });
+      await tick();
+    }
+    assert.equal(spawned.length, 5);
+    await driver.prompt('again', { permission: 'plan' });
+    assert.equal(spawned.length, 5, 'the same level reuses the process');
+    assert.equal(driver.status().options.permission, 'plan');
+    await assert.rejects(createClaudeDriver({ cwd: '.', emit: () => undefined }).prompt('x', { permission: 'yolo' }), {
+      code: 'INVALID_PERMISSION',
+    });
+  });
+
+  test('AG-23 init reports the slash commands the CLI accepts here, for the composer «/» list', () => {
+    const [init] = translateClaudeMessage(
+      {
+        type: 'system',
+        subtype: 'init',
+        session_id: 'S',
+        model: 'm',
+        slash_commands: ['omni-specify', 'compact', '', 42],
+      },
+      fresh(),
+    );
+    assert.deepEqual(init.commands, ['omni-specify', 'compact']);
+    assert.deepEqual(translateClaudeMessage({ type: 'system', subtype: 'init' }, fresh())[0].commands, []);
   });
 });
 

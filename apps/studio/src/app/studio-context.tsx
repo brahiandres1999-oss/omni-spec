@@ -17,6 +17,7 @@ import {
 } from '@/stores/app';
 import { type ConversationsStore, createConversationsStore } from '@/stores/conversations';
 import { createLayoutStore, type InspectorTab, type LayoutStore, type StageTab } from '@/stores/layout';
+import { createSettingsStore, type SettingsStore } from '@/stores/settings';
 import { createTerminalStore, type TerminalStore } from '@/stores/terminal';
 import type { TerminalFactory } from '@/terminal/xterm-adapter';
 
@@ -40,6 +41,8 @@ export interface StudioContextValue {
   layout: LayoutStore;
   terminal: TerminalStore;
   ui: UiStore;
+  /** Ajustes, per user. */
+  settings: SettingsStore;
   snapshot: ReturnType<typeof createSnapshotStore>;
   recent: ReturnType<typeof createRecentStore>;
   /** Studio conversations of every project in the rail. */
@@ -69,6 +72,7 @@ export function StudioProvider({ client, children, onAction, terminalFactory = n
     layout: createLayoutStore(),
     terminal: createTerminalStore(client),
     ui: createUiStore(),
+    settings: createSettingsStore(),
     snapshot: createSnapshotStore(client),
     recent: createRecentStore(client),
     conversations: createConversationsStore(client),
@@ -142,8 +146,10 @@ export function StudioProvider({ client, children, onAction, terminalFactory = n
           current.board.getState().requestFocus(action.id);
           break;
         case 'file.open':
+          // A changed file opens in Archivos › Cambios de git, the repo-wide diff.
           layout.getState().setInspectorCollapsed(false);
-          layout.getState().setInspectorTab('review');
+          layout.getState().setInspectorTab('files');
+          ui.getState().setFilesView('git');
           ui.getState().focusDiffFile(action.path);
           break;
         case 'project.scan':

@@ -27,6 +27,7 @@ export function OptionMenu({
   display,
   disabled,
   side = 'top',
+  tone,
 }: {
   /** Accessible name of the setting ("Modelo"). */
   label: string;
@@ -39,6 +40,8 @@ export function OptionMenu({
   disabled?: boolean;
   /** Where the menu opens: the composer opens upwards, the tab bar downwards. */
   side?: 'top' | 'bottom';
+  /** `danger` paints the pill red (permisos «Sin restricciones»). */
+  tone?: 'danger';
 }) {
   const current = options.find(option => option.value === value);
   return (
@@ -52,7 +55,10 @@ export function OptionMenu({
           'disabled:opacity-45 data-[state=open]:bg-divider data-[state=open]:text-fg',
           press,
           focusRing,
+          tone === 'danger' &&
+            'border-breach/50 bg-breach/10 text-breach enabled:hover:bg-breach/15 enabled:hover:text-breach',
         )}
+        data-tone={tone}
       >
         {icon ? <Icon icon={icon} /> : null}
         <span className="tabular-nums">{display ?? current?.label ?? value}</span>

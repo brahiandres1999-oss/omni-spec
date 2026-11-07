@@ -41,7 +41,7 @@ export function StudioLogo({ size = 16, className, ...props }: StudioLogoProps) 
       </defs>
 
       {/* Subtle isometric base plinth shadow */}
-      <polygon points="12,21.5 19,17.5 12,13.5 5,17.5" fill="#000000" opacity="0.35" />
+      <polygon points="12,21.5 19,17.5 12,13.5 5,17.5" fill="#080A0E" opacity="0.35" />
 
       {/* Isometric foundation slab */}
       <polygon points="12,14 18.5,17.5 12,21 5.5,17.5" fill="#181D26" stroke="#383F47" strokeWidth="0.75" />

@@ -1,12 +1,13 @@
 /**
  * Shell layout, persisted per user in localStorage (ST-08, SH-02, SH-07). Fase 3 vuelta 2a: the stage shows one
- * page (the conversation, or Specs, Memoria, Uso…) chosen from the rail, the left rail folds with Ctrl+B and
- * the right panel «Resumen» (Revisión, Archivos, Terminal) starts closed and folds with Ctrl+J.
+ * page (the conversation, Specs, Memoria or Uso) chosen from the rail, the left rail folds with Ctrl+B and
+ * the right panel «Resumen» (Revisión, Archivos, Terminal) starts closed and folds with Ctrl+J. Vuelta 2b moved
+ * Cartografía into Revisión › Impacto, Diffs into Archivos › Cambios de git and Skills into Ajustes.
  */
 import { createStore } from 'zustand/vanilla';
 import { readJson, writeJson } from './storage';
 
-export const STAGE_TABS = ['chat', 'kanban', 'memory', 'finops', 'cartography', 'diffs', 'skills'] as const;
+export const STAGE_TABS = ['chat', 'kanban', 'memory', 'finops'] as const;
 export const INSPECTOR_TABS = ['review', 'files', 'terminal'] as const;
 export type StageTab = (typeof STAGE_TABS)[number];
 export type InspectorTab = (typeof INSPECTOR_TABS)[number];
@@ -41,13 +42,17 @@ function isLayout(value: unknown): value is PersistedLayout {
     !!entry &&
     typeof entry.railCollapsed === 'boolean' &&
     typeof entry.inspectorCollapsed === 'boolean' &&
-    (INSPECTOR_TABS as readonly string[]).includes(entry.inspectorTab ?? '') &&
-    (STAGE_TABS as readonly string[]).includes(entry.stageTab ?? '')
+    (INSPECTOR_TABS as readonly string[]).includes(entry.inspectorTab ?? '')
   );
 }
 
+const isStageTab = (value: unknown): value is StageTab =>
+  typeof value === 'string' && (STAGE_TABS as readonly string[]).includes(value);
+
 export function createLayoutStore() {
-  const initial = readJson<PersistedLayout>(KEY, DEFAULTS, isLayout);
+  const saved = readJson<PersistedLayout>(KEY, DEFAULTS, isLayout);
+  // A page that moved elsewhere (Cartografía, Diffs, Skills) reopens the conversation.
+  const initial = { ...saved, stageTab: isStageTab(saved.stageTab) ? saved.stageTab : 'chat' };
   return createStore<LayoutState>()((set, get) => {
     const update = (patch: Partial<PersistedLayout>) => {
       set(patch);

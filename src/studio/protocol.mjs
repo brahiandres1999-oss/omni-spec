@@ -190,6 +190,7 @@ export const STUDIO_METHODS = Object.freeze({
         text: string({ minLength: 1 }),
         model: string({ minLength: 1 }),
         effort: { enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
+        permission: { enum: ['ask', 'default', 'auto', 'bypass', 'plan'] },
       },
       ['text'],
     ),

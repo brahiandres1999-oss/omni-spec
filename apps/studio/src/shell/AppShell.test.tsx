@@ -132,7 +132,7 @@ describe('SH three-column shell', () => {
         .map(option => option.textContent ?? '');
 
     for (const [query, expected] of [
-      ['crtg', 'Cartografía'], // view
+      ['memri', 'Memoria'], // view
       ['mmry', '001-memory'], // spec
       ['apptxt', 'src/app.txt'], // file (files.tree)
       ['nueva', 'Nueva Spec'], // action

@@ -1,7 +1,7 @@
 # Omni Studio: cockpit agéntico
 
-Estado: prototipo (fases 0–2, 2.5 y 2.6). **La Fase 3 · Cockpit multiagente está decidida y por empezar** (ver
-su sección). Reemplaza el escenario de dashboards de la fase 4, que queda en el tag `studio-dashboard-v0`.
+Estado: prototipo (fases 0–2, 2.5 y 2.6). **La Fase 3 · Cockpit multiagente está en curso** (vueltas 1, 2a y 2b
+hechas; vuelta 3 en curso; ver su sección). Reemplaza el escenario de dashboards de la fase 4, que queda en el tag `studio-dashboard-v0`.
 
 ## Cómo retomar (léelo primero)
 
@@ -56,8 +56,8 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 
 **Método de cada vuelta.**
 1. El usuario manda una captura de la app real y elige el tema.
-2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-22** y el próximo
-   de la UI es **CH-15** (SH-xx para el resto del shell; SH-11 pasó a ser la página Memoria).
+2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-24** y el próximo
+   de la UI es **CH-19** (SH-xx para el resto del shell, el próximo **SH-15**; SH-11 pasó a ser la página Memoria).
 3. Pasan las tres comprobaciones de arriba.
 4. El usuario lo prueba en la app (reinicio completo si se tocó el motor) y manda captura.
 5. Se actualiza este documento (tabla de vueltas de la Fase 3, hechos verificados) y se hace **un commit por
@@ -74,10 +74,13 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 | Hub de agentes y métodos `agent.*` | `src/studio/agents/index.mjs`, `src/studio/engine.mjs`, `src/studio/protocol.mjs` |
 | Tests del driver (AG-xx) y CLI simulada | `test/studio-agents.test.mjs`, `test-support/fake-claude.mjs` |
 | Estado del chat (eventos → transcript, uso, opciones) | `apps/studio/src/stores/chat.ts` |
-| Chat, compositor y `ChatHeader` (estado del agente) | `apps/studio/src/views/ChatView.tsx` |
+| Chat y `ChatHeader` (estado del agente) | `apps/studio/src/views/ChatView.tsx` |
+| Compositor: modelo y razonamiento, permisos, cola, «+», `@` y `/` | `apps/studio/src/views/Composer.tsx` (tests CH-15 a CH-18) |
+| Ajustes (modal) y su estado | `apps/studio/src/shell/SettingsDialog.tsx`, `apps/studio/src/stores/settings.ts` (test SH-14) |
 | Centro: una página a la vez, ruta «Proyecto / Título» y `ChatHeader` | `apps/studio/src/shell/Stage.tsx` (páginas en `stores/layout.ts`, layout `v3`) |
 | Página Memoria y su resumen en el motor | `apps/studio/src/views/MemoryView.tsx`, `src/studio/memory-summary.mjs` (método `memory.summary`, test AG-21) |
 | Panel derecho «Resumen» (Revisión, Archivos, Terminal) | `apps/studio/src/shell/Inspector.tsx` (tests SH-03, SH-12) |
+| Revisión de esta conversación (Cambios e Impacto) | `apps/studio/src/views/ConversationReview.tsx`, `apps/studio/src/stores/conversation-review.ts` (test SH-13) |
 | Panel izquierdo: «Nueva conversación», buscador, árbol Proyectos → Conversaciones | `apps/studio/src/shell/Rail.tsx`, store `apps/studio/src/stores/conversations.ts`, tests SH-04 y CH-11 a CH-14 |
 | «Retomar sesión de la terminal…» | `apps/studio/src/shell/TerminalSessionsDialog.tsx` |
 | Proyectos recientes, quitar uno y selector de carpetas (host) | `apps/studio/src-tauri/src/recent.rs`, `commands.rs` (`recent_remove`, `project_pick`); tests RP-01 a RP-04 |
@@ -92,6 +95,10 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
   sistema, herramientas, CLAUDE.md y skills).
 - Cambiar de modelo invalida la caché: el primer turno con el modelo nuevo vuelve a escribir todo el contexto.
   Con Opus eso fueron ≈ US$ 0,28 a precio de lista.
+- `--permission-mode` acepta `acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk` y `plan` (`default` ya no
+  sale en la ayuda). Ninguno pide permiso para leer: `manual` y `default` dejaron pasar un Read con
+  `--permission-prompts none`. `bypassPermissions` y `auto` arrancan en `-p` sin más flags.
+- El mensaje `system/init` trae `slash_commands`: comandos y skills sin la barra (101 en esta máquina).
 - Para volver a comprobarlo: lanzar `claude -p --input-format stream-json --output-format stream-json --verbose
   --model haiku`, enviar dos mensajes por stdin, cerrar, repetir con `--resume <session_id>` y comparar
   `total_cost_usd` con `usage` de cada `result`.
@@ -204,8 +211,8 @@ resumen), varias cuentas por agente y una versión comercial.
 | Vuelta | Contenido | Estado |
 |---|---|---|
 | 1 · Panel izquierdo | Árbol Proyectos → Conversaciones, selector de carpetas, índice en la memoria, títulos, renombrar, archivar, buscador, «Retomar sesión de la terminal…» (Claude), specs fuera del panel. Su commit incluye el trabajo pendiente de la Fase 2.6 vuelta 2 | **Probada en la app el 2026-11-06**: todo funciona salvo Ctrl+N, que abría una ventana nueva de WebView2 (corregido; falta volver a probarlo) |
-| 2a · Estructura | Fuera pestañas y Dock; ruta «Proyecto / Título» arriba; páginas Specs, Memoria y Uso en el panel izquierdo; panel derecho «Resumen» (Revisión, Archivos, Terminal) cerrado por defecto; Ctrl+B y Ctrl+J | **Hecha en código, falta probarla en la app** (ver abajo) |
-| 2b · Compositor y revisión | Modelo agrupado por agente con razonamiento, permisos, cola y «+» en el compositor; Revisión de esta conversación con +N −M e Impacto; Ajustes modal con Skills en Personalizaciones | |
+| 2a · Estructura | Fuera pestañas y Dock; ruta «Proyecto / Título» arriba; páginas Specs, Memoria y Uso en el panel izquierdo; panel derecho «Resumen» (Revisión, Archivos, Terminal) cerrado por defecto; Ctrl+B y Ctrl+J | **Hecha**: commit `bf154d8`, probada en la app |
+| 2b · Compositor y revisión | Modelo agrupado por agente con razonamiento, permisos, cola y «+» en el compositor; Revisión de esta conversación con +N −M e Impacto; Ajustes modal con Skills en Personalizaciones | **Hecha** (pruebas que requieren turno de LLM quedan en el checklist acumulativo hasta integrar más agentes) |
 | 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | |
 | 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | |
 | 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | |
@@ -239,6 +246,35 @@ Codex; la memoria después, para probarla con dos proveedores.
 5. Ctrl+B oculta y muestra el panel izquierdo.
 6. «Nueva Spec» (Ctrl+K) abre el chat con `/omni-specify ` escrito.
 7. Cartografía, Diffs y Skills siguen en Ctrl+K hasta la vuelta 2b.
+
+**Vuelta 2b · por comprobar en la app** (reinicio completo: cambió el motor):
+1. El compositor tiene, de izquierda a derecha: «+», Modelo («Opus · alto») y Permisos. El menú de Modelo agrupa los
+   modelos bajo «Claude Code» y abajo trae el submenú «Razonamiento».
+2. Permisos ofrece Preguntar siempre (con lo que arranca toda conversación), Predeterminado, Automático, Sin
+   restricciones (la pastilla se pone roja) y Planificar. Cambiarlo reinicia la CLI con `--resume` en el próximo
+   mensaje; la conversación sigue. Comprobar que «Planificar» no edita y que «Predeterminado» aplica una edición sin
+   tarjeta pero pide permiso para un comando.
+3. Con el agente trabajando, Enter deja el mensaje «En cola» encima del cuadro (lápiz para editarlo, × para
+   quitarlo) y sale solo al terminar el turno; Ctrl+Enter detiene el turno y lo envía primero.
+4. `@` muestra archivos del proyecto y `/` (solo al principio del mensaje) los comandos y skills; la lista de `/`
+   se completa tras el primer mensaje de la primera conversación y se recuerda. El «+» inserta cualquiera de los dos.
+5. Cuando el agente edita, el botón del panel en la fila de arriba muestra +N −M. Resumen › Revisión › Cambios lista
+   solo esos archivos con su diff; Impacto da el Blast Radius de cada uno y «Ver el mapa de módulos» abre la antigua
+   Cartografía en grande.
+6. Resumen › Archivos tiene «Árbol» y «Cambios de git» (el diff de todo el repo, la antigua página Diffs). Un
+   archivo cambiado del árbol abre ahí.
+7. Ajustes (abajo del panel izquierdo o Ctrl+K) es una ventana con General, Agentes, Apariencia, Atajos,
+   Notificaciones, Personalizaciones (las skills) y Proyectos. Lo elegido en General › Permisos vale para la próxima
+   conversación nueva.
+8. Cartografía, Diffs y Skills ya no aparecen en Ctrl+K.
+
+**Límites conocidos de la vuelta 2b**: «+» solo menciona archivos del proyecto; adjuntar un archivo de fuera o una
+imagen necesita un comando nuevo del host (selector de archivos) y queda pendiente. «Aprobar o revertir» desde
+Revisión tampoco está: la revisión por hunks sigue en Cambios de git. Apariencia solo informa el tema (no hay tema
+claro) y las Notificaciones se guardan, pero los avisos llegan en la vuelta 3. El contador +N −M cuenta las líneas
+de las ediciones del agente; un Write sobre un archivo existente cuenta todo como agregado porque el contenido
+anterior no viaja en el evento. La Revisión se arma con los eventos del chat abierto: una conversación retomada
+muestra lo que trae su historial (los últimos 400 eventos).
 
 **Límites conocidos de la vuelta 1** (se resuelven más adelante): cambiar de proyecto todavía reinicia el motor y
 corta la conversación en curso (vuelta 3); «Retomar sesión de la terminal…» solo está en el proyecto abierto;
@@ -308,8 +344,12 @@ responden `OMNISPEC_NOT_INSTALLED` en vez de escribir en el repositorio.
 
 ```
 claude -p --input-format stream-json --output-format stream-json --verbose
-       --include-partial-messages --permission-mode default --permission-prompt-tool stdio
+       --include-partial-messages --permission-prompt-tool stdio --permission-mode <modo>
 ```
+
+- Permisos de Studio → `--permission-mode` (`CLAUDE_PERMISSION_MODES`): Preguntar siempre → `manual`,
+  Predeterminado → `acceptEdits`, Automático → `auto`, Sin restricciones → `bypassPermissions`, Planificar →
+  `plan`. Como el modelo y el esfuerzo, cambiarlo reinicia la CLI con `--resume`.
 
 - Entrada (una línea JSON por mensaje): `{"type":"user","message":{"role":"user","content":[…]}}`.
 - Permisos: la CLI envía `control_request` con `subtype: "can_use_tool"`; Studio responde
@@ -322,7 +362,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose
 | Método | Dirección | Qué hace |
 |---|---|---|
 | `agent.status` | host→engine | Agentes disponibles, estado y modo del workspace |
-| `agent.prompt` | host→engine | Envía un mensaje; responde enseguida, el resto llega por eventos |
+| `agent.prompt` | host→engine | Envía un mensaje con `model`, `effort` y `permission` (`ask`, `default`, `auto`, `bypass`, `plan`); responde enseguida, el resto llega por eventos |
 | `agent.cancel` | host→engine | Interrumpe el turno en curso |
 | `agent.permission` | host→engine | Respuesta a un pedido de permiso |
 | `agent.reset` | host→engine | Cierra la conversación y empieza una nueva |
@@ -334,7 +374,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose
 | `recent.remove` / `project.pick` | host (Rust) | Quita un proyecto de la lista (sin tocar su carpeta) / abre el selector de carpetas nativo |
 | `agent.event` | engine→host | Eventos normalizados: `status`, `init`, `text`, `tool`, `tool_result`, `permission`, `result`, `error` |
 
-`result` lleva `costUsd` (lo que costó ese turno) y `sessionCostUsd` (el total de la conversación). Claude Code
+`init` lleva `commands`, los comandos y skills que la CLI acepta (la lista de `/`). `result` lleva `costUsd` (lo que costó ese turno) y `sessionCostUsd` (el total de la conversación). Claude Code
 informa `total_cost_usd` como acumulado de la sesión, y `--resume` lo arrastra, así que el driver calcula el
 costo del turno restando el total anterior.
 
@@ -413,6 +453,6 @@ Lista de la primera revisión con capturas reales. Lo que quedó abierto pasó a
 7. ~~Retomar conversaciones anteriores (sesiones de Claude Code con `--resume`).~~ Hecho (vuelta 2): ver
    «Conversaciones anteriores». Límite conocido: el historial no recupera modelo ni ventana de contexto hasta el
    primer turno nuevo. En la Fase 3 pasa a «Retomar sesión de la terminal…».
-8. Mencionar archivos con `@` y pegar imágenes. → Fase 3, vuelta 2 (botón «+» del compositor).
-9. Comandos con `/`, incluidos los `/omni-*`. → Fase 3, vuelta 2 (acciones del «+»).
-10. Panel «Cambios del turno». → Fase 3, vuelta 2 (Revisión de esta conversación).
+8. ~~Mencionar archivos con `@`~~ (Fase 3, vuelta 2b). Pegar imágenes y adjuntar archivos de fuera: pendiente.
+9. ~~Comandos con `/`, incluidos los `/omni-*`.~~ Hecho en la Fase 3, vuelta 2b.
+10. ~~Panel «Cambios del turno».~~ Hecho en la Fase 3, vuelta 2b (Revisión de esta conversación).

@@ -170,7 +170,8 @@ describe('DS design system (rendered views)', () => {
     const user = userEvent.setup();
     const { view } = await mountShell();
     const inspector = screen.getByRole('complementary', { name: 'Resumen' });
-    const tab = (name: string) => within(within(inspector).getByRole('tablist')).getByRole('tab', { name });
+    const tab = (name: string) =>
+      within(within(inspector).getByRole('tablist', { name: 'Resumen' })).getByRole('tab', { name });
     await user.click(tab('Terminal'));
     await waitFor(() =>
       expect(inspector.querySelector('[data-scroll-region="terminal"]')).toHaveClass('overscroll-contain'),

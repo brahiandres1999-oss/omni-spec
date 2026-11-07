@@ -79,6 +79,9 @@ export interface UiState {
   paletteOrigin: HTMLElement | null;
   settingsOpen: boolean;
   diffFocus: { path: string; nonce: number } | null;
+  /** Resumen › Archivos: the project tree or the repo-wide «Cambios de git». */
+  filesView: 'tree' | 'git';
+  setFilesView(view: UiState['filesView']): void;
   /** Engine lifecycle shown by the shell banner. */
   engine: { status: 'ok' | 'restarting' | 'dead' | 'error'; message?: string };
   setEngine(engine: UiState['engine']): void;
@@ -96,6 +99,8 @@ export function createUiStore() {
     paletteOrigin: null,
     settingsOpen: false,
     diffFocus: null,
+    filesView: 'tree',
+    setFilesView: filesView => set({ filesView }),
     engine: { status: 'ok' },
     pendingConversation: null,
     setPendingConversation: pendingConversation => set({ pendingConversation }),

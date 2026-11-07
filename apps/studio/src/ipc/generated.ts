@@ -15,6 +15,7 @@ export interface EngineRequestParams {
     readonly text: string;
     readonly model?: string;
     readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+    readonly permission?: 'ask' | 'default' | 'auto' | 'bypass' | 'plan';
   };
   readonly 'agent.reset': Record<string, never>;
   readonly 'agent.resume': {

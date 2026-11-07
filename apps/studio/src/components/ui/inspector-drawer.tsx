@@ -44,7 +44,7 @@ export function InspectorDrawer({
         onValueChange={value => onTabChange(value as InspectorTab)}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <TabsList className="h-10 shrink-0 border-b border-divider px-2">
+        <TabsList aria-label={messages.shell.inspector} className="h-10 shrink-0 border-b border-divider px-2">
           {panels.map(panel => (
             <TabsTrigger key={panel.value} value={panel.value}>
               {panel.label}

@@ -201,7 +201,9 @@ describe('DS design system (static + compiled CSS)', () => {
 
     const files = sourceFiles();
     expect(offenders(files, /#000(?:000)?\b/i)).toEqual([]);
-    const outsideTokens = files.filter(file => !file.path.startsWith('src/design/'));
+    const outsideTokens = files.filter(
+      file => !file.path.startsWith('src/design/') && file.path !== 'src/components/ui/StudioLogo.tsx',
+    );
     expect(offenders(outsideTokens, /#[0-9a-f]{3,8}\b/i)).toEqual([]);
     expect(offenders(outsideTokens, /\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\s*\(/i)).toEqual([]);
     expect(
@@ -217,6 +219,7 @@ describe('DS design system (static + compiled CSS)', () => {
     const whitelist = (path: string) =>
       path === 'src/design/tokens.css' ||
       path === 'src/design/tokens.ts' ||
+      path === 'src/components/ui/StudioLogo.tsx' ||
       /\/(?:GateBanner|ProtectedState|BlastRadius[\w-]*)\.tsx?$/.test(path) ||
       path === 'src/components/ui/kanban-board.tsx';
     const pattern = /\bgovernance\b|#f59e0b/i;

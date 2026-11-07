@@ -1,7 +1,7 @@
 /**
- * «Resumen» panel (docs/STUDIO-AGENT-COCKPIT.md, Fase 3 Q14; SH-03, SH-11, SH-12): Revisión (the working tree
- * diff for now; per conversation in vuelta 2b), Archivos and Terminal. It starts closed and never opens by
- * itself: Ctrl+J or the button at the end of the top row. Overview and FinOps left it; FinOps is the Uso page.
+ * «Resumen» panel (docs/STUDIO-AGENT-COCKPIT.md, Fase 3 Q14; SH-03, SH-12, SH-13): Revisión of this
+ * conversation (its files with their diff, and Impacto), Archivos (the tree, or «Cambios de git» of the whole
+ * repo) and Terminal. It starts closed and never opens by itself: Ctrl+J or the button at the end of the top row.
  */
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type KeyboardEvent, useRef, useState } from 'react';
@@ -10,10 +10,12 @@ import { useEnsureLoaded, useRefreshOn, useStudio } from '@/app/studio-context';
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen, Icon } from '@/components/ui/icon';
 import { InspectorDrawer } from '@/components/ui/inspector-drawer';
 import { cn, focusRingInset, mono } from '@/components/ui/interaction';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorState, rowHeightClass, SkeletonRow } from '@/components/ui/view-state';
 import { rowHeights } from '@/design/tokens';
 import { messages } from '@/i18n/messages.es';
 import { flattenTree } from '@/stores/files';
+import { ConversationReview } from '@/views/ConversationReview';
 import { DiffView } from '@/views/DiffView';
 import { TerminalPanel } from './TerminalPanel';
 
@@ -28,7 +30,7 @@ export function Inspector() {
       tab={tab}
       onTabChange={value => layout.getState().setInspectorTab(value)}
       panels={[
-        { value: 'review', label: labels.review, content: <ReviewPanel /> },
+        { value: 'review', label: labels.review, content: <ConversationReview /> },
         { value: 'files', label: labels.files, content: <FilesPanel /> },
         {
           value: 'terminal',
@@ -41,13 +43,32 @@ export function Inspector() {
   );
 }
 
-function ReviewPanel() {
-  const { snapshot } = useStudio();
+/** Archivos: the project tree, or «Cambios de git», the diff of the whole working tree. */
+function FilesPanel() {
+  const { ui, snapshot } = useStudio();
+  const view = useStore(ui, state => state.filesView);
   const spec = useStore(snapshot, state => state.data?.activeSpec?.id ?? '');
-  return <DiffView spec={spec} />;
+  return (
+    <Tabs
+      value={view}
+      onValueChange={value => ui.getState().setFilesView(value as 'tree' | 'git')}
+      className="flex h-full min-h-0 flex-col"
+    >
+      <TabsList aria-label={messages.files.views} className="h-9 shrink-0 border-b border-divider px-2">
+        <TabsTrigger value="tree">{messages.files.treeView}</TabsTrigger>
+        <TabsTrigger value="git">{messages.files.gitView}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="tree" className="min-h-0 flex-1">
+        <FileTree />
+      </TabsContent>
+      <TabsContent value="git" className="min-h-0 flex-1">
+        <DiffView spec={spec} />
+      </TabsContent>
+    </Tabs>
+  );
 }
 
-function FilesPanel() {
+function FileTree() {
   const { project, dispatch } = useStudio();
   const files = project.files;
   const resource = useStore(files, state => state.resource);

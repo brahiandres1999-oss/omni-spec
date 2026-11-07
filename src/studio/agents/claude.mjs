@@ -23,8 +23,6 @@ export const CLAUDE_BASE_ARGS = Object.freeze([
   'stream-json',
   '--verbose',
   '--include-partial-messages',
-  '--permission-mode',
-  'default',
   '--permission-prompt-tool',
   'stdio',
 ]);
@@ -33,6 +31,22 @@ export const CLAUDE_BASE_ARGS = Object.freeze([
 export const CLAUDE_MODELS = Object.freeze(['fable', 'opus', 'sonnet', 'haiku']);
 /** Values of `--effort` accepted by the CLI (`claude --help`). */
 export const CLAUDE_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
+
+/**
+ * Studio's permission levels (Fase 3, Q25) as `--permission-mode` of Claude Code 2.1.318. Claude reads without
+ * asking in every mode (checked: `manual` and `default` both let Read through), so «Preguntar siempre» asks for
+ * every edit and command, «Predeterminado» applies edits and asks for commands, «Automático» lets the CLI's own
+ * classifier decide, «Sin restricciones» skips every check and «Planificar» only reads.
+ */
+export const CLAUDE_PERMISSION_MODES = Object.freeze({
+  ask: 'manual',
+  default: 'acceptEdits',
+  auto: 'auto',
+  bypass: 'bypassPermissions',
+  plan: 'plan',
+});
+/** Studio starts every conversation asking (Q25); the user's own default comes from Ajustes. */
+export const DEFAULT_PERMISSION = 'ask';
 
 const MAX_TEXT = 16_000;
 const MAX_FIELD = 8_000;
@@ -129,6 +143,10 @@ export function translateClaudeMessage(message, state) {
             sessionId: message.session_id ?? null,
             permissionMode: message.permissionMode ?? null,
             tools: Array.isArray(message.tools) ? message.tools.length : null,
+            // Slash commands and skills the CLI accepts here, without the slash: the composer's «/» list.
+            commands: Array.isArray(message.slash_commands)
+              ? message.slash_commands.filter(name => typeof name === 'string' && name)
+              : [],
           },
         ];
       }
@@ -282,8 +300,9 @@ export function createClaudeDriver({
   let state = 'idle'; // idle | starting | ready | busy
   let session = { model: null, sessionId: null };
   let translation = { messageId: null, streamed: new Set() };
-  // Model and effort the running process was started with; changing either restarts it with --resume.
-  let running = { model: null, effort: null };
+  // Model, effort and permission level the running process was started with; changing any of them restarts it
+  // with --resume (the conversation continues).
+  let running = { model: null, effort: null, permission: DEFAULT_PERMISSION };
   let stderr = '';
   let interrupts = 0;
   const pending = new Map();
@@ -349,11 +368,12 @@ export function createClaudeDriver({
         'No encontré Claude Code. Instálalo con `npm i -g @anthropic-ai/claude-code` y vuelve a intentarlo.',
       );
     }
-    const args = [...location.prefix, ...CLAUDE_BASE_ARGS];
+    const permission = options.permission ?? DEFAULT_PERMISSION;
+    const args = [...location.prefix, ...CLAUDE_BASE_ARGS, '--permission-mode', CLAUDE_PERMISSION_MODES[permission]];
     if (options.model) args.push('--model', options.model);
     if (options.effort) args.push('--effort', options.effort);
     if (session.sessionId) args.push('--resume', session.sessionId);
-    running = { model: options.model ?? null, effort: options.effort ?? null };
+    running = { model: options.model ?? null, effort: options.effort ?? null, permission };
     stderr = '';
     const proc = spawnImpl(location.file, args, { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     child = proc;
@@ -417,10 +437,20 @@ export function createClaudeDriver({
         throw new StudioError('AGENT_BUSY', 'Claude Code está arrancando.', { retryable: true });
       if (options.effort && !CLAUDE_EFFORTS.includes(options.effort))
         throw new StudioError('INVALID_EFFORT', `Nivel de esfuerzo desconocido: ${options.effort}.`);
-      const wanted = { model: options.model ?? null, effort: options.effort ?? null };
-      // The CLI fixes model and effort at launch: a change restarts it on the same session.
-      if (child && (wanted.model !== running.model || wanted.effort !== running.effort)) stop();
-      if (!child) await start(options);
+      if (options.permission && !Object.hasOwn(CLAUDE_PERMISSION_MODES, options.permission))
+        throw new StudioError('INVALID_PERMISSION', `Nivel de permisos desconocido: ${options.permission}.`);
+      const wanted = {
+        model: options.model ?? null,
+        effort: options.effort ?? null,
+        permission: options.permission ?? DEFAULT_PERMISSION,
+      };
+      // The CLI fixes model, effort and permission mode at launch: a change restarts it on the same session.
+      if (
+        child &&
+        (wanted.model !== running.model || wanted.effort !== running.effort || wanted.permission !== running.permission)
+      )
+        stop();
+      if (!child) await start(wanted);
       write({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } });
       setState('busy');
       return { accepted: true };

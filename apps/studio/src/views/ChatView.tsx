@@ -1,10 +1,10 @@
 /**
  * Agent chat (docs/STUDIO-AGENT-COCKPIT.md): the user talks to their own Claude Code. Answers render as
  * Markdown, every tool call is a card, edits show a line diff, and edits or commands wait for Aprobar /
- * Rechazar. The composer carries the model and effort for the next turns and says when they differ from the
- * running ones; ChatHeader (on the stage tab bar) shows the agent, its model, context and cost.
+ * Rechazar. The Composer carries model, reasoning and permissions for the next turns, the queue, `@` and `/`;
+ * ChatHeader (on the stage top row) shows the agent, its model, context and cost.
  */
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { useStudio } from '@/app/studio-context';
 import { Button } from '@/components/ui/button';
@@ -17,23 +17,19 @@ import {
   Icon,
   MessageSquare,
   RotateCcw,
-  SendHorizontal,
   ShieldAlert,
-  Sparkles,
-  Square,
   SquareTerminal,
   X,
 } from '@/components/ui/icon';
 import { cn, focusRing, mono } from '@/components/ui/interaction';
 import { LineDiff } from '@/components/ui/line-diff';
 import { Markdown } from '@/components/ui/markdown';
-import { type MenuOption, OptionMenu } from '@/components/ui/option-menu';
 import { formatInt, messages } from '@/i18n/messages.es';
 import type { AgentOptions, AgentUsage, ChatItem, ChatStore, ToolInput } from '@/stores/chat';
 import { sameRoot } from '@/stores/conversations';
+import { Composer } from './Composer';
 
 const t = messages.chat;
-const DEFAULT = '';
 
 function stringField(input: ToolInput, key: string): string | null {
   const value = input?.[key];
@@ -335,26 +331,15 @@ export function ChatView() {
   const agentState = useStore(chat, state => state.agentState);
   const model = useStore(chat, state => state.model);
   const status = useStore(chat, state => state.status);
-  const draft = useStore(chat, state => state.draft);
   const error = useStore(chat, state => state.error);
   const options = useStore(chat, state => state.options);
   const applied = useStore(chat, state => state.applied);
   const scroller = useRef<HTMLDivElement>(null);
-  const input = useRef<HTMLTextAreaElement>(null);
   const pinned = useRef(true);
   const busy = agentState === 'busy' || agentState === 'starting';
   const agent = status?.agents.find(entry => entry.id === status.active);
   const available = agent?.available ?? true;
   const pending = pendingChange(model, applied, options);
-
-  const modelOptions: MenuOption[] = [
-    { value: DEFAULT, label: t.defaultOption },
-    ...(agent?.models ?? Object.keys(t.models)).map(value => ({ value, label: t.models[value] ?? value })),
-  ];
-  const effortOptions: MenuOption[] = [
-    { value: DEFAULT, label: t.defaultOption },
-    ...(agent?.efforts ?? Object.keys(t.efforts)).map(value => ({ value, label: t.efforts[value] ?? value })),
-  ];
 
   useEffect(() => {
     void chat.getState().loadStatus();
@@ -375,16 +360,6 @@ export function ChatView() {
   }, [items]);
 
   const openTerminal = () => dispatch({ type: 'inspector.open', tab: 'terminal' });
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      void chat.getState().send();
-    } else if (event.key === 'Escape' && busy) {
-      event.preventDefault();
-      void chat.getState().cancel();
-    }
-  };
 
   return (
     <section aria-label={t.region} className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto]">
@@ -420,84 +395,19 @@ export function ChatView() {
         </div>
       </div>
 
-      <form
-        className="mx-auto w-full max-w-3xl px-4 pb-4"
-        onSubmit={event => {
-          event.preventDefault();
-          void chat.getState().send();
-        }}
-      >
-        {/* Concentric corners: rounded-2xl (16px) frame = rounded-lg (8px) controls + p-2 (8px). */}
-        <div
-          className="grid gap-1 rounded-2xl border border-floating-border bg-floating p-2 transition-[border-color] duration-150 ease-out focus-within:border-fg-muted/40"
-          onPointerDown={event => {
-            if (event.target === event.currentTarget) input.current?.focus();
-          }}
-        >
-          <textarea
-            ref={input}
-            aria-label={t.placeholder}
-            value={draft}
-            rows={Math.min(8, Math.max(2, draft.split('\n').length))}
-            placeholder={t.placeholder}
-            onChange={event => chat.getState().setDraft(event.target.value)}
-            onKeyDown={onKeyDown}
-            className="max-h-56 min-h-12 resize-none bg-transparent px-2 py-1.5 text-[14px] leading-relaxed text-fg outline-none placeholder:text-fg-muted"
-          />
-          <div className="flex items-center gap-1">
-            <OptionMenu
-              label={t.modelLabel}
-              value={options.model ?? DEFAULT}
-              options={modelOptions}
-              icon={Sparkles}
-              onChange={value => chat.getState().setOptions({ model: value || null })}
-            />
-            <OptionMenu
-              label={t.effortLabel}
-              value={options.effort ?? DEFAULT}
-              options={effortOptions}
-              icon={Gauge}
-              display={t.effortPill(
-                options.effort ? (t.efforts[options.effort] ?? options.effort) : t.defaultOption.toLowerCase(),
-              )}
-              onChange={value => chat.getState().setOptions({ effort: value || null })}
-            />
-            {/* Always mounted so the change is announced when it appears. */}
-            <span
-              aria-live="polite"
-              className="min-w-0 flex-1 truncate px-2 text-xs text-fg-muted"
-              title={
-                pending
-                  ? [t.appliesNext, pending.modelChanges ? t.modelSwitchCost : null].filter(Boolean).join(' ')
-                  : undefined
+      <Composer
+        agent={agent}
+        available={available}
+        busy={busy}
+        pending={
+          pending
+            ? {
+                text: pending.text,
+                title: [t.appliesNext, pending.modelChanges ? t.modelSwitchCost : null].filter(Boolean).join(' '),
               }
-            >
-              {pending?.text}
-            </span>
-            {busy ? (
-              <Button
-                variant="secondary"
-                size="icon"
-                aria-label={t.stop}
-                title={`${t.stop} (Esc)`}
-                onClick={() => void chat.getState().cancel()}
-              >
-                <Icon icon={Square} />
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                size="icon"
-                type="submit"
-                aria-label={t.send}
-                disabled={!draft.trim() || !available}
-              >
-                <Icon icon={SendHorizontal} />
-              </Button>
-            )}
-          </div>
-        </div>
-      </form>
+            : null
+        }
+      />
     </section>
   );
 }

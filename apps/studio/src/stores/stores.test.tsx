@@ -141,14 +141,14 @@ describe('ST domain stores', () => {
     layout.getState().toggleInspector();
     const collapsed = layout.getState().inspectorCollapsed;
     layout.getState().setInspectorTab('files');
-    layout.getState().setStageTab('skills');
+    layout.getState().setStageTab('finops');
     expect(localStorage.length).toBeGreaterThan(0);
 
     const reopened = createLayoutStore();
     expect(reopened.getState()).toMatchObject({
       inspectorCollapsed: collapsed,
       inspectorTab: 'files',
-      stageTab: 'skills',
+      stageTab: 'finops',
     });
     reopened.getState().toggleInspector();
     expect(createLayoutStore().getState().inspectorCollapsed).toBe(!collapsed);

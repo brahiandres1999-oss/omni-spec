@@ -1,5 +1,5 @@
 import { StudioError } from '../protocol.mjs';
-import { CLAUDE_EFFORTS, CLAUDE_MODELS, createClaudeDriver, locateClaude } from './claude.mjs';
+import { CLAUDE_EFFORTS, CLAUDE_MODELS, CLAUDE_PERMISSION_MODES, createClaudeDriver, locateClaude } from './claude.mjs';
 import { listClaudeSessions, readClaudeSession } from './claude-sessions.mjs';
 
 /**
@@ -8,7 +8,14 @@ import { listClaudeSessions, readClaudeSession } from './claude-sessions.mjs';
  * This prototype ships the Claude Code driver; Codex (`app-server`) and ACP drivers plug in here.
  */
 export const AGENTS = Object.freeze([
-  { id: 'claude', label: 'Claude Code', models: CLAUDE_MODELS, efforts: CLAUDE_EFFORTS },
+  {
+    id: 'claude',
+    label: 'Claude Code',
+    models: CLAUDE_MODELS,
+    efforts: CLAUDE_EFFORTS,
+    // Studio's permission levels this agent has (Q25); a level an agent lacks is not offered.
+    permissions: Object.freeze(Object.keys(CLAUDE_PERMISSION_MODES)),
+  },
 ]);
 
 /**
@@ -74,10 +81,10 @@ export function createAgentHub({
         ...driver.status(),
       };
     },
-    prompt({ text, model, effort }) {
+    prompt({ text, model, effort, permission }) {
       if (!text.trim()) throw new StudioError('EMPTY_PROMPT', 'Escribe un mensaje antes de enviarlo.');
       if (!driver.status().sessionId) firstPrompt = text;
-      return driver.prompt(text, { model, effort });
+      return driver.prompt(text, { model, effort, permission });
     },
     cancel: () => driver.cancel(),
     permission: ({ requestId, decision, message }) => driver.respond(requestId, decision, message),

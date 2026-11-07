@@ -1,7 +1,8 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { AppShell } from '@/shell/AppShell';
+import { relativePath } from '@/stores/conversation-review';
 import { renderWithStudio } from '@/test/render';
 import { FakeTransport } from '@/test/fake-transport';
 import {
@@ -25,7 +26,8 @@ afterEach(() => {
   restoreLayout();
 });
 
-const inspectorTabs = () => within(screen.getByRole('complementary', { name: 'Resumen' })).getByRole('tablist');
+const inspectorTabs = () =>
+  within(screen.getByRole('complementary', { name: 'Resumen' })).getByRole('tablist', { name: 'Resumen' });
 
 async function openInspectorTab(user: ReturnType<typeof userEvent.setup>, name: string): Promise<HTMLElement> {
   const tab = within(inspectorTabs()).getByRole('tab', { name });
@@ -114,9 +116,102 @@ describe('SH inspector', () => {
     expect(within(tree).getByRole('treeitem', { name: /README\.md/ })).not.toHaveAttribute('data-git', 'modified');
 
     await user.click(changelog);
-    // A changed file opens in Revisión, in the same panel.
-    const review = within(inspectorTabs()).getByRole('tab', { name: 'Revisión' });
-    await waitFor(() => expect(review).toHaveAttribute('aria-selected', 'true'));
+    // A changed file opens in Archivos › Cambios de git, the repo-wide diff, in the same panel.
+    const git = within(within(panel).getByRole('tablist', { name: 'Vista de archivos' })).getByRole('tab', {
+      name: 'Cambios de git',
+    });
+    await waitFor(() => expect(git).toHaveAttribute('aria-selected', 'true'));
+    expect(within(inspectorTabs()).getByRole('tab', { name: 'Archivos' })).toHaveAttribute('aria-selected', 'true');
     await waitFor(() => expect(document.querySelector('[data-diff-file="CHANGELOG.md"]')).not.toBeNull());
+  });
+
+  test('SH-13 Revisión shows only the files this conversation touched, +N −M on the panel button, and their impact', async () => {
+    expect(relativePath('C:\\dev\\omni-spec\\src\\a.ts', 'C:/dev/omni-spec')).toBe('src/a.ts');
+    expect(relativePath('c:/DEV/omni-spec/b.ts', 'C:\\dev\\omni-spec\\')).toBe('b.ts');
+    expect(relativePath('D:/other/c.ts', 'C:/dev/omni-spec')).toBe('D:/other/c.ts');
+
+    const fake = scriptStudio(new FakeTransport()).respond('agent.status', {
+      workspace: { mode: 'project', dir: 'C:/dev/omni-spec/specs' },
+      active: 'claude',
+      agents: [{ id: 'claude', label: 'Claude Code', available: true, path: 'claude.exe' }],
+      state: 'idle',
+      model: null,
+      sessionId: null,
+    });
+    // First run: the conversation, with the panel closed.
+    localStorage.setItem(
+      'omni-studio:layout.v3',
+      JSON.stringify({ railCollapsed: false, inspectorCollapsed: true, inspectorTab: 'review', stageTab: 'chat' }),
+    );
+    const user = userEvent.setup();
+    renderWithStudio(<AppShell />, { transport: fake });
+    await screen.findByRole('region', { name: 'Chat con el agente' });
+    expect(screen.getByRole('button', { name: 'Mostrar u ocultar el panel Resumen' })).toBeInTheDocument();
+
+    act(() => {
+      const tool = (id: string, name: string, input: Record<string, unknown>) =>
+        fake.emit('agent.event', { kind: 'tool', id, name, title: String(input.file_path ?? ''), input });
+      tool('t1', 'Edit', { file_path: 'C:\\dev\\omni-spec\\src\\app.ts', old_string: 'a\nb', new_string: 'a\nc\nd' });
+      tool('t2', 'Write', { file_path: 'C:/dev/omni-spec/README.md', content: '# Hola\n\nmundo' });
+      tool('t3', 'Edit', { file_path: 'C:/dev/omni-spec/denied.ts', old_string: 'x', new_string: 'y' });
+      tool('t4', 'Read', { file_path: 'C:/dev/omni-spec/package.json' });
+      fake.emit('agent.event', { kind: 'tool_result', toolUseId: 't3', isError: true, output: 'rechazado' });
+    });
+    // Edit: −b +c +d; Write: three new lines. The rejected edit and the read changed nothing.
+    const toggle = await screen.findByRole('button', { name: /esta conversación cambió \+5 −1 líneas/ });
+    expect(toggle).toHaveTextContent('+5−1');
+
+    await user.click(toggle);
+    const panel = screen.getByRole('complementary', { name: 'Resumen' });
+    const changes = await within(panel).findByRole('list', { name: 'Cambios' });
+    expect(
+      [...changes.querySelectorAll('[data-review-file]')].map(node => node.getAttribute('data-review-file')),
+    ).toEqual(['src/app.ts', 'README.md']);
+    expect(within(panel).getByText('2 archivos cambiados')).toBeInTheDocument();
+    expect(within(panel).getByText('Archivo escrito entero')).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole('tab', { name: 'Impacto' }));
+    const files = await within(panel).findByRole('list', { name: 'Archivos de esta conversación' });
+    await user.click(within(files).getByRole('button', { name: 'src/app.ts' }));
+    await waitFor(() => expect(fake.lastCall('blastRadius.heat')).toEqual({ target: 'src/app.ts' }));
+    expect(within(panel).getByRole('button', { name: 'Ver el mapa de módulos' })).toBeInTheDocument();
+  });
+
+  test('SH-14 Ajustes is a modal with its seven sections; skills live in Personalizaciones; the default level persists', async () => {
+    const fake = scriptStudio(new FakeTransport());
+    const user = userEvent.setup();
+    renderWithStudio(<AppShell />, { transport: fake });
+    const rail = await screen.findByRole('navigation', { name: 'Conversaciones y proyectos' });
+    await user.click(within(rail).getByRole('button', { name: 'Ajustes' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Ajustes' });
+    const sections = within(within(dialog).getByRole('tablist', { name: 'Ajustes' })).getAllByRole('tab');
+    expect(sections.map(tab => tab.textContent)).toEqual([
+      'General',
+      'Agentes',
+      'Apariencia',
+      'Atajos',
+      'Notificaciones',
+      'Personalizaciones',
+      'Proyectos',
+    ]);
+
+    await user.click(within(dialog).getByRole('radio', { name: /Planificar/ }));
+    expect(JSON.parse(localStorage.getItem('omni-studio:settings.v1') ?? '{}')).toMatchObject({
+      defaultPermission: 'plan',
+    });
+
+    await user.click(within(dialog).getByRole('tab', { name: 'Personalizaciones' }));
+    await waitFor(() => expect(fake.calls('skills.list').length).toBeGreaterThan(0));
+    await user.click(within(dialog).getByRole('tab', { name: 'Atajos' }));
+    expect(within(dialog).getByText('Interrumpir el turno y enviar')).toBeInTheDocument();
+
+    // The pages that found a new place are gone from the palette.
+    await user.keyboard('{Escape}');
+    await user.keyboard('{Control>}k{/Control}');
+    const palette = await screen.findByRole('dialog');
+    const views = within(palette)
+      .queryAllByRole('option')
+      .map(option => option.textContent ?? '');
+    expect(views.some(name => /Cartografía|Diffs|Skills/.test(name))).toBe(false);
   });
 });

@@ -5,9 +5,10 @@ import { AppShell } from '@/shell/AppShell';
 import { diffLines } from '@/components/ui/line-diff';
 import { applyAgentEvent, type ChatItem } from '@/stores/chat';
 import { FakeTransport } from '@/test/fake-transport';
-import { installLayoutStub, scriptStudio, stubCanvas, stubWorker } from '@/test/fixtures';
+import { fileTree, installLayoutStub, scriptStudio, stubCanvas, stubWorker } from '@/test/fixtures';
 import { renderWithStudio } from '@/test/render';
 import { ChatHeader, ChatView, modelName, pendingChange } from './ChatView';
+import { activeToken, rankFiles } from './Composer';
 
 /** The chat as the stage shows it: the status row on the tab bar, the transcript under it. */
 const ChatWithHeader = () => (
@@ -86,9 +87,9 @@ describe('CH chat view', () => {
     await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
     expect(screen.getByText(/Modo Studio/)).toBeInTheDocument();
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox', { name: /Pídele algo/ });
     await user.type(input, 'agrega un README{Enter}');
-    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'agrega un README' }));
+    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'agrega un README', permission: 'ask' }));
     expect(screen.getByText('agrega un README')).toBeInTheDocument();
     expect(input).toHaveValue('');
 
@@ -164,8 +165,10 @@ describe('CH chat view', () => {
     renderWithStudio(<ChatWithHeader />, { transport: fake });
     await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
     expect(screen.getByRole('button', { name: 'Modelo: Opus' })).toBeInTheDocument();
-    await user.type(screen.getByRole('textbox'), 'hola{Enter}');
-    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'hola', model: 'opus', effort: 'high' }));
+    await user.type(screen.getByRole('combobox', { name: /Pídele algo/ }), 'hola{Enter}');
+    await waitFor(() =>
+      expect(fake.lastCall('agent.prompt')).toEqual({ text: 'hola', model: 'opus', effort: 'high', permission: 'ask' }),
+    );
     act(() => {
       fake.emit('agent.event', {
         kind: 'result',
@@ -186,7 +189,7 @@ describe('CH chat view', () => {
     const fake = chatTransport();
     renderWithStudio(<ChatWithHeader />, { transport: fake });
     await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
-    await user.type(screen.getByRole('textbox'), 'hola{Enter}');
+    await user.type(screen.getByRole('combobox', { name: /Pídele algo/ }), 'hola{Enter}');
     await waitFor(() => expect(fake.calls('agent.prompt')).toHaveLength(1));
     // Two turns as the driver reports them: the turn cost and the conversation total (not their sum).
     act(() => {
@@ -216,8 +219,10 @@ describe('CH chat view', () => {
     await user.click(await screen.findByRole('menuitemradio', { name: 'Haiku' }));
     expect(screen.getByText('Opus 5.5 ahora → Haiku desde tu próximo mensaje')).toBeInTheDocument();
 
-    await user.type(screen.getByRole('textbox'), 'sigue{Enter}');
-    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'sigue', model: 'haiku' }));
+    await user.type(screen.getByRole('combobox', { name: /Pídele algo/ }), 'sigue{Enter}');
+    await waitFor(() =>
+      expect(fake.lastCall('agent.prompt')).toEqual({ text: 'sigue', model: 'haiku', permission: 'ask' }),
+    );
     await waitFor(() => expect(screen.queryByText(/desde tu próximo mensaje/)).toBeNull());
   });
 
@@ -239,6 +244,183 @@ describe('CH chat view', () => {
     expect(pendingChange('claude-opus-5-5', applied, { model: null, effort: 'low' })?.text).toBe(
       'Opus 5.5 ahora → el modelo predeterminado desde tu próximo mensaje',
     );
+  });
+});
+
+describe('CH composer', () => {
+  beforeEach(() => {
+    globalThis.localStorage?.clear();
+  });
+
+  const STATUS_WITH_LEVELS = {
+    ...STATUS,
+    agents: [
+      {
+        id: 'claude',
+        label: 'Claude Code',
+        available: true,
+        path: 'claude.exe',
+        models: ['opus', 'haiku'],
+        efforts: ['low', 'high'],
+        permissions: ['ask', 'default', 'auto', 'bypass', 'plan'],
+      },
+    ],
+  };
+
+  async function mountChat(transport = chatTransport()) {
+    const user = userEvent.setup();
+    renderWithStudio(<ChatView />, { transport });
+    await waitFor(() => expect(transport.calls('agent.status')).toHaveLength(1));
+    return { user, fake: transport, input: screen.getByRole('combobox', { name: /Pídele algo/ }) };
+  }
+
+  test('CH-15 with the agent working Enter queues (editable, removable); the turn end sends it; Ctrl+Enter interrupts', async () => {
+    const { user, fake, input } = await mountChat();
+    await user.type(input, 'uno{Enter}');
+    await waitFor(() => expect(fake.calls('agent.prompt')).toHaveLength(1));
+    act(() => fake.emit('agent.event', { kind: 'status', state: 'busy' }));
+    expect(input).toHaveAttribute('placeholder', 'Enter pone en cola · Ctrl+Enter interrumpe y envía');
+
+    await user.type(input, 'dos{Enter}');
+    await user.type(input, 'tres{Enter}');
+    const queue = screen.getByRole('list', { name: 'Mensajes en cola' });
+    expect(
+      within(queue)
+        .getAllByRole('listitem')
+        .map(item => item.textContent),
+    ).toEqual([expect.stringContaining('dos'), expect.stringContaining('tres')]);
+    expect(fake.calls('agent.prompt')).toHaveLength(1);
+
+    await user.click(within(queue).getByRole('button', { name: 'Quitar de la cola: tres' }));
+    await user.click(within(queue).getByRole('button', { name: 'Editar: dos' }));
+    expect(input).toHaveValue('dos');
+    expect(screen.queryByRole('list', { name: 'Mensajes en cola' })).toBeNull();
+    await user.type(input, ' más{Enter}');
+
+    // The turn ends: the queued message goes out by itself.
+    act(() => fake.emit('agent.event', { kind: 'status', state: 'ready' }));
+    await waitFor(() => expect(fake.calls('agent.prompt')).toHaveLength(2));
+    expect(fake.lastCall('agent.prompt')).toMatchObject({ text: 'dos más' });
+
+    // Ctrl+Enter stops the turn and sends this message first.
+    act(() => fake.emit('agent.event', { kind: 'status', state: 'busy' }));
+    await user.type(input, 'urgente{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(fake.calls('agent.cancel')).toHaveLength(1));
+    act(() => fake.emit('agent.event', { kind: 'status', state: 'ready' }));
+    await waitFor(() => expect(fake.lastCall('agent.prompt')).toMatchObject({ text: 'urgente' }));
+  });
+
+  test('CH-16 permissions: five levels, «Sin restricciones» in red, the level travels with the prompt; Ajustes sets the default', async () => {
+    globalThis.localStorage?.setItem('omni-studio:settings.v1', JSON.stringify({ defaultPermission: 'plan' }));
+    const { user, fake, input } = await mountChat(chatTransport().respond('agent.status', STATUS_WITH_LEVELS));
+    await user.click(screen.getByRole('button', { name: 'Permisos: Planificar' }));
+    const items = await screen.findAllByRole('menuitemradio');
+    expect(items.map(item => item.textContent)).toEqual([
+      expect.stringContaining('Preguntar siempre'),
+      expect.stringContaining('Predeterminado'),
+      expect.stringContaining('Automático'),
+      expect.stringContaining('Sin restricciones'),
+      expect.stringContaining('Planificar'),
+    ]);
+    await user.click(screen.getByRole('menuitemradio', { name: /Sin restricciones/ }));
+    const bypass = screen.getByRole('button', { name: 'Permisos: Sin restricciones' });
+    expect(bypass).toHaveAttribute('data-tone', 'danger');
+    expect(bypass).toHaveClass('text-breach');
+
+    await user.type(input, 'hazlo{Enter}');
+    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'hazlo', permission: 'bypass' }));
+  });
+
+  test('CH-17 the model menu groups models under their agent, with a reasoning submenu', async () => {
+    const { user, fake, input } = await mountChat(chatTransport().respond('agent.status', STATUS_WITH_LEVELS));
+    await user.click(screen.getByRole('button', { name: 'Modelo: Predeterminado' }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('Claude Code')).toBeInTheDocument();
+    expect(
+      within(menu)
+        .getAllByRole('menuitemradio')
+        .map(item => item.textContent),
+    ).toEqual(['Predeterminado', 'Opus', 'Haiku']);
+    await user.click(within(menu).getByRole('menuitemradio', { name: 'Opus' }));
+
+    await user.click(screen.getByRole('button', { name: 'Modelo: Opus' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Razonamiento/ }));
+    // Keyboard, as jsdom does not hover a submenu open.
+    const high = await screen.findByRole('menuitemradio', { name: 'Alto' });
+    act(() => high.focus());
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Modelo: Opus' })).toHaveTextContent('Opus · alto');
+
+    await user.type(input, 'piensa{Enter}');
+    await waitFor(() =>
+      expect(fake.lastCall('agent.prompt')).toEqual({
+        text: 'piensa',
+        model: 'opus',
+        effort: 'high',
+        permission: 'ask',
+      }),
+    );
+  });
+
+  test('CH-18 «@» suggests project files and «/» the agent commands; «+» inserts either', async () => {
+    expect(activeToken('mira @src/a', 11)).toEqual({ kind: '@', query: 'src/a', start: 5 });
+    expect(activeToken('/omni', 5)).toEqual({ kind: '/', query: 'omni', start: 0 });
+    expect(activeToken('hola /omni', 10)).toBeNull();
+    expect(activeToken('correo@x', 8)).toBeNull();
+    expect(rankFiles(['lib/zapp.ts', 'src/app.txt', 'docs/app.md'], 'app')).toEqual([
+      'src/app.txt',
+      'docs/app.md',
+      'lib/zapp.ts',
+    ]);
+
+    const { user, fake, input } = await mountChat(
+      chatTransport()
+        .respond('files.tree', fileTree())
+        .respond('skills.list', {
+          items: [
+            {
+              name: 'omni-plan',
+              description: 'Planifica la spec',
+              origin: 'bundled',
+              path: 'skills/omni-plan/SKILL.md',
+              enabled: true,
+              weight: { tokens: 120, estimated: true },
+            },
+          ],
+          activeTokens: 120,
+          budgetTokens: 200_000,
+          budgetShare: 0.0006,
+        })
+        .respond('agent.status', STATUS_WITH_LEVELS),
+    );
+    await user.type(input, 'revisa @app');
+    const list = await screen.findByRole('listbox', { name: 'Sugerencias' });
+    expect(within(list).getByRole('option', { name: 'src/app.txt' })).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{Enter}');
+    expect(input).toHaveValue('revisa @src/app.txt ');
+    expect(screen.queryByRole('listbox')).toBeNull();
+
+    // Skills from skills.list work right away; commands from the agent's init join them and are remembered.
+    act(() => fake.emit('agent.event', { kind: 'init', model: 'm', commands: ['omni-specify', 'compact'] }));
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: 'Agregar al mensaje' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Acción o skill/ }));
+    await waitFor(() => expect(input).toHaveValue('/'));
+    await user.type(input, 'omni');
+    const commands = await screen.findByRole('listbox', { name: 'Sugerencias' });
+    expect(
+      within(commands)
+        .getAllByRole('option')
+        .map(option => option.getAttribute('aria-label')),
+    ).toEqual(['/omni-plan', '/omni-specify']);
+    expect(within(commands).getByText('Planifica la spec')).toBeInTheDocument();
+    await user.keyboard('{Tab}');
+    expect(input).toHaveValue('/omni-plan ');
+    expect(JSON.parse(globalThis.localStorage?.getItem('omni-studio:chat.commands') ?? '[]')).toEqual([
+      'omni-specify',
+      'compact',
+    ]);
   });
 });
 

@@ -46,7 +46,11 @@ const ROW = {
 const SIGN = { same: ' ', del: '−', add: '+' } as const;
 
 export function LineDiff({ before, after, className }: { before: string; after: string; className?: string }) {
-  const lines = diffLines(before, after);
+  return <DiffLines lines={diffLines(before, after)} className={className} />;
+}
+
+/** Lines already diffed (the conversation review folds them per file). */
+export function DiffLines({ lines, className }: { lines: DiffLine[]; className?: string }) {
   const added = lines.filter(line => line.kind === 'add').length;
   const removed = lines.filter(line => line.kind === 'del').length;
   return (
