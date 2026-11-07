@@ -1,5 +1,5 @@
 //! Recent projects in `%APPDATA%\OmniStudio\recent.json` (plan §10.9, reconciliation §1.17.10):
-//! MRU order, canonical paths compared case-insensitively on Windows, at most 10 entries, atomic
+//! MRU order, canonical paths compared case-insensitively on Windows, at most 30 entries, atomic
 //! writes. Loading never rewrites the file, so a corrupt list survives until the user opens a project.
 
 use std::path::{Path, PathBuf};
@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Result, StudioError};
 use crate::security::simplify;
 
-/// Maximum number of remembered projects.
-pub const MAX_RECENT: usize = 10;
+/// Maximum number of remembered projects. The rail lists them as the user's projects (Fase 3, Q3), so the
+/// cap only guards against an unbounded file.
+pub const MAX_RECENT: usize = 30;
 
 /// One remembered project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -136,6 +137,26 @@ impl RecentProjects {
         self.save()?;
         self.load_error = None;
         Ok(())
+    }
+
+    /// Removes `project` from the list (it may no longer exist) and saves it. Removing a project that is
+    /// not listed changes nothing.
+    ///
+    /// # Errors
+    /// I/O errors when saving.
+    pub fn remove(&mut self, project: &Path) -> Result<()> {
+        let canonical = project
+            .canonicalize()
+            .map(|path| simplify(&path))
+            .unwrap_or_else(|_| project.to_path_buf());
+        let wanted = key(&canonical);
+        let before = self.entries.len();
+        self.entries
+            .retain(|existing| key(&existing.path) != wanted);
+        if self.entries.len() == before {
+            return Ok(());
+        }
+        self.save()
     }
 
     fn save(&self) -> Result<()> {

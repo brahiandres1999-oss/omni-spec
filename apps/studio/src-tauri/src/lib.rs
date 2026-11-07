@@ -84,7 +84,13 @@ mod app {
         let Some(config) = app.config().app.windows.iter().find(|w| w.label == "main") else {
             return Ok(());
         };
-        let mut builder = tauri::WebviewWindowBuilder::from_config(app, config)?;
+        let mut builder =
+            tauri::WebviewWindowBuilder::from_config(app, config)?.on_new_window(|url, _| {
+                if let Some(link) = crate::window::new_window_target(url.as_str()) {
+                    crate::window::open_in_browser(link);
+                }
+                tauri::webview::NewWindowResponse::Deny
+            });
         // CDP for the E2E suite exists only in debug builds and only on request (SEC-04, D-15).
         if std::env::var_os("OMNI_STUDIO_CDP_PORT").is_some()
             && std::env::var_os("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_none()
@@ -177,6 +183,7 @@ mod app {
                 commands::open_from_args(app, &argv, &PathBuf::from(cwd));
             }))
             .plugin(tauri_plugin_notification::init())
+            .plugin(tauri_plugin_dialog::init())
             .manage(state)
             .setup(|app| {
                 let handle = app.handle().clone();
@@ -210,6 +217,8 @@ mod app {
                 commands::pty_close,
                 commands::window_set_caption_layout,
                 commands::fs_rescan,
+                commands::recent_remove,
+                commands::project_pick,
             ])
             .build(tauri::generate_context!())?
             .run(|app, event| {

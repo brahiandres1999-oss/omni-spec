@@ -13,6 +13,8 @@ fn main() {
         "pty_close",
         "window_set_caption_layout",
         "fs_rescan",
+        "recent_remove",
+        "project_pick",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .unwrap_or_else(|error| panic!("tauri build script failed: {error:#}"));

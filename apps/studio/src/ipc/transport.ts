@@ -15,6 +15,8 @@ export interface StudioTransport {
 const HOST_COMMANDS: Readonly<Record<string, string>> = {
   'project.open': 'project_open',
   'recent.list': 'recent_list',
+  'recent.remove': 'recent_remove',
+  'project.pick': 'project_pick',
   'engine.stderr': 'engine_stderr',
   'pty.open': 'pty_open',
   'pty.write': 'pty_write',

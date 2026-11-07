@@ -45,7 +45,7 @@ describe('SH three-column shell', () => {
   test('SH-01 four landmark regions; the dock floats over the stage', async () => {
     await mountShell();
     expect(screen.getByRole('banner')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Proyectos' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Conversaciones y proyectos' })).toBeInTheDocument();
     const main = screen.getByRole('main');
     expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument();
     const dock = screen.getByRole('region', { name: 'Dock' });
@@ -84,10 +84,10 @@ describe('SH three-column shell', () => {
 
   test('SH-05 switching project from the rail calls project.open, resets the stores and shows Loading', async () => {
     const { fake, user } = await mountShell();
-    const rail = screen.getByRole('navigation', { name: 'Proyectos' });
+    const rail = screen.getByRole('navigation', { name: 'Conversaciones y proyectos' });
     const pendingBoard = fake.defer('board.get');
 
-    await user.click(within(rail).getByRole('button', { name: /omnipage/ }));
+    await user.click(within(rail).getByRole('button', { name: 'omnipage' }));
     expect(fake.lastCall('project.open')).toEqual({ path: 'C:/dev/omnipage' });
     await waitFor(() => expect(viewState('board')).toBe('loading'));
 

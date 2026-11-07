@@ -30,6 +30,7 @@ import { Markdown } from '@/components/ui/markdown';
 import { type MenuOption, OptionMenu } from '@/components/ui/option-menu';
 import { formatInt, messages } from '@/i18n/messages.es';
 import type { AgentOptions, AgentUsage, ChatItem, ChatStore, ToolInput } from '@/stores/chat';
+import { sameRoot } from '@/stores/conversations';
 
 const t = messages.chat;
 const DEFAULT = '';
@@ -328,7 +329,7 @@ export function ChatHeader() {
 }
 
 export function ChatView() {
-  const { project, dispatch } = useStudio();
+  const { project, dispatch, ui, projectId } = useStudio();
   const chat = project.chat;
   const items = useStore(chat, state => state.items);
   const agentState = useStore(chat, state => state.agentState);
@@ -358,6 +359,14 @@ export function ChatView() {
   useEffect(() => {
     void chat.getState().loadStatus();
   }, [chat]);
+
+  // A conversation clicked in the rail under another project opens once this project's engine is up.
+  useEffect(() => {
+    const pending = ui.getState().pendingConversation;
+    if (!pending || projectId === null || !sameRoot(pending.root, projectId)) return;
+    ui.getState().setPendingConversation(null);
+    void chat.getState().resume(pending.sessionId);
+  }, [chat, ui, projectId]);
 
   // Follow the conversation while the user is at the bottom; leave them alone when they scrolled up.
   useEffect(() => {

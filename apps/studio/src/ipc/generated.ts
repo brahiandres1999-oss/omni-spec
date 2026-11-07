@@ -17,6 +17,10 @@ export interface EngineRequestParams {
     readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   };
   readonly 'agent.reset': Record<string, never>;
+  readonly 'agent.resume': {
+    readonly sessionId: string;
+  };
+  readonly 'agent.sessions': Record<string, never>;
   readonly 'agent.status': Record<string, never>;
   readonly 'blastRadius.heat': {
     readonly target: string;
@@ -32,6 +36,22 @@ export interface EngineRequestParams {
     };
   };
   readonly 'cartography.graph': Record<string, never>;
+  readonly 'conversations.archive': {
+    readonly root?: string;
+    readonly agent: string;
+    readonly sessionId: string;
+    readonly archived: boolean;
+  };
+  readonly 'conversations.list': {
+    readonly roots?: string[];
+    readonly includeArchived?: boolean;
+  };
+  readonly 'conversations.rename': {
+    readonly root?: string;
+    readonly agent: string;
+    readonly sessionId: string;
+    readonly title: string;
+  };
   readonly 'diff.get': {
     readonly maxBytes?: number;
   };
@@ -98,5 +118,5 @@ export interface EngineEventPayloads {
 export type EngineRequest = keyof EngineRequestParams;
 export type EngineEvent = keyof EngineEventPayloads;
 
-export const ENGINE_REQUESTS: readonly EngineRequest[] = ['agent.cancel', 'agent.permission', 'agent.prompt', 'agent.reset', 'agent.status', 'blastRadius.heat', 'board.get', 'cartography.graph', 'diff.get', 'diff.getFile', 'files.tree', 'finops.snapshot', 'gate.approve', 'project.snapshot', 'review.addRemark', 'review.decideHunk', 'review.stageApproved', 'skills.list', 'skills.toggle', 'studio.challenge'];
+export const ENGINE_REQUESTS: readonly EngineRequest[] = ['agent.cancel', 'agent.permission', 'agent.prompt', 'agent.reset', 'agent.resume', 'agent.sessions', 'agent.status', 'blastRadius.heat', 'board.get', 'cartography.graph', 'conversations.archive', 'conversations.list', 'conversations.rename', 'diff.get', 'diff.getFile', 'files.tree', 'finops.snapshot', 'gate.approve', 'project.snapshot', 'review.addRemark', 'review.decideHunk', 'review.stageApproved', 'skills.list', 'skills.toggle', 'studio.challenge'];
 export const ENGINE_EVENTS: readonly EngineEvent[] = ['agent.event', 'finops.tick', 'project.changed'];

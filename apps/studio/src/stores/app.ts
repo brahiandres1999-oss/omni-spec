@@ -89,6 +89,9 @@ export interface UiState {
   setDockDraft(draft: string): void;
   focusDock(patch?: { mode?: string; draft?: string }): void;
   focusDiffFile(path: string): void;
+  /** Conversation to open once the engine of another project is up (a click in the rail switched project). */
+  pendingConversation: { root: string; sessionId: string } | null;
+  setPendingConversation(pending: UiState['pendingConversation']): void;
 }
 
 export function createUiStore() {
@@ -99,6 +102,8 @@ export function createUiStore() {
     dock: { mode: null, draft: '', focusNonce: 0 },
     diffFocus: null,
     engine: { status: 'ok' },
+    pendingConversation: null,
+    setPendingConversation: pendingConversation => set({ pendingConversation }),
     setEngine: engine => set({ engine }),
     setPaletteOpen: paletteOpen =>
       set(

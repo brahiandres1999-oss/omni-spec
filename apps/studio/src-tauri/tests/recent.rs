@@ -7,7 +7,7 @@ mod support;
 use std::path::{Path, PathBuf};
 
 use omni_studio::error::StudioError;
-use omni_studio::recent::RecentProjects;
+use omni_studio::recent::{MAX_RECENT, RecentProjects};
 use support::{canon, norm_path};
 
 fn entry_paths(recent: &RecentProjects) -> Vec<String> {
@@ -29,7 +29,7 @@ fn make_projects(parent: &Path, count: usize) -> Vec<PathBuf> {
 }
 
 #[test]
-fn rp_01_mru_without_duplicates_capped_at_ten_written_atomically() {
+fn rp_01_mru_without_duplicates_capped_written_atomically() {
     #[cfg(windows)]
     {
         let appdata = PathBuf::from(std::env::var_os("APPDATA").expect("APPDATA"));
@@ -42,7 +42,7 @@ fn rp_01_mru_without_duplicates_capped_at_ten_written_atomically() {
     let workspace = tempfile::tempdir().expect("projects");
     let store = tempfile::tempdir().expect("store dir");
     let file = store.path().join("recent.json");
-    let projects = make_projects(workspace.path(), 12);
+    let projects = make_projects(workspace.path(), MAX_RECENT + 2);
 
     let mut recent = RecentProjects::load(&file);
     assert!(
@@ -78,8 +78,13 @@ fn rp_01_mru_without_duplicates_capped_at_ten_written_atomically() {
         recent.open(project).expect("open");
     }
     let paths = entry_paths(&recent);
-    assert_eq!(paths.len(), 10, "capped at 10");
-    let newest_first: Vec<String> = projects.iter().rev().take(10).map(|p| canon(p)).collect();
+    assert_eq!(paths.len(), MAX_RECENT, "capped");
+    let newest_first: Vec<String> = projects
+        .iter()
+        .rev()
+        .take(MAX_RECENT)
+        .map(|p| canon(p))
+        .collect();
     assert_eq!(paths, newest_first);
 
     // Persisted: a fresh load sees the same list; only recent.json is left behind (temp + rename).
@@ -160,4 +165,37 @@ fn rp_03_corrupt_file_is_typed_and_preserved_until_next_open() {
     let reloaded = RecentProjects::load(&file);
     assert!(reloaded.load_error().is_none());
     assert_eq!(entry_paths(&reloaded), vec![canon(&project)]);
+}
+
+#[test]
+fn rp_04_removing_a_project_drops_it_from_the_list_only() {
+    let workspace = tempfile::tempdir().expect("projects");
+    let store = tempfile::tempdir().expect("store dir");
+    let file = store.path().join("recent.json");
+    let projects = make_projects(workspace.path(), 3);
+    let mut recent = RecentProjects::load(&file);
+    for project in &projects {
+        recent.open(project).expect("open");
+    }
+
+    recent.remove(&projects[1]).expect("remove");
+    assert_eq!(
+        entry_paths(&recent),
+        vec![canon(&projects[2]), canon(&projects[0])]
+    );
+    assert!(projects[1].is_dir(), "the folder itself is untouched");
+    assert_eq!(
+        entry_paths(&RecentProjects::load(&file)),
+        vec![canon(&projects[2]), canon(&projects[0])],
+        "saved"
+    );
+
+    // A folder that no longer exists can still be removed, and an unknown one changes nothing.
+    std::fs::remove_dir_all(&projects[0]).expect("delete folder");
+    let gone = RecentProjects::load(&file).entries()[1].path.clone();
+    recent.remove(&gone).expect("remove missing");
+    recent
+        .remove(Path::new("C:/no/such/folder"))
+        .expect("remove unknown");
+    assert_eq!(entry_paths(&recent), vec![canon(&projects[2])]);
 }

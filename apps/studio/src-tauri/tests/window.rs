@@ -212,3 +212,24 @@ fn wn_04_snap_layouts_flyout_manual_evidence() {
     //  6. Attach the screenshots and the build number (`winver`) to the evidence file.
     panic!("WN-04 is verified manually; see the checklist above and docs/evidence/phase4/");
 }
+
+#[test]
+fn wn_05_new_windows_are_refused_and_only_web_links_leave_for_the_browser() {
+    use omni_studio::window::new_window_target;
+    // WebView2's Ctrl+N asks for a blank window: Studio refuses it instead of cloning itself.
+    assert_eq!(new_window_target("about:blank"), None);
+    assert_eq!(
+        new_window_target("file:///C:/Windows/System32/calc.exe"),
+        None
+    );
+    assert_eq!(new_window_target("javascript:alert(1)"), None);
+    assert_eq!(new_window_target("tauri://localhost/"), None);
+    assert_eq!(
+        new_window_target("https://antigravity.google/docs"),
+        Some("https://antigravity.google/docs")
+    );
+    assert_eq!(
+        new_window_target("HTTP://example.com"),
+        Some("HTTP://example.com")
+    );
+}

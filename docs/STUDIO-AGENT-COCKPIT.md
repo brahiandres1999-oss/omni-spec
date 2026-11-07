@@ -1,15 +1,17 @@
 # Omni Studio: cockpit agéntico
 
-Estado: prototipo (fases 0–2 y 2.5, más la vuelta 1 de «Pendientes»). Reemplaza el escenario de dashboards de la
-fase 4, que queda en el tag `studio-dashboard-v0`.
+Estado: prototipo (fases 0–2, 2.5 y 2.6). **La Fase 3 · Cockpit multiagente está decidida y por empezar** (ver
+su sección). Reemplaza el escenario de dashboards de la fase 4, que queda en el tag `studio-dashboard-v0`.
 
 ## Cómo retomar (léelo primero)
 
 Esta sección basta para seguir iterando desde otra sesión, otra máquina u otro agente.
 
 **Dónde estamos.** Rama `feat/studio-agent-cockpit` (base `main`). `git log --oneline -5` muestra el último
-commit de vuelta. La próxima vuelta es la indicada en «Pendientes → Siguiente vuelta». `specs/.omni/memory.db`
-aparece sin seguimiento: es la memoria local de Omni, no se commitea.
+commit de vuelta. La próxima vuelta es la primera sin «Hecha» en la tabla «Fase 3 → Vueltas». Hay trabajo sin
+commit a propósito: la vuelta 2 de la Fase 2.6 (conversaciones anteriores de Claude), que entra en el commit de la
+vuelta 1 de la Fase 3. `specs/.omni/memory.db` aparece sin seguimiento: es la memoria local de Omni, no se
+commitea.
 
 **Requisitos.** Node ≥ 22.19 (hoy 24.x), Rust y el toolchain de Tauri v2, WebView2, y Claude Code en el PATH con
 sesión iniciada (`claude` y luego `/login` en una terminal). El driver busca `claude.exe` o el shim `claude.cmd`
@@ -32,25 +34,34 @@ En modo debug el host ejecuta el motor desde este checkout (`bin/omni-spec.mjs`)
 
 Si un cambio del motor «no aparece», casi siempre falta ese reinicio completo (así se diagnosticó P0.2).
 
+Lanza Studio **siempre desde tu propia terminal**. Lanzado desde dentro de la app de Claude (que corre en un
+contenedor MSIX), Windows le redirige `%APPDATA%` y `%LOCALAPPDATA%`: ve otra lista de proyectos recientes y otra
+memoria de modo Studio.
+
 **Comprobar antes de cada commit** (todo debe pasar):
 
 ```
-node --test test/studio-agents.test.mjs
+node --test test/studio-agents.test.mjs test/studio-conversations.test.mjs
 cd apps/studio && npm run typecheck && npm test
 npm run lint
 ```
 
-`npm test` en la raíz corre toda la suite del motor (más lenta). `npm run lint` es `biome ci .`;
+Si se tocó el host Rust (p. ej. la lista blanca de métodos), además `cargo test --test security` en
+`apps/studio/src-tauri`. Con la app abierta el exe bloquea `target/` («Acceso denegado»): usar otra carpeta con
+`CARGO_TARGET_DIR`.
+
+`npm test` en la raíz corre toda la suite del motor (más lenta). Incluye G-SLOP-12, que revisa el propio código: un `catch` que
+devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: motivo`. `npm run lint` es `biome ci .`;
 `npm run lint:fix` corrige el formato.
 
 **Método de cada vuelta.**
 1. El usuario manda una captura de la app real y elige el tema.
-2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del driver es **AG-16** y el próximo
-   de la UI es **CH-11**.
+2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-21** y el próximo
+   de la UI es **CH-15** (SH-xx para el resto del shell).
 3. Pasan las tres comprobaciones de arriba.
 4. El usuario lo prueba en la app (reinicio completo si se tocó el motor) y manda captura.
-5. Se actualiza este documento (Pendientes, «Siguiente vuelta», hechos verificados) y se hace **un commit por
-   vuelta** con el formato `feat(studio): … (phase 2.6 round N)`. Al fusionar a `main`, el PR se hace con
+5. Se actualiza este documento (tabla de vueltas de la Fase 3, hechos verificados) y se hace **un commit por
+   vuelta** con el formato `feat(studio): … (phase 3 round N)`. Al fusionar a `main`, el PR se hace con
    *squash*, así que `main` recibe un solo commit.
 
 **Mapa de archivos.**
@@ -58,17 +69,23 @@ npm run lint
 | Qué | Dónde |
 |---|---|
 | Driver de Claude Code (spawn, stream-json, permisos, costo) | `src/studio/agents/claude.mjs` |
+| Sesiones de Claude Code de la carpeta (listar, leer historial) | `src/studio/agents/claude-sessions.mjs` |
+| Índice de conversaciones de Studio (tabla `studio_conversations` en la memoria) | `src/studio/conversations.mjs`; tests AG-18 a AG-20 en `test/studio-conversations.test.mjs` |
 | Hub de agentes y métodos `agent.*` | `src/studio/agents/index.mjs`, `src/studio/engine.mjs`, `src/studio/protocol.mjs` |
 | Tests del driver (AG-xx) y CLI simulada | `test/studio-agents.test.mjs`, `test-support/fake-claude.mjs` |
 | Estado del chat (eventos → transcript, uso, opciones) | `apps/studio/src/stores/chat.ts` |
 | Chat, compositor y `ChatHeader` (estado del agente) | `apps/studio/src/views/ChatView.tsx` |
 | Fila de pestañas donde vive `ChatHeader` | `apps/studio/src/shell/Stage.tsx` |
+| Panel izquierdo: «Nueva conversación», buscador, árbol Proyectos → Conversaciones | `apps/studio/src/shell/Rail.tsx`, store `apps/studio/src/stores/conversations.ts`, tests SH-04 y CH-11 a CH-14 |
+| «Retomar sesión de la terminal…» | `apps/studio/src/shell/TerminalSessionsDialog.tsx` |
+| Proyectos recientes, quitar uno y selector de carpetas (host) | `apps/studio/src-tauri/src/recent.rs`, `commands.rs` (`recent_remove`, `project_pick`); tests RP-01 a RP-04 |
 | Todos los textos de la UI | `apps/studio/src/i18n/messages.es.ts` (sección `chat`) |
 | Tests de la UI del chat (CH-xx) | `apps/studio/src/views/ChatView.test.tsx` |
 
 **Hechos verificados de la CLI** (Claude Code 2.1.318, 2026-11-06; no hace falta volver a averiguarlos):
-- `total_cost_usd` del mensaje `result` es el **total acumulado de la sesión**, no el del turno, y `--resume` lo
-  arrastra. `modelUsage` también es acumulado. El costo del turno se obtiene restando el total anterior.
+- `total_cost_usd` del mensaje `result` es el **total acumulado de la sesión**, no el del turno. `--resume` lo
+  arrastra solo si el proceso anterior terminó limpio (deja un `cost-state` en la sesión); si se cortó, la CLI
+  cuenta desde cero. `modelUsage` también es acumulado. El costo del turno se obtiene restando el total anterior.
 - Una sesión nueva arranca con unos 35–45 k tokens de contexto antes de que el usuario diga nada (prompt de
   sistema, herramientas, CLAUDE.md y skills).
 - Cambiar de modelo invalida la caché: el primer turno con el modelo nuevo vuelve a escribir todo el contexto.
@@ -79,20 +96,188 @@ npm run lint
 
 ## Qué es
 
-Omni Studio es el entorno visual donde el usuario programa con los agentes que ya usa (Claude Code,
-luego Codex, Copilot CLI y Gemini CLI). **Omni Studio no es un agente**: lanza la CLI oficial de cada
-proveedor y le habla por su protocolo estructurado. Omni (memoria, specs, gates, guardian) trabaja por
-detrás.
+Omni Studio es el entorno visual donde el usuario programa con los agentes que ya usa: Claude Code, Codex,
+Antigravity y cualquier agente que hable ACP, cada uno con su propia suscripción. **Omni Studio no es un
+agente**: lanza la CLI oficial de cada proveedor y le habla por su protocolo estructurado. Omni (memoria, specs,
+gates, guardian) trabaja por detrás y es lo que comparten todos los agentes de un proyecto. Es una app local y
+gratuita bajo MIT, sin servicio en la nube ni cuentas propias.
 
 ## Reglas que no se negocian
 
-1. **El login es siempre el de la CLI oficial.** Studio nunca lee, guarda ni reenvía tokens, y nunca se
-   hace pasar por otra herramienta. Si la CLI no tiene sesión, Studio indica cómo iniciarla en la terminal.
+1. **El login es siempre el de la CLI oficial.** Studio nunca lee, guarda ni reenvía tokens, nunca llama a
+   endpoints privados de un proveedor y nunca se hace pasar por otra herramienta. Si la CLI no tiene sesión,
+   Studio indica cómo iniciarla en la terminal. Cada proveedor entra solo por su CLI o protocolo oficial (ver
+   «Fase 3 → Agentes y reglas de los proveedores»).
 2. **Cero archivos en el proyecto en modo Studio.** Si el repositorio no tiene `specs/manifest.json`, el
    estado de Omni vive en `%LOCALAPPDATA%\OmniStudio\workspaces\<id>\` (`OMNI_STUDIO_HOME` lo cambia).
-   El agente sí edita el código cuando el usuario lo aprueba; Omni no deja rastro.
-3. **Nada se escribe ni se ejecuta sin aprobación** salvo lo que la propia CLI permite sin preguntar
-   (lecturas). Cada pedido de permiso llega a la UI como una tarjeta Aprobar / Rechazar.
+   El agente sí edita el código cuando el usuario lo aprueba; Omni no deja rastro. Tampoco se escribe en la
+   configuración global de un agente (`~/.claude`, `~/.codex`, `~/.gemini`): Omni llega por parámetros de cada
+   sesión.
+3. **Por defecto, nada se escribe ni se ejecuta sin aprobación**, salvo lo que la propia CLI permite sin
+   preguntar (lecturas). Cada pedido de permiso llega a la UI como una tarjeta Aprobar / Rechazar. Cada
+   conversación puede subir de nivel a propósito (Fase 3, Q8).
+
+## Fase 3 · Cockpit multiagente (decidida el 2026-11-06)
+
+Reemplaza las fases 3–6 del plan original. Salió de un interrogatorio de 29 preguntas (Q1…Q29) con capturas de
+Antigravity como referencia de **estructura e interacciones**, no de identidad visual (la identidad es
+`docs/STUDIO-DESIGN-SYSTEM.md`). Cada decisión lleva el número de su pregunta.
+
+### Decisiones
+
+**Panel izquierdo** (Q2–Q5, Q11, Q18, Q20, Q29)
+- Arriba, «Nueva conversación» (Ctrl+N) y tres páginas que se abren en el centro: **Specs** (tablero y gates; en
+  modo Studio explica cómo instalar OmniSpec), **Memoria** (lo que comparten los agentes) y **Uso**. Un buscador de
+  conversaciones por título abarca todos los proyectos.
+- Debajo, el árbol **Proyectos → Conversaciones**. Los proyectos son una lista explícita (botón de carpeta para
+  agregar; se pueden ocultar), sembrada con los recientes y ordenada por actividad. El proyecto abierto aparece
+  desplegado; al pasar el ratón sobre otro aparece «+» para empezar una conversación ahí.
+- Solo aparecen conversaciones iniciadas desde Studio. Cada proyecto tiene «Retomar sesión de la terminal…», con
+  buscador, para traer una sesión externa del agente.
+- Título: primera línea del primer mensaje, y luego el que dé el agente si lo da. Renombrar con doble clic o ⋮;
+  «Archivar» la oculta. Studio nunca borra el historial de un agente.
+- Las specs salen del panel. Abajo, Ajustes abre una ventana modal: General (permisos por defecto, cola),
+  Agentes (instalados, con sesión o no, cómo iniciarla), Apariencia, Atajos, Notificaciones, Personalizaciones
+  (skills) y Proyectos.
+- Atajos: Ctrl+N nueva conversación, Ctrl+K buscar, Ctrl+B panel izquierdo, Ctrl+J panel derecho.
+
+**Conversaciones** (Q6, Q7, Q12, Q13, Q17, Q19)
+- Cada conversación pertenece a un agente; dentro se cambian modelo y razonamiento. Cambiar de empresa es una
+  conversación nueva.
+- Siguen trabajando en segundo plano al cambiar de conversación o de proyecto. Cada una muestra un punto de
+  estado (trabajando, esperando aprobación, terminada sin leer) y Windows avisa cuando una pide aprobación o
+  termina sin que la estés mirando.
+- En modo proyecto se pueden ligar a una spec: chip «Spec 013» junto al título; desde una tarjeta del tablero,
+  «Trabajar en esta spec».
+- Varios agentes trabajan en el **mismo árbol de trabajo**; Omni avisa en ambas conversaciones (y en la tarjeta de
+  aprobación) cuando una toca un archivo que otra conversación viva ya cambió.
+- Con el agente trabajando, Enter pone el mensaje **en cola** (visible, editable, cancelable); Ctrl+Enter
+  interrumpe el turno y lo envía.
+
+**Centro y panel derecho** (Q10, Q11, Q14–Q16)
+- Arriba, la ruta «Proyecto / Título». El compositor de una conversación nueva muestra proyecto y rama (solo
+  lectura) y, abajo, **Modelo agrupado por agente** con submenú de razonamiento (elegir el modelo elige el agente),
+  Permisos y «+» (archivos, carpetas, menciones, acciones). Tras el primer mensaje, proyecto y agente quedan fijos.
+- Panel derecho **«Resumen»**: cerrado por defecto y nunca se abre solo. El botón de la cabecera muestra +N −M;
+  un clic abre un resumen flotante y «Fijar» lo acopla. Contiene: **Revisión de esta conversación** (diff de los
+  archivos que tocó, aprobar o revertir, e «Impacto», lo que era Cartografía), Archivos (con «Cambios de git» del
+  repo entero), Terminal, Tareas en segundo plano y Archivos modificados.
+- Desaparecen las pestañas «Chat · Diffs · Más vistas», el Dock y el Inspector. FinOps pasa a la página Uso y
+  Skills a Ajustes › Personalizaciones.
+
+**Agentes** (Q8, Q22–Q25)
+- Tres drivers con el mismo vocabulario de `agent.event`: **Claude Code** por stream-json directo (como hoy, no el
+  adaptador ACP), **Codex** por `codex app-server`, y **ACP genérico** para Antigravity (`agy acp`) y cualquier otro
+  agente ACP (OpenCode, Cline, Copilot, Cursor).
+- **Antigravity es experimental y viene apagado**: se enciende en Ajustes › Agentes después de un aviso que
+  explica la postura de Google. Nunca viene encendido en una versión pública sin un OK escrito de Google. Solo
+  por ACP y con el MCP por sesión; nunca tocando `~/.gemini/config` (lo que hace Deska).
+- **Modelos y niveles de razonamiento los informa el agente**: Claude en su `initialize`, Codex en `model/list`,
+  ACP en sus config options. Studio guarda la última lista conocida para pintar el selector antes de arrancar; sin
+  niveles informados no hay submenú.
+- **Permisos por conversación**: Preguntar siempre, Predeterminado (pregunta lo sensible), Automático (el agente
+  decide, en su sandbox si lo tiene), Sin restricciones, y Planificar (solo lectura). Cada nivel se traduce al
+  modo propio del agente; si un agente no lo tiene, no aparece. «Permitir siempre» usa la opción nativa del
+  agente; Studio no tiene motor de reglas propio. Studio arranca en «Preguntar siempre»; tu predeterminado se
+  cambia en Ajustes y «Sin restricciones» pinta el selector de rojo.
+- Una cuenta por agente: la que tenga iniciada su CLI.
+
+**Memoria compartida y uso** (Q26, Q27)
+- El MCP de Omni se conecta a cada conversación al arrancarla (Claude `--mcp-config '<json>'`, Codex
+  `-c mcp_servers.omni…`, ACP `mcpServers`), en los dos modos y sin escribir archivos, más una instrucción corta por
+  sesión que dice cuándo consultar y cuándo registrar (Claude `--append-system-prompt`, Codex
+  `developerInstructions`, ACP `systemPrompt`).
+- Herramientas: buscar contexto, registrar decisiones, **registrar aprendizajes** (patrones, trampas,
+  convenciones; nuevo), spec activa y gates, impacto, y **quién trabaja en qué** (conversaciones vivas del
+  proyecto, su agente y los archivos que tocaron; nuevo, lo alimenta Studio).
+- El índice de conversaciones vive en la memoria de cada proyecto, así un agente puede ver qué hizo otro.
+- Página Uso: contexto y costo por conversación para todos; ventanas de límite (5 h, semanal) solo cuando el
+  agente las da por su canal oficial (Codex sí; Claude por verificar; Antigravity no, ACP no trae cuotas).
+
+**Fuera de esta fase:** aislar una conversación en un worktree, «Continuar con otro agente» (traspaso con
+resumen), varias cuentas por agente y una versión comercial.
+
+### Vueltas (Q28)
+
+| Vuelta | Contenido | Estado |
+|---|---|---|
+| 1 · Panel izquierdo | Árbol Proyectos → Conversaciones, selector de carpetas, índice en la memoria, títulos, renombrar, archivar, buscador, «Retomar sesión de la terminal…» (Claude), specs fuera del panel. Su commit incluye el trabajo pendiente de la Fase 2.6 vuelta 2 | **Probada en la app el 2026-11-06**: todo funciona salvo Ctrl+N, que abría una ventana nueva de WebView2 (corregido; falta volver a probarlo) |
+| 2 · Layout | Ruta y compositor con selectores, cola y «+»; panel Resumen; páginas Specs, Memoria y Uso; Ajustes modal; fuera pestañas, Dock e Inspector | |
+| 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | |
+| 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | |
+| 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | |
+| 6 · ACP y Antigravity | Driver ACP genérico; Antigravity experimental; modelos de Claude leídos de su `initialize` | |
+
+Orden: primero lo visible; el paralelo antes que Codex para que Claude y Codex trabajen juntos el día que llegue
+Codex; la memoria después, para probarla con dos proveedores.
+
+**Vuelta 1 · por comprobar en la app** (reinicio completo: cambiaron el motor y el host Rust, que ahora trae
+`tauri-plugin-dialog`):
+1. El panel izquierdo empieza con «Nueva conversación» y el buscador; debajo, «Proyectos» con el abierto desplegado
+   y sus conversaciones. Las de antes de esta vuelta no aparecen: el índice empieza vacío y se llena con cada
+   conversación nueva o con «Retomar sesión de la terminal…».
+2. Escribir un mensaje en una conversación nueva: aparece en el árbol con la primera línea como título.
+3. Doble clic renombra; ⋮ archiva; ⋮ del proyecto › «Mostrar archivadas».
+4. «Retomar sesión de la terminal…» lista las sesiones de Claude Code de la carpeta que aún no están en Studio.
+5. El botón de carpeta agrega un proyecto; ⋮ › «Quitar de la lista» lo saca (su carpeta no se toca).
+6. Clic en una conversación de otro proyecto: se abre ese proyecto y luego la conversación.
+7. Ctrl+N abre una conversación nueva. WebView2 reserva ese atajo para «ventana nueva»: el host rechaza toda ventana
+   nueva (`on_new_window` en `lib.rs`, test WN-05) y los enlaces web del chat se abren en el navegador.
+8. Pendiente de la Fase 2.6: el aviso de cambio de modelo.
+
+**Límites conocidos de la vuelta 1** (se resuelven más adelante): cambiar de proyecto todavía reinicia el motor y
+corta la conversación en curso (vuelta 3); «Retomar sesión de la terminal…» solo está en el proyecto abierto;
+Ctrl+B y Ctrl+J para los paneles llegan con el layout (vuelta 2).
+
+### Notas de arquitectura (verificadas el 2026-11-06)
+
+- **Índice de conversaciones (vuelta 1).** La tabla `sessions` de la memoria (`id, host, model, started_at,
+  ended_at, capabilities_json`, `src/memory.mjs:30-37`) no tiene título, archivado ni actividad. Subir
+  `MEMORY_SCHEMA_VERSION` rompería los runtimes de OmniSpec ya instalados en repos, que rechazan cualquier otra
+  versión (`src/memory.mjs:279-301`). Por eso el índice va en una tabla nueva creada al primer uso, sin cambiar la
+  versión, como ya hace `circuit_breakers` (`src/circuit-breaker.mjs:305-320`). Para listar conversaciones de
+  proyectos no abiertos, el motor abre en solo lectura la memoria de cada uno (ruta según su modo, `resolveWorkspace`).
+- **Proyectos (vuelta 1).** Los recientes viven en `%APPDATA%\OmniStudio\recent.json` (`recent.rs`, máximo 10,
+  el más reciente primero). No hay selector de carpetas: hoy un proyecto nuevo solo entra por argumento de línea de
+  comandos o segunda instancia (`lib.rs:175-178`); hace falta `tauri-plugin-dialog`.
+- **Motores (vuelta 3).** El host guarda un solo `Supervisor` (`commands.rs:44-46`) y `open_project` mata el motor
+  anterior (`engine.rs:497-524`). Hay que pasar a un mapa raíz → motor y llevar la raíz en `engine_call`,
+  `engine_stderr`, `fs_rescan`, `pty_open` y en los eventos. Un motor por proyecto y no uno para todos:
+  `node:sqlite` es síncrono y una espera de 5 s en una memoria frenaría a todos los proyectos. El hub de agentes
+  necesita un id de conversación en cada método `agent.*` (hoy hay un solo driver por motor).
+- **Memoria (vuelta 5).** La base funciona: WAL, `busy_timeout` 5000, escrituras en `BEGIN IMMEDIATE`; sus tests
+  incluyen 6 procesos × 200 transacciones sin `SQLITE_BUSY`. Pero hoy solo guarda el grafo de código: nadie
+  escribe `observations`, `sessions` ni `token_usage_events`. El MCP (`src/mcp-server.mjs`, `omni-spec mcp`)
+  tiene `omni_search_context`, `omni_get_active_spec`, `omni_check_blast_radius` y `omni_record_decision`; exige
+  `specs/manifest.json` y siempre usa `<root>/specs/.omni/memory.db`, así que no sirve en modo Studio. No hay
+  reclamos de archivos: `docs/locking.md` solo serializa escrituras del CLI de OmniSpec.
+
+### Agentes y reglas de los proveedores (verificado el 2026-11-06)
+
+| Agente | En esta máquina | Protocolo | Modelos y razonamiento | Permisos | MCP por sesión, sin archivos | Historial |
+|---|---|---|---|---|---|---|
+| Claude Code | 2.1.318 | `claude -p` stream-json | Respuesta de control `initialize`: `models[].supportedEffortLevels`; `--model`, `--effort` | `--permission-mode` acceptEdits, auto, bypassPermissions, manual, dontAsk, plan | `--mcp-config '<json>'` | `~/.claude/projects/<carpeta>/<id>.jsonl` (cada registro con `cwd`) |
+| Codex | 0.166.0 | `codex app-server` (JSON-RPC por stdio) | `model/list` con `supportedReasoningEfforts`; `turn/start {model, effort}` | Pares aprobación/sandbox, de `untrusted`/`read-only` a `never`/`danger-full-access`; aprobaciones `item/*/requestApproval` | `-c mcp_servers.<nombre>.command=…` | `~/.codex/sessions/AAAA/MM/DD/rollout-*.jsonl`; `thread/list`, `thread/resume` |
+| Antigravity (`agy`) | 1.5.1 | `agy acp` (desde 1.5.0, 2026-11-04) | Config options de ACP (`model`, `thought_level`) | Modos accept-edits, auto, plan y sin permisos | ACP `mcpServers` (falta confirmar que `agy acp` lo acepta) | `~/.gemini/antigravity-cli/conversations/` |
+
+- Gemini CLI no está instalado, y desde el 2026-06-18 las cuentas personales de Google usan Antigravity CLI en su
+  lugar. También están instalados OpenCode 1.19.5 (`opencode acp`) y Cline 3.0.61 (`--acp`), útiles para probar
+  el driver ACP.
+- **ACP v1** (esquema 1.29.1): `session/new|load|resume|list|close`, `session/set_config_option` (categorías
+  `model`, `thought_level`, `mode`); `session/set_model` se eliminó el 2026-06-01 y los modos están en retirada;
+  `usage_update` trae contexto usado, tamaño y costo, pero no cuotas; todo agente debe aceptar MCP por stdio.
+- **Anthropic** (code.claude.com/docs/en/agent-sdk/overview y /legal-and-compliance): sin aprobación previa no se
+  permite que un producto de terceros ofrezca el login de claude.ai, tampoco mediante el Agent SDK ni su adaptador
+  ACP; sí está permitido que el usuario inicie sesión en el binario `claude` sin modificar. Usar Claude Code dentro
+  de un producto implica aceptar sus Commercial Terms: revisarlos antes de una versión pública.
+- **OpenAI** (learn.chatgpt.com/docs/app-server): el login de ChatGPT por `app-server` nunca se ha permitido en
+  servicios comerciales u hospedados; las apps locales o de código abierto sí pueden usarlo.
+- **Google** (antigravity.google/terms, /docs/faq, /docs/ide/extensions/acp): los términos llaman incumplimiento a
+  usar software de terceros para acceder al servicio, y el FAQ dice que envolver `agy` en apps de terceros no está
+  soportado en planes personales; a la vez, su documentación dice que cualquier cliente ACP puede lanzar `agy`. Por
+  eso Antigravity entra como experimental y apagado.
+- **Lo que no se copia de Deska:** leer tokens para consultar el uso (`api.anthropic.com/api/oauth/usage`,
+  `chatgpt.com/backend-api/wham/usage`) y escribir hooks y MCP en `~/.gemini/config`.
 
 ## Modos del motor
 
@@ -126,11 +311,37 @@ claude -p --input-format stream-json --output-format stream-json --verbose
 | `agent.cancel` | host→engine | Interrumpe el turno en curso |
 | `agent.permission` | host→engine | Respuesta a un pedido de permiso |
 | `agent.reset` | host→engine | Cierra la conversación y empieza una nueva |
+| `agent.sessions` | host→engine | Conversaciones anteriores de la carpeta, la más reciente primero: `{id, title, updatedAt}` |
+| `agent.resume` | host→engine | Carga una conversación anterior (`sessionId`): devuelve su historial como `agent.event` (más `user` para los prompts), su título, el contexto y el costo guardados; el próximo mensaje la continúa con `--resume`. Si venía de la terminal, entra en el índice |
+| `conversations.list` | host→engine | Conversaciones de Studio de cada proyecto (`roots`), la de actividad más reciente primero. La del proyecto abierto sale de su memoria; las otras se leen sin crear nada |
+| `conversations.rename` / `conversations.archive` | host→engine | Renombra o archiva una conversación de cualquier proyecto de la lista; nunca toca el historial del agente |
+| `recent.remove` / `project.pick` | host (Rust) | Quita un proyecto de la lista (sin tocar su carpeta) / abre el selector de carpetas nativo |
 | `agent.event` | engine→host | Eventos normalizados: `status`, `init`, `text`, `tool`, `tool_result`, `permission`, `result`, `error` |
 
 `result` lleva `costUsd` (lo que costó ese turno) y `sessionCostUsd` (el total de la conversación). Claude Code
 informa `total_cost_usd` como acumulado de la sesión, y `--resume` lo arrastra, así que el driver calcula el
 costo del turno restando el total anterior.
+
+Un método nuevo toca cinco sitios: `src/studio/protocol.mjs` (fuente de verdad), `schema/studio-ipc.schema.json`
+(`npm run build:studio-schema`), `apps/studio/src/ipc/generated.ts` (`npm run gen:ipc` en `apps/studio`), la lista
+blanca del host `apps/studio/src-tauri/src/security.rs` y la lista de PR-15 en `test/studio-protocol.test.mjs`. Si
+tiene efectos, también `MUTATIONS` en `apps/studio/src/ipc/client.ts`.
+
+### Conversaciones anteriores
+
+Claude Code guarda cada sesión en `<config>/projects/<carpeta>/<sessionId>.jsonl` (`<config>` es
+`CLAUDE_CONFIG_DIR` o `~/.claude`; `<carpeta>` es la ruta absoluta con todo lo que no sea letra o dígito cambiado
+por `-`, p. ej. `C:\dev\ClubGixxerMedellin` → `C--dev-ClubGixxerMedellin`). Lo lee `src/studio/agents/claude-sessions.mjs`:
+- Título: el último `custom-title` que la CLI le puso; si no hay, la primera línea del primer prompt. Para listar
+  solo se leen los primeros 256 KB y los últimos 64 KB de cada archivo (hay sesiones de 14 MB).
+- Prompts: registros `user` sin `isMeta` ni `isSidechain` con texto; un comando se muestra como se escribió
+  (`/omni-plan login`). Lo que la CLI inyecta lleva `isMeta: true` y no se muestra.
+- Respuestas y herramientas: los registros `assistant` y `user` pasan por el mismo `translateClaudeMessage` que el
+  vivo. Cada bloque viene en su propio registro con el mismo id de mensaje, así que se usa el `uuid` del registro.
+- Costo: el último `cost-state.totalCostUSD`. Solo existe si el proceso anterior terminó limpio; Studio corta la
+  CLI al cambiar de modelo o de conversación, así que muchas sesiones no lo tienen y entonces la CLI reanuda
+  contando desde cero (el driver lo resuelve: ver `costOf`).
+- Se muestran los últimos 400 eventos. Studio nunca lee el registro `session-owner` ni credenciales.
 
 Los eventos son independientes del proveedor: los próximos drivers (Codex `app-server`, ACP) emiten los
 mismos tipos y la UI no cambia.
@@ -153,25 +364,16 @@ mismos tipos y la UI no cambia.
 - Ediciones como diff de líneas; Kanban, Cartografía, FinOps y Skills pasan a «Más vistas».
 - Un agente solo aparece en el selector cuando su driver existe (hoy, Claude Code).
 
-## Pendientes (revisión del 2026-11-06 con capturas reales)
+## Fase 2.6 · Pendientes de la revisión del 2026-11-06 (cerrada)
 
-Método: ver «Cómo retomar → Método de cada vuelta».
+Lista de la primera revisión con capturas reales. Lo que quedó abierto pasó a la Fase 3 (indicado en cada punto).
 
 **Registro de vueltas**
 
 | Vuelta | Temas | Probado en la app | Commit |
 |---|---|---|---|
 | 1 · Cabecera | P0.1, P0.2, P1.3 y costo de P1.6 | Fila única y costo (captura del 2026-11-06). El aviso de cambio de modelo solo está cubierto por tests (CH-09) | `feat(studio): one status row, pending model notice and per-turn cost (phase 2.6 round 1)` |
-
-**Siguiente vuelta: 2 · Conversaciones (P1.4 + P2.7).** Van juntas porque un historial que no se puede retomar no
-sirve. Punto de partida: el driver ya reanuda con `--resume <sessionId>` cuando cambia modelo o esfuerzo
-(`session.sessionId` en `claude.mjs`). Falta (a) listar las sesiones anteriores de la carpeta y (b) un
-`agent.resume` que arranque la CLI sobre la elegida y repinte su historial. Antes de diseñar, verificar dónde y en
-qué formato guarda la CLI las sesiones (se supone que en `~/.claude/projects/<carpeta>/*.jsonl`, sin confirmar) y
-respetar la regla 1: leer el historial, nunca credenciales. Primero comprobar en la app el aviso de cambio de
-modelo de la vuelta 1.
-
-Orden previsto después: 3 · Inspector y cambios del turno (P1.5 + P2.10), 4 · Compositor (P2.8 + P2.9).
+| 2 · Conversaciones | P1.4, P2.7 | Lector probado contra las sesiones reales de ClubGixxerMedellin (6 conversaciones, títulos e historial de 116 eventos); en la app se vio la lista, y de ahí salió la Fase 3. Sin commit propio: entra en el de la Fase 3 vuelta 1 | — |
 
 **P0 · Confusiones y posibles errores**
 1. ~~La cabecera muestra el modelo en ejecución y el selector el elegido, sin explicar cuándo cambia.~~ Hecho: el
@@ -184,21 +386,17 @@ Orden previsto después: 3 · Inspector y cambios del turno (P1.5 + P2.10), 4 ·
 **P1 · Menos marco, más foco**
 3. ~~Fusionar la barra de pestañas (Chat · Diffs · Más vistas) y la cabecera del chat en una sola fila.~~ Hecho:
    el estado del agente va a la derecha de las pestañas y se acorta cuando la fila se estrecha.
-4. Panel izquierdo: conversaciones (historial) con «Nueva conversación» como acción principal; la lista de specs
-   y «Nueva Spec» pasan a secundarias.
-5. Inspector derecho cerrado por defecto; se abre solo cuando el agente ejecuta comandos, o muestra los archivos
-   cambiados del turno.
-6. Hacer visible el gasto: el primer turno con Opus costó ≈ US$ 0,28 a precio de lista por cargar el contexto.
-   Avance: el costo se ve siempre en la cabecera, y el aviso de cambio de modelo explica (en su tooltip) que el
-   nuevo modelo vuelve a leer todo el contexto. Falta decidir si conviene avisar antes de un turno caro.
+4. ~~Panel izquierdo: conversaciones con «Nueva conversación» como acción principal; specs y «Nueva Spec»
+   secundarias.~~ Primera versión en la vuelta 2 (lista plana de conversaciones de Claude de la carpeta). Al verla
+   se rediseñó como árbol Proyectos → Conversaciones: Fase 3, vuelta 1.
+5. Inspector derecho cerrado por defecto. → Fase 3, vuelta 2 (panel «Resumen», que nunca se abre solo).
+6. Hacer visible el gasto. Avance: el costo se ve siempre en la cabecera, y el aviso de cambio de modelo explica
+   que el nuevo modelo vuelve a leer todo el contexto. → El resto, en la página Uso (Fase 3, vueltas 2 y 4).
 
 **P2 · Capacidades de cockpit**
-7. Retomar conversaciones anteriores (sesiones de Claude Code con `--resume`).
-8. Mencionar archivos con `@` y pegar imágenes.
-9. Comandos con `/`, incluidos los `/omni-*`.
-10. Panel «Cambios del turno»: archivos tocados con su diff y aprobar todo de una vez.
-
-## Fuera de este prototipo
-
-Inyección de Omni en la sesión (MCP y reglas, fase 3), drivers de Codex y ACP (fases 4 y 6), layout
-completo (fase 5).
+7. ~~Retomar conversaciones anteriores (sesiones de Claude Code con `--resume`).~~ Hecho (vuelta 2): ver
+   «Conversaciones anteriores». Límite conocido: el historial no recupera modelo ni ventana de contexto hasta el
+   primer turno nuevo. En la Fase 3 pasa a «Retomar sesión de la terminal…».
+8. Mencionar archivos con `@` y pegar imágenes. → Fase 3, vuelta 2 (botón «+» del compositor).
+9. Comandos con `/`, incluidos los `/omni-*`. → Fase 3, vuelta 2 (acciones del «+»).
+10. Panel «Cambios del turno». → Fase 3, vuelta 2 (Revisión de esta conversación).

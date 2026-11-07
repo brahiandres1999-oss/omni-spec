@@ -205,8 +205,37 @@ export const messages = {
     inspector: 'Inspector',
     inspectorTabs: { terminal: 'Terminal', overview: 'Overview', finops: 'FinOps', files: 'Files' },
     toggleInspector: 'Alternar Inspector',
+    rail: 'Conversaciones y proyectos',
     projects: 'Proyectos',
     newSpec: 'Nueva Spec',
+    newConversation: 'Nueva conversación',
+    newConversationShortcut: 'Nueva conversación (Ctrl+N)',
+    newConversationIn: (project: string) => `Nueva conversación en ${project}`,
+    searchConversations: 'Buscar conversaciones',
+    noSearchResults: 'Ninguna conversación coincide.',
+    addProject: 'Agregar proyecto',
+    projectOptions: (project: string) => `Opciones de ${project}`,
+    expandProject: (project: string) => `Mostrar las conversaciones de ${project}`,
+    collapseProject: (project: string) => `Ocultar las conversaciones de ${project}`,
+    resumeFromTerminal: 'Retomar sesión de la terminal…',
+    showArchived: 'Mostrar archivadas',
+    hideArchived: 'Ocultar archivadas',
+    removeProject: 'Quitar de la lista',
+    noConversationsYet: 'Sin conversaciones todavía.',
+    moreConversations: (count: number) => `Ver ${count} más`,
+    fewerConversations: 'Ver menos',
+    conversationOptions: (title: string) => `Opciones de «${title}»`,
+    rename: 'Renombrar',
+    renameLabel: 'Título de la conversación',
+    archive: 'Archivar',
+    unarchive: 'Desarchivar',
+    archived: 'archivada',
+    terminalTitle: 'Retomar sesión de la terminal',
+    terminalHint:
+      'Sesiones de Claude Code abiertas en esta carpeta desde la terminal u otras apps. Al elegir una, entra en Studio y la conversación continúa.',
+    terminalFilter: 'Filtrar sesiones',
+    terminalEmpty: 'No hay sesiones de esta carpeta que no estén ya en Studio.',
+    terminalLoading: 'Buscando sesiones…',
     settings: 'Ajustes',
     missing: 'no encontrado',
     palette: 'Buscar vistas, specs, archivos y acciones',
@@ -302,6 +331,7 @@ export const messages = {
     effortPhrase: (level: string) => `esfuerzo ${level}`,
     defaultModel: 'el modelo predeterminado',
     modelSwitchCost: 'El nuevo modelo vuelve a leer todo el contexto, así que ese mensaje cuesta más.',
+    olderHidden: 'Se muestran los últimos mensajes; los anteriores siguen en la conversación.',
     copy: 'Copiar',
     copied: 'Copiado',
   },
@@ -312,6 +342,19 @@ export const messages = {
 } as const;
 
 /** Spanish thousands separator for every count (es-ES omits it below 10.000; the UI always groups). */
+const relative = new Intl.RelativeTimeFormat('es', { numeric: 'auto', style: 'short' });
+
+/** «hace 5 min», «ayer», «hace 3 días»; under a minute reads «ahora». */
+export function formatAgo(iso: string, now = Date.now()): string {
+  const seconds = (Date.parse(iso) - now) / 1000;
+  if (!Number.isFinite(seconds)) return '';
+  const abs = Math.abs(seconds);
+  if (abs < 60) return 'ahora';
+  if (abs < 3600) return relative.format(Math.round(seconds / 60), 'minute');
+  if (abs < 86_400) return relative.format(Math.round(seconds / 3600), 'hour');
+  return relative.format(Math.round(seconds / 86_400), 'day');
+}
+
 export function formatInt(value: number): string {
   const sign = value < 0 ? '-' : '';
   const digits = String(Math.round(Math.abs(value)));

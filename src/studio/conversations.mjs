@@ -1,0 +1,142 @@
+import { existsSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { StudioError } from './protocol.mjs';
+import { memoryPathOf } from './workspace.mjs';
+
+/**
+ * Omni Studio's own index of conversations (docs/STUDIO-AGENT-COCKPIT.md, Fase 3, vuelta 1): the rail lists
+ * the conversations started from Studio, grouped by project, the same way for every agent. It lives in each
+ * project's memory, so agents can later see what another agent did there.
+ *
+ * The table is created on first use and MEMORY_SCHEMA_VERSION does not change: the OmniSpec runtimes already
+ * installed in repositories refuse any other version but ignore tables they do not know (the same approach
+ * as `circuit_breakers`).
+ */
+
+const TABLE = `CREATE TABLE IF NOT EXISTS studio_conversations (
+  agent TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  title_source TEXT NOT NULL CHECK(title_source IN ('prompt', 'agent', 'user')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  archived_at TEXT,
+  PRIMARY KEY (agent, session_id)
+)`;
+const COLUMNS = 'agent, session_id, title, title_source, created_at, updated_at, archived_at';
+const MAX_TITLE = 80;
+
+/** First non-empty line of a prompt, clipped: what the rail shows until the agent or the person names it. */
+export function titleFrom(text) {
+  const line =
+    String(text ?? '')
+      .split('\n')
+      .find(entry => entry.trim()) ?? '';
+  const trimmed = line.trim();
+  return trimmed.length > MAX_TITLE ? `${trimmed.slice(0, MAX_TITLE - 1)}…` : trimmed || 'Conversación';
+}
+
+const toSummary = row => ({
+  agent: row.agent,
+  sessionId: row.session_id,
+  title: row.title,
+  titleSource: row.title_source,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  archived: row.archived_at !== null,
+});
+
+const unknown = () => new StudioError('CONVERSATION_UNKNOWN', 'Esa conversación no está en este proyecto.');
+
+function statements(db) {
+  return {
+    list: db.prepare(`SELECT ${COLUMNS} FROM studio_conversations ORDER BY updated_at DESC`),
+    rename: db.prepare(
+      `UPDATE studio_conversations SET title = ?, title_source = 'user' WHERE agent = ? AND session_id = ?`,
+    ),
+    archive: db.prepare('UPDATE studio_conversations SET archived_at = ? WHERE agent = ? AND session_id = ?'),
+  };
+}
+
+const listFrom = (rows, includeArchived) => rows.map(toSummary).filter(entry => includeArchived || !entry.archived);
+
+/**
+ * The index of the open project, on the engine's own memory connection.
+ * @param {import('node:sqlite').DatabaseSync} db
+ */
+export function createConversationIndex(db, { now = () => new Date().toISOString() } = {}) {
+  db.exec(TABLE);
+  const sql = statements(db);
+  // Opening a conversation is not activity: an existing entry keeps its place in the rail.
+  const record = db.prepare(
+    `INSERT INTO studio_conversations (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, NULL)
+     ON CONFLICT(agent, session_id) DO NOTHING`,
+  );
+  const touch = db.prepare('UPDATE studio_conversations SET updated_at = ? WHERE agent = ? AND session_id = ?');
+  return {
+    /** Adds a conversation the first time Studio sees it; later calls change nothing (`touch` is activity). */
+    record({ agent, sessionId, title, titleSource = 'prompt' }) {
+      const at = now();
+      record.run(agent, sessionId, titleFrom(title), titleSource, at, at);
+    },
+    touch(agent, sessionId) {
+      touch.run(now(), agent, sessionId);
+    },
+    list({ includeArchived = false } = {}) {
+      return listFrom(sql.list.all(), includeArchived);
+    },
+    rename(agent, sessionId, title) {
+      if (sql.rename.run(titleFrom(title), agent, sessionId).changes === 0) throw unknown();
+    },
+    archive(agent, sessionId, archived) {
+      if (sql.archive.run(archived ? now() : null, agent, sessionId).changes === 0) throw unknown();
+    },
+  };
+}
+
+/**
+ * Opens the memory of a project that is not the open one. `null` when it has none yet: reading never creates
+ * a database, so listing a project leaves no trace in it.
+ */
+async function openOther(root, { env, readOnly }) {
+  const path = await memoryPathOf(root, { env });
+  if (!existsSync(path)) return null;
+  const db = new DatabaseSync(path, { readOnly });
+  db.exec('PRAGMA busy_timeout = 5000');
+  return db;
+}
+
+const hasTable = db =>
+  Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'studio_conversations'").get());
+
+/** Conversations of another project, read-only. */
+export async function listConversationsAt(root, { env = process.env, includeArchived = false } = {}) {
+  const db = await openOther(root, { env, readOnly: true });
+  if (!db) return [];
+  try {
+    return hasTable(db) ? listFrom(statements(db).list.all(), includeArchived) : [];
+  } finally {
+    db.close();
+  }
+}
+
+/** Renames or archives a conversation of another project (the rail allows it on every project). */
+export async function updateConversationAt(
+  root,
+  change,
+  { env = process.env, now = () => new Date().toISOString() } = {},
+) {
+  const db = await openOther(root, { env, readOnly: false });
+  if (!db) throw unknown();
+  try {
+    if (!hasTable(db)) throw unknown();
+    const sql = statements(db);
+    const result =
+      'title' in change
+        ? sql.rename.run(titleFrom(change.title), change.agent, change.sessionId)
+        : sql.archive.run(change.archived ? now() : null, change.agent, change.sessionId);
+    if (result.changes === 0) throw unknown();
+  } finally {
+    db.close();
+  }
+}

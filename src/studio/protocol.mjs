@@ -197,6 +197,13 @@ export const STUDIO_METHODS = Object.freeze({
     'Send one user message to the agent; the answer arrives as agent.event notifications.',
   ),
   'agent.reset': method(HOST, object(), anyObject, 'End the conversation and start a new one on the next prompt.'),
+  'agent.resume': method(
+    HOST,
+    object({ sessionId: string({ pattern: '^[0-9a-fA-F-]{36}$' }) }, ['sessionId']),
+    anyObject,
+    'Load an earlier conversation of this folder; the next prompt continues it.',
+  ),
+  'agent.sessions': method(HOST, object(), anyObject, 'Earlier agent conversations of this folder, newest first.'),
   'agent.status': method(HOST, object(), anyObject, 'Available agents, conversation state and workspace mode.'),
   'blastRadius.heat': method(
     HOST,
@@ -217,6 +224,40 @@ export const STUDIO_METHODS = Object.freeze({
     'Specification board: lanes for one ceremony route, unrouted specs and counts.',
   ),
   'cartography.graph': method(HOST, object(), anyObject, 'Module graph projection with compact integer ids.'),
+  'conversations.archive': method(
+    HOST,
+    object(
+      {
+        root: string({ minLength: 1 }),
+        agent: string({ minLength: 1 }),
+        sessionId: string({ minLength: 1 }),
+        archived: { type: 'boolean' },
+      },
+      ['agent', 'sessionId', 'archived'],
+    ),
+    anyObject,
+    'Archive or restore a Studio conversation of any listed project (its agent history is never touched).',
+  ),
+  'conversations.list': method(
+    HOST,
+    object({ roots: strings, includeArchived: { type: 'boolean' } }),
+    anyObject,
+    'Studio conversations of each project, newest activity first.',
+  ),
+  'conversations.rename': method(
+    HOST,
+    object(
+      {
+        root: string({ minLength: 1 }),
+        agent: string({ minLength: 1 }),
+        sessionId: string({ minLength: 1 }),
+        title: string({ minLength: 1 }),
+      },
+      ['agent', 'sessionId', 'title'],
+    ),
+    anyObject,
+    'Rename a Studio conversation of any listed project.',
+  ),
   'diff.get': method(
     HOST,
     object({ maxBytes: { type: 'integer', minimum: 1024 } }),

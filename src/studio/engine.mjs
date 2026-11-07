@@ -35,7 +35,8 @@ import {
   STUDIO_METHODS,
 } from './protocol.mjs';
 import { addRemark, approveGate2, decideHunk, getDiff, getDiffFile, stageApproved } from './review.mjs';
-import { resolveWorkspace } from './workspace.mjs';
+import { createConversationIndex, listConversationsAt, updateConversationAt } from './conversations.mjs';
+import { resolveWorkspace, sameRoot } from './workspace.mjs';
 
 /**
  * `omni-spec studio-engine`: the Node side of Omni Studio (plan §5). It connects as a client to the
@@ -132,7 +133,7 @@ function studioModeHandlers(handlers) {
   return guarded;
 }
 
-function createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents }) {
+function createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents, conversations }) {
   const studio = workspace.mode === 'studio';
   const activeSpecId = async spec => {
     if (spec) return spec;
@@ -250,6 +251,29 @@ function createHandlers(root, memory, { version, actor, credentials, notify, wor
     'agent.cancel': () => agents.cancel(),
     'agent.permission': params => agents.permission(params),
     'agent.reset': () => agents.reset(),
+    'agent.sessions': () => agents.sessions(),
+    'agent.resume': params => agents.resume(params),
+    // The rail lists every project: the open one from this engine's memory, the others read-only from theirs.
+    'conversations.list': async ({ roots = [root], includeArchived = false }) => ({
+      projects: await Promise.all(
+        roots.map(async other => ({
+          root: other,
+          conversations: sameRoot(other, root)
+            ? conversations.list({ includeArchived })
+            : await listConversationsAt(other, { includeArchived }),
+        })),
+      ),
+    }),
+    'conversations.rename': async ({ root: other = root, agent, sessionId, title }) => {
+      if (sameRoot(other, root)) conversations.rename(agent, sessionId, title);
+      else await updateConversationAt(other, { agent, sessionId, title });
+      return { renamed: true };
+    },
+    'conversations.archive': async ({ root: other = root, agent, sessionId, archived }) => {
+      if (sameRoot(other, root)) conversations.archive(agent, sessionId, archived);
+      else await updateConversationAt(other, { agent, sessionId, archived });
+      return { archived };
+    },
   };
   return studio ? studioModeHandlers(handlers) : handlers;
 }
@@ -366,9 +390,10 @@ export function runStudioEngine({
       supervisor = startCheckpointSupervisor(memory);
       pruneTokenEvents(memory);
       const actor = userInfo().username;
-      agents = (deps.createAgentHub ?? createAgentHub)({ root, workspace, notify, log });
+      const conversations = createConversationIndex(memory.db);
+      agents = (deps.createAgentHub ?? createAgentHub)({ root, workspace, notify, log, conversations });
       const handlers = {
-        ...createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents }),
+        ...createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents, conversations }),
         ...handlerOverrides,
       };
       dispatcher = createRpcDispatcher({ direction: 'host->engine', handlers, onFatal: fatal });

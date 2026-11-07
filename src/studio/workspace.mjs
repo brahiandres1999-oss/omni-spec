@@ -34,6 +34,20 @@ async function exists(path) {
 }
 
 /**
+ * Where the memory of `root` is, without creating anything: for reading another project's state (the
+ * conversation list of the rail) from the engine of the open one.
+ */
+export async function memoryPathOf(root, { env = process.env } = {}) {
+  const absolute = resolve(root);
+  return (await exists(join(absolute, 'specs', 'manifest.json')))
+    ? join(absolute, 'specs', '.omni', 'memory.db')
+    : join(studioHome(env), 'workspaces', workspaceId(absolute), 'memory.db');
+}
+
+/** Same folder, compared as `workspaceId` does (case and slashes do not matter on Windows). */
+export const sameRoot = (a, b) => workspaceId(a) === workspaceId(b);
+
+/**
  * @param {string} root Project folder.
  * @param {{env?: NodeJS.ProcessEnv}} [options]
  * @returns {Promise<{mode: 'project'|'studio', root: string, dir: string, memoryPath: string}>}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-pick"
+description = "Enables the project_pick command without any pre-configured scope."
+commands.allow = ["project_pick"]
+
+[[permission]]
+identifier = "deny-project-pick"
+description = "Denies the project_pick command without any pre-configured scope."
+commands.deny = ["project_pick"]

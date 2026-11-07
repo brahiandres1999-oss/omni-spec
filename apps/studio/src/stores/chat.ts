@@ -4,6 +4,7 @@
  */
 import { createStore } from 'zustand/vanilla';
 import { type StudioClient, StudioError } from '@/ipc/client';
+import { messages } from '@/i18n/messages.es';
 import { readJson, writeJson } from './storage';
 
 export type AgentState = 'idle' | 'starting' | 'ready' | 'busy';
@@ -67,6 +68,22 @@ const isOptions = (value: unknown): value is AgentOptions => {
   );
 };
 const EMPTY_USAGE: AgentUsage = { contextTokens: null, contextWindow: null, costUsd: 0, costBasis: null };
+
+/** One Claude Code session of the folder, as `agent.sessions` lists it («Retomar sesión de la terminal…»). */
+export interface AgentSession {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+/** What `agent.resume` returns: the history as agent events, plus the context and cost recorded. */
+interface ResumedConversation {
+  sessionId: string;
+  events: AgentEvent[];
+  truncated: boolean;
+  contextTokens: number | null;
+  costUsd: number | null;
+}
 
 export interface AgentStatus {
   workspace: { mode: 'project' | 'studio'; dir: string };
@@ -161,6 +178,9 @@ export function applyAgentEvent(items: readonly ChatItem[], event: AgentEvent): 
       return [...items, { type: 'error', id: nextId('error'), code: str(event.code), message: str(event.message) }];
     case 'notice':
       return [...items, { type: 'notice', id: nextId('notice'), text: str(event.text) }];
+    case 'user':
+      // Only in the history of a resumed conversation; live prompts are added by `send`.
+      return [...items, { type: 'user', id: nextId('user'), text: str(event.text) }];
     default:
       return [...items];
   }
@@ -178,8 +198,12 @@ export interface ChatState {
   /** Model and effort the conversation runs with; `options` differ from it until the next message. */
   applied: AgentOptions | null;
   usage: AgentUsage;
+  /** Id of the CLI session on screen; `null` before the first message of a new conversation. */
+  sessionId: string | null;
   setOptions(patch: Partial<AgentOptions>): void;
   loadStatus(): Promise<void>;
+  /** Shows an earlier conversation; the next message continues it. */
+  resume(sessionId: string): Promise<void>;
   setDraft(draft: string): void;
   send(text?: string): Promise<void>;
   cancel(): Promise<void>;
@@ -208,7 +232,8 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         set({ agentState: state });
         return;
       }
-      if (event.kind === 'init') set({ model: str(event.model) || null });
+      if (event.kind === 'init')
+        set({ model: str(event.model) || null, sessionId: str(event.sessionId) || get().sessionId });
       if (event.kind === 'result') {
         const usage = get().usage;
         set({
@@ -236,6 +261,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       options: readJson<AgentOptions>(OPTIONS_KEY, { model: null, effort: null }, isOptions),
       applied: null,
       usage: EMPTY_USAGE,
+      sessionId: null,
       setOptions(patch) {
         const options = { ...get().options, ...patch };
         set({ options });
@@ -250,6 +276,33 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             agentState: status.state,
             model: status.model ?? get().model,
             applied: status.model && isOptions(status.options) ? status.options : get().applied,
+            sessionId: status.sessionId ?? get().sessionId,
+          });
+        } catch (reason) {
+          fail(reason);
+        }
+      },
+      async resume(sessionId) {
+        attach();
+        if (sessionId === get().sessionId) return;
+        try {
+          const history = (await client.call('agent.resume', { sessionId })) as ResumedConversation;
+          let items: ChatItem[] = [];
+          for (const event of history.events ?? []) items = applyAgentEvent(items, event);
+          // A tool without a recorded result was cut short; it is not running any more.
+          items = items.map(item =>
+            item.type === 'tool' && item.status === 'running' ? { ...item, status: 'done' } : item,
+          );
+          if (history.truncated)
+            items.unshift({ type: 'notice', id: nextId('notice'), text: messages.chat.olderHidden });
+          set({
+            items,
+            sessionId,
+            model: null,
+            applied: null,
+            error: null,
+            agentState: 'idle',
+            usage: { ...EMPTY_USAGE, contextTokens: history.contextTokens, costUsd: history.costUsd ?? 0 },
           });
         } catch (reason) {
           fail(reason);
@@ -296,7 +349,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       async reset() {
         try {
           await client.call('agent.reset', {});
-          set({ items: [], model: null, applied: null, error: null, usage: EMPTY_USAGE });
+          set({ items: [], model: null, applied: null, error: null, usage: EMPTY_USAGE, sessionId: null });
         } catch (reason) {
           fail(reason);
         }

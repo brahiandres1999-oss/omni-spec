@@ -18,30 +18,70 @@ afterEach(() => {
 });
 
 describe('SH rail', () => {
-  test('SH-04 recent projects with nested specs, + Nueva Spec and Ajustes; a spec focuses its board card', async () => {
-    const fake = scriptStudio(new FakeTransport());
+  test('SH-04 the rail is Proyectos → Conversaciones: no specs, a folder picker adds a project, a project can leave the list', async () => {
+    const fake = scriptStudio(new FakeTransport())
+      .respond('conversations.list', (args: Record<string, unknown>) => ({
+        projects: (args.roots as string[]).map(root => ({
+          root,
+          conversations:
+            root === 'C:/dev/omnipage'
+              ? [
+                  {
+                    agent: 'claude',
+                    sessionId: 'p1',
+                    title: 'Landing nueva',
+                    titleSource: 'prompt',
+                    createdAt: '2026-11-01T00:00:00Z',
+                    updatedAt: '2026-11-01T00:00:00Z',
+                    archived: false,
+                  },
+                ]
+              : [
+                  {
+                    agent: 'claude',
+                    sessionId: 'o1',
+                    title: 'Arreglar el login',
+                    titleSource: 'prompt',
+                    createdAt: '2026-11-06T00:00:00Z',
+                    updatedAt: '2026-11-06T00:00:00Z',
+                    archived: false,
+                  },
+                ],
+        })),
+      }))
+      .respond('project.pick', 'C:/dev/nuevo');
     const user = userEvent.setup();
     renderWithStudio(<AppShell />, { transport: fake });
-    const rail = await screen.findByRole('navigation', { name: 'Proyectos' });
+    const rail = await screen.findByRole('navigation', { name: 'Conversaciones y proyectos' });
 
-    const project = await waitFor(() => {
+    const open = await waitFor(() => {
       const element = rail.querySelector<HTMLElement>('[data-project="C:/dev/omni-spec"]');
-      if (!element) throw new Error('active project is not listed in the rail');
+      if (!element) throw new Error('the open project is not listed in the rail');
       return element;
     });
-    expect(within(project).getByText('omni-spec')).toBeInTheDocument();
-    expect(within(rail).getByRole('button', { name: /omnipage/ })).toBeInTheDocument();
+    // The open project is unfolded with its conversations; the other one is folded.
+    expect(await within(open).findByRole('button', { name: /^Arreglar el login/ })).toBeInTheDocument();
+    expect(within(rail).getByRole('button', { name: 'Mostrar las conversaciones de omnipage' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(within(rail).queryByText('Landing nueva')).toBeNull();
     for (const slug of ['001-memory', '002-guardian', '003-carto'])
-      expect(within(project).getByRole('button', { name: new RegExp(slug) })).toBeInTheDocument();
-    expect(within(rail).getByRole('button', { name: /Nueva Spec/ })).toBeInTheDocument();
+      expect(within(rail).queryByRole('button', { name: new RegExp(slug) })).toBeNull();
+    expect(within(rail).getByRole('button', { name: 'Nueva conversación' })).toBeInTheDocument();
     expect(within(rail).getByRole('button', { name: /Ajustes/ })).toBeInTheDocument();
-    expect(fake.calls('recent.list').length).toBeGreaterThan(0);
 
-    // From another stage tab, selecting a spec returns to Kanban and focuses its card.
-    await user.keyboard('{Control>}5{/Control}');
-    await user.click(within(project).getByRole('button', { name: /001-memory/ }));
-    const kanban = within(screen.getByRole('tablist', { name: 'Vistas' })).getByRole('tab', { name: 'Kanban' });
-    await waitFor(() => expect(kanban).toHaveAttribute('aria-selected', 'true'));
-    await waitFor(() => expect((document.activeElement as HTMLElement | null)?.dataset.cardId).toBe('001'));
+    // The chevron unfolds without opening the project.
+    await user.click(within(rail).getByRole('button', { name: 'Mostrar las conversaciones de omnipage' }));
+    expect(await within(rail).findByRole('button', { name: /^Landing nueva/ })).toBeInTheDocument();
+    expect(fake.calls('project.open')).toHaveLength(0);
+
+    await user.click(within(rail).getByRole('button', { name: 'Agregar proyecto' }));
+    await waitFor(() => expect(fake.lastCall('project.open')).toEqual({ path: 'C:/dev/nuevo' }));
+
+    await user.click(within(rail).getByRole('button', { name: 'Opciones de omnipage' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Quitar de la lista' }));
+    await waitFor(() => expect(fake.lastCall('recent.remove')).toEqual({ path: 'C:/dev/omnipage' }));
+    expect(fake.calls('recent.list').length).toBeGreaterThan(1);
   });
 });

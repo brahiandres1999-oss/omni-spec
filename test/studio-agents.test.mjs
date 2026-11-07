@@ -2,12 +2,13 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { createClaudeDriver, locateClaude, translateClaudeMessage } from '../src/studio/agents/claude.mjs';
+import { claudeSessionsDir, listClaudeSessions, readClaudeSession } from '../src/studio/agents/claude-sessions.mjs';
 import { resolveWorkspace, workspaceId } from '../src/studio/workspace.mjs';
 import { makeStudioProject } from '../test-support/studio-fixtures.mjs';
 import { startStudioHost } from '../test-support/studio-host.mjs';
@@ -325,6 +326,136 @@ describe('AG model, effort and context', () => {
       null,
       'no total, no cost',
     );
+  });
+});
+
+describe('AG earlier conversations', () => {
+  const ROOT = 'C:\\dev\\Mi Proyecto';
+  const OLD = '11111111-1111-4111-8111-111111111111';
+  const NEW = '22222222-2222-4222-8222-222222222222';
+  const EMPTY = '33333333-3333-4333-8333-333333333333';
+  let config;
+  let env;
+  const jsonl = records => `${records.map(record => JSON.stringify(record)).join('\n')}\n`;
+
+  beforeEach(() => {
+    config = mkdtempSync(join(tmpdir(), 'omni-claude-config-'));
+    env = { CLAUDE_CONFIG_DIR: config };
+    const dir = claudeSessionsDir(ROOT, env);
+    mkdirSync(dir, { recursive: true });
+    // Records as Claude Code 2.1.318 writes them (trimmed to the fields Studio reads).
+    writeFileSync(
+      join(dir, `${OLD}.jsonl`),
+      jsonl([
+        { type: 'session-owner', sessionId: OLD },
+        {
+          type: 'user',
+          uuid: 'u1',
+          message: {
+            role: 'user',
+            content: '<command-name>/omni-plan</command-name>\n<command-args>login</command-args>',
+          },
+        },
+        {
+          type: 'user',
+          uuid: 'u2',
+          isMeta: true,
+          message: { role: 'user', content: [{ type: 'text', text: 'Base directory for this skill' }] },
+        },
+        { type: 'assistant', uuid: 'a1', message: { id: 'm1', content: [{ type: 'text', text: 'Reviso el plan.' }] } },
+        {
+          type: 'assistant',
+          uuid: 'a2',
+          message: {
+            id: 'm1',
+            content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }],
+            usage: { input_tokens: 10, cache_read_input_tokens: 990 },
+          },
+        },
+        {
+          type: 'user',
+          uuid: 'u3',
+          message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'a.txt' }] },
+        },
+        {
+          type: 'assistant',
+          uuid: 'a3',
+          isSidechain: true,
+          message: { id: 'm2', content: [{ type: 'text', text: 'subagente' }] },
+        },
+        { type: 'custom-title', customTitle: 'Plan del login', sessionId: OLD },
+        { type: 'cost-state', totalCostUSD: 0.42, sessionId: OLD },
+      ]),
+    );
+    writeFileSync(
+      join(dir, `${NEW}.jsonl`),
+      jsonl([
+        { type: 'user', uuid: 'n1', message: { role: 'user', content: [{ type: 'text', text: 'hola\n\nmás texto' }] } },
+      ]),
+    );
+    writeFileSync(join(dir, `${EMPTY}.jsonl`), jsonl([{ type: 'session-owner', sessionId: EMPTY }]));
+    writeFileSync(join(dir, 'notes.jsonl'), 'not a session\n');
+    utimesSync(join(dir, `${OLD}.jsonl`), new Date('2026-11-01'), new Date('2026-11-01'));
+  });
+  afterEach(() => rmSync(config, { recursive: true, force: true }));
+
+  test('AG-16 sessions are listed newest first with their title; history comes back as agent events', async () => {
+    assert.ok(claudeSessionsDir(ROOT, env).endsWith(join('projects', 'C--dev-Mi-Proyecto')));
+    const sessions = await listClaudeSessions({ root: ROOT, env });
+    assert.deepEqual(
+      sessions.map(({ id, title }) => ({ id, title })),
+      [
+        { id: NEW, title: 'hola' },
+        { id: OLD, title: 'Plan del login' },
+      ],
+      'no prompt, no entry; files that are not sessions are ignored',
+    );
+    assert.deepEqual(await listClaudeSessions({ root: 'C:\\otra', env }), []);
+
+    const history = await readClaudeSession({ root: ROOT, sessionId: OLD, env });
+    assert.deepEqual(
+      history.events.map(event => [event.kind, event.text ?? event.delta ?? event.title ?? event.output]),
+      [
+        ['user', '/omni-plan login'],
+        ['text', 'Reviso el plan.'],
+        ['tool', 'ls'],
+        ['tool_result', 'a.txt'],
+      ],
+    );
+    assert.equal(history.costUsd, 0.42);
+    assert.equal(history.contextTokens, 1000);
+    await assert.rejects(readClaudeSession({ root: ROOT, sessionId: '../../secret', env }), {
+      code: 'SESSION_UNKNOWN',
+    });
+    await assert.rejects(readClaudeSession({ root: ROOT, sessionId: EMPTY.replace('3', '4'), env }), {
+      code: 'SESSION_UNKNOWN',
+    });
+  });
+
+  test('AG-17 resuming starts the next prompt with --resume and counts cost from the recorded total', async () => {
+    const proc = fakeProcess();
+    const spawned = [];
+    const events = [];
+    const driver = createClaudeDriver({
+      cwd: ROOT,
+      emit: event => events.push(event),
+      locate: async () => ({ file: 'claude.exe', prefix: [], path: 'claude.exe' }),
+      spawnImpl: (_file, args) => {
+        spawned.push(args);
+        return proc;
+      },
+    });
+    assert.deepEqual(driver.resume(OLD, { costUsd: 0.42 }), { sessionId: OLD });
+    assert.equal(driver.status().sessionId, OLD);
+    await driver.prompt('sigue');
+    const args = spawned[0];
+    assert.deepEqual(args.slice(args.indexOf('--resume'), args.indexOf('--resume') + 2), ['--resume', OLD]);
+    assert.throws(() => driver.resume(NEW), { code: 'AGENT_BUSY' });
+    proc.send({ type: 'result', is_error: false, total_cost_usd: 0.45 });
+    await tick();
+    const result = events.find(event => event.kind === 'result');
+    assert.ok(Math.abs(result.costUsd - 0.03) < 1e-9, `turn cost ${result.costUsd}`);
+    assert.equal(result.sessionCostUsd, 0.45);
   });
 });
 

@@ -119,6 +119,7 @@ export function AppShell() {
       const key = event.key.toLowerCase();
       if (key === 'j') dispatch({ type: 'inspector.toggle' });
       else if (key === 'k') ui.getState().setPaletteOpen(!ui.getState().paletteOpen);
+      else if (key === 'n') dispatch({ type: 'conversation.new' });
       else if (/^[1-6]$/.test(key)) {
         const tab = STAGE_TABS[Number(key) - 1];
         if (tab) dispatch({ type: 'stage.open', tab });

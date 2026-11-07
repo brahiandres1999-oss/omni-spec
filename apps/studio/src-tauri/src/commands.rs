@@ -3,7 +3,7 @@
 //!
 //! Logical frontend names map to commands as follows (the Tauri transport of `src/ipc` does the
 //! mapping): engine methods → `engine_call { method, params }`; `project.open` → `project_open`;
-//! `recent.list` → `recent_list`; `pty.open|write|resize|close` → `pty_*`;
+//! `recent.list` → `recent_list`; `recent.remove` → `recent_remove`; `project.pick` → `project_pick`; `pty.open|write|resize|close` → `pty_*`;
 //! `window.set_caption_layout` → `window_set_caption_layout`; `fs.rescan` → `fs_rescan`.
 //! Tauri event names cannot contain `.`, so events use `:` (`project:changed`, `finops:tick`,
 //! `pty:output`, `pty:exit`, `engine:state`, `watcher:error`).
@@ -38,6 +38,8 @@ pub const COMMANDS: &[&str] = &[
     "pty_close",
     "window_set_caption_layout",
     "fs_rescan",
+    "recent_remove",
+    "project_pick",
 ];
 
 /// Shared host state.
@@ -294,6 +296,36 @@ pub fn recent_list(state: State<'_, StudioState>) -> Value {
         "entries": recent.entries(),
         "error": recent.load_error().map(StudioError::to_rpc_error),
     })
+}
+
+/// Drops a project from the rail's list (Fase 3, Q3: "ocultar"). Its files and its memory stay.
+#[tauri::command]
+pub fn recent_remove(state: State<'_, StudioState>, path: String) -> Result<Value> {
+    let mut recent = lock(&state.recent);
+    recent.remove(Path::new(&path))?;
+    Ok(json!({ "entries": recent.entries() }))
+}
+
+/// The native folder picker behind the rail's "add project" button; `null` when cancelled.
+#[tauri::command]
+pub async fn project_pick(app: AppHandle) -> Result<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = app.dialog().file().set_title("Agregar proyecto");
+        // Owned by the main window, so it opens in front of Studio and blocks it like any modal.
+        if let Some(window) = app.get_webview_window("main") {
+            dialog = dialog.set_parent(&window);
+        }
+        dialog.blocking_pick_folder()
+    })
+    .await
+    .map_err(|error| StudioError::Io {
+        op: "pick folder",
+        message: error.to_string(),
+    })?;
+    Ok(picked
+        .and_then(|folder| folder.into_path().ok())
+        .map(|path| path.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]

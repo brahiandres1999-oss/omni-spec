@@ -15,6 +15,7 @@ import {
   type ProjectStores,
   type UiStore,
 } from '@/stores/app';
+import { type ConversationsStore, createConversationsStore } from '@/stores/conversations';
 import { createLayoutStore, type InspectorTab, type LayoutStore, type StageTab } from '@/stores/layout';
 import { createTerminalStore, type TerminalStore } from '@/stores/terminal';
 import type { TerminalFactory } from '@/terminal/xterm-adapter';
@@ -31,7 +32,8 @@ export type StudioAction =
   | { type: 'project.open'; path: string }
   | { type: 'terminal.new' }
   | { type: 'inspector.toggle' }
-  | { type: 'settings.open' };
+  | { type: 'settings.open' }
+  | { type: 'conversation.new' };
 
 export interface StudioContextValue {
   client: StudioClient;
@@ -40,6 +42,8 @@ export interface StudioContextValue {
   ui: UiStore;
   snapshot: ReturnType<typeof createSnapshotStore>;
   recent: ReturnType<typeof createRecentStore>;
+  /** Studio conversations of every project in the rail. */
+  conversations: ConversationsStore;
   project: ProjectStores;
   /** `null` until the shell knows the project root; standalone views use a default project. */
   projectId: string | null;
@@ -67,6 +71,7 @@ export function StudioProvider({ client, children, onAction, terminalFactory = n
     ui: createUiStore(),
     snapshot: createSnapshotStore(client),
     recent: createRecentStore(client),
+    conversations: createConversationsStore(client),
   }));
   const projects = useRef(new Map<string, ProjectStores>());
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -162,6 +167,10 @@ export function StudioProvider({ client, children, onAction, terminalFactory = n
           break;
         case 'settings.open':
           ui.getState().setSettingsOpen(true);
+          break;
+        case 'conversation.new':
+          layout.getState().setStageTab('chat');
+          void current.chat.getState().reset();
           break;
       }
     },

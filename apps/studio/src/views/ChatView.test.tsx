@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { AppShell } from '@/shell/AppShell';
@@ -237,6 +237,146 @@ describe('CH chat view', () => {
     expect(pendingChange('claude-opus-5-5', applied, { model: null, effort: 'low' })?.text).toBe(
       'Opus 5.5 ahora → el modelo predeterminado desde tu próximo mensaje',
     );
+  });
+});
+
+describe('CH conversations in the rail', () => {
+  const OPEN = 'C:/dev/omni-spec';
+  const OTHER = 'C:/dev/omnipage';
+  const conversation = (sessionId: string, title: string, extra: Record<string, unknown> = {}) => ({
+    agent: 'claude',
+    sessionId,
+    title,
+    titleSource: 'prompt',
+    createdAt: '2026-11-06T10:00:00Z',
+    updatedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    archived: false,
+    ...extra,
+  });
+  const history = (sessionId: string) => ({
+    sessionId,
+    title: 'Plan del login',
+    titleSource: 'prompt',
+    events: [
+      { kind: 'user', text: '/omni-plan login' },
+      { kind: 'text', key: 'a1:full:0', delta: 'Reviso el plan.' },
+      { kind: 'tool', id: 't1', name: 'Bash', title: 'ls', input: { command: 'ls' } },
+    ],
+    truncated: false,
+    contextTokens: 1000,
+    costUsd: 0.42,
+  });
+
+  function railTransport() {
+    const lists: Record<string, unknown[]> = {
+      [OPEN]: [conversation('S1', 'Plan del login'), conversation('S2', 'Viejo', { archived: true })],
+      [OTHER]: [conversation('P1', 'Landing nueva')],
+    };
+    return scriptStudio(chatTransport())
+      .respond('conversations.list', (args: Record<string, unknown>) => ({
+        projects: (args.roots as string[]).map(root => ({ root, conversations: lists[root] ?? [] })),
+      }))
+      .respond('conversations.rename', { renamed: true })
+      .respond('conversations.archive', (args: Record<string, unknown>) => ({ archived: args.archived }))
+      .respond('agent.resume', (args: Record<string, unknown>) => history(String(args.sessionId)))
+      .respond('agent.sessions', {
+        sessions: [
+          { id: 'S1', title: 'Plan del login', updatedAt: '2026-11-06T10:00:00Z' },
+          { id: 'T9', title: 'Sesión de la terminal', updatedAt: '2026-11-05T10:00:00Z' },
+        ],
+      });
+  }
+
+  async function mountRail() {
+    const restoreLayout = installLayoutStub();
+    stubCanvas();
+    stubWorker();
+    const user = userEvent.setup();
+    const fake = railTransport();
+    renderWithStudio(<AppShell />, { transport: fake });
+    const rail = await screen.findByRole('navigation', { name: 'Conversaciones y proyectos' });
+    const entry = await within(rail).findByRole('button', { name: /^Plan del login/ });
+    return { fake, user, rail, entry, restoreLayout };
+  }
+
+  test('CH-11 one click opens a conversation with its history; «Nueva conversación» starts over', async () => {
+    const { fake, user, rail, entry, restoreLayout } = await mountRail();
+    expect(entry).toHaveTextContent('hace 5 min');
+    expect(within(rail).queryByText('Viejo')).toBeNull();
+
+    await user.click(entry);
+    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'S1' }));
+    expect(await screen.findByText('/omni-plan login')).toBeInTheDocument();
+    expect(screen.getByText('Reviso el plan.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Bash/ })).toHaveTextContent('Listo');
+    expect(entry).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('group', { name: 'Estado del agente' })).toHaveTextContent('US$ 0.4200');
+
+    await user.click(within(rail).getByRole('button', { name: 'Nueva conversación' }));
+    await waitFor(() => expect(fake.calls('agent.reset')).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText('Reviso el plan.')).toBeNull());
+    expect(entry).not.toHaveAttribute('aria-current');
+    restoreLayout();
+  });
+
+  test('CH-12 a double click renames; the menu archives; archived ones show on demand', async () => {
+    const { fake, user, rail, entry, restoreLayout } = await mountRail();
+    await user.dblClick(entry);
+    const field = within(rail).getByRole('textbox', { name: 'Título de la conversación' });
+    await user.clear(field);
+    await user.type(field, 'Login con Google{Enter}');
+    await waitFor(() =>
+      expect(fake.lastCall('conversations.rename')).toEqual({
+        root: OPEN,
+        agent: 'claude',
+        sessionId: 'S1',
+        title: 'Login con Google',
+      }),
+    );
+
+    await user.click(within(rail).getByRole('button', { name: 'Opciones de «Plan del login»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Archivar' }));
+    await waitFor(() =>
+      expect(fake.lastCall('conversations.archive')).toEqual({
+        root: OPEN,
+        agent: 'claude',
+        sessionId: 'S1',
+        archived: true,
+      }),
+    );
+
+    await user.click(within(rail).getByRole('button', { name: 'Opciones de omni-spec' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Mostrar archivadas' }));
+    expect(await within(rail).findByRole('button', { name: /^Viejo/ })).toHaveTextContent('archivada');
+    restoreLayout();
+  });
+
+  test('CH-13 the search spans every project; a conversation of another project opens that project first', async () => {
+    const { fake, user, rail, restoreLayout } = await mountRail();
+    await user.type(within(rail).getByRole('searchbox', { name: 'Buscar conversaciones' }), 'landing');
+    const hit = await within(rail).findByRole('button', { name: /^Landing nueva/ });
+    expect(hit).toHaveTextContent('omnipage');
+    expect(within(rail).queryByRole('button', { name: /^Plan del login/ })).toBeNull();
+
+    await user.click(hit);
+    await waitFor(() => expect(fake.lastCall('project.open')).toEqual({ path: OTHER }));
+    // Once the other project's engine is up, its chat opens the conversation.
+    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'P1' }));
+    restoreLayout();
+  });
+
+  test('CH-14 «Retomar sesión de la terminal…» lists the sessions not in Studio and brings one in', async () => {
+    const { fake, user, rail, restoreLayout } = await mountRail();
+    await user.click(within(rail).getByRole('button', { name: 'Opciones de omni-spec' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Retomar sesión de la terminal…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Retomar sesión de la terminal' });
+    const pick = await within(dialog).findByRole('button', { name: /Sesión de la terminal/ });
+    expect(within(dialog).queryByRole('button', { name: /^Plan del login/ })).toBeNull();
+
+    await user.click(pick);
+    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'T9' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    restoreLayout();
   });
 });
 

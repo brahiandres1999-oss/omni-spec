@@ -584,6 +584,12 @@ export function scriptStudio(fake: FakeTransport): FakeTransport {
     .respond('skills.toggle', (args: InvokeArgs) => ({ name: args.name, enabled: args.enabled }))
     .respond('files.tree', fileTree())
     .respond('fs.rescan', null)
+    .respond('agent.sessions', { sessions: [] })
+    .respond('conversations.list', (args: InvokeArgs) => ({
+      projects: ((args.roots as string[] | undefined) ?? []).map(root => ({ root, conversations: [] })),
+    }))
+    .respond('project.pick', null)
+    .respond('recent.remove', { entries: [] })
     .respond('pty.open', { id: 'pty-1' })
     .respond('pty.write', null)
     .respond('pty.resize', null)

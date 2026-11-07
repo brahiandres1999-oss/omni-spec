@@ -206,6 +206,26 @@ pub fn force_dark(hwnd: windows::Win32::Foundation::HWND) -> crate::error::Resul
     .map_err(|e| crate::error::StudioError::win32("DwmSetWindowAttribute", &e))
 }
 
+/// What a request for a new webview window becomes. Studio has one window: WebView2's own Ctrl+N (and any
+/// `window.open`) must not clone it. Only web links leave, to the default browser.
+pub fn new_window_target(url: &str) -> Option<&str> {
+    let lower = url.to_ascii_lowercase();
+    (lower.starts_with("https://") || lower.starts_with("http://")).then_some(url)
+}
+
+/// Opens a web link in the default browser (links in the chat use `target="_blank"`).
+#[cfg(windows)]
+pub fn open_in_browser(url: &str) {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use windows::core::{HSTRING, w};
+    let target = HSTRING::from(url);
+    // SAFETY: null-terminated wide strings that outlive the call; no parent window is needed.
+    unsafe {
+        ShellExecuteW(None, w!("open"), &target, None, None, SW_SHOWNORMAL);
+    }
+}
+
 /// `OMNI_STUDIO_USER_DATA`: a folder that replaces every per-user location (recent projects and the
 /// WebView2 profile, hence `localStorage`). The E2E suite gives each run its own folder so runs never
 /// see each other's layout or recent list.

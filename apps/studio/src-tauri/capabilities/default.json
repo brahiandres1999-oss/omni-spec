@@ -20,6 +20,8 @@
     "allow-pty-resize",
     "allow-pty-close",
     "allow-window-set-caption-layout",
-    "allow-fs-rescan"
+    "allow-fs-rescan",
+    "allow-recent-remove",
+    "allow-project-pick"
   ]
 }

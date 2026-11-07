@@ -209,6 +209,16 @@ export function translateClaudeMessage(message, state) {
   }
 }
 
+/** One stdout line as JSON; `null` for anything else. */
+function parseLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    // guardian-allow SLOP_SWALLOWED_ERROR: the CLI only writes JSON on stdout in this mode; anything else is noise.
+    return null;
+  }
+}
+
 async function isFile(path) {
   try {
     await access(path, constants.F_OK);
@@ -355,15 +365,8 @@ export function createClaudeDriver({
       while (newline !== -1) {
         const line = buffered.slice(0, newline).trim();
         buffered = buffered.slice(newline + 1);
-        if (line) {
-          let message = null;
-          try {
-            message = JSON.parse(line);
-          } catch {
-            // The CLI only writes JSON on stdout in this mode; anything else is noise.
-          }
-          if (message) onMessage(message);
-        }
+        const message = line ? parseLine(line) : null;
+        if (message) onMessage(message);
         newline = buffered.indexOf('\n');
       }
     });
@@ -453,6 +456,21 @@ export function createClaudeDriver({
       });
       emit({ kind: 'permission_resolved', requestId, decision });
       return { requestId, decision };
+    },
+
+    /**
+     * Continues an earlier conversation: the next prompt starts the CLI with `--resume <sessionId>`.
+     * `costUsd` is the session total the CLI recorded; it is the base for the cost of the next turns.
+     */
+    resume(sessionId, { costUsd = null } = {}) {
+      if (state === 'busy' || state === 'starting')
+        throw new StudioError('AGENT_BUSY', 'Claude todavía está trabajando; espera o detén el turno.');
+      stop();
+      session = { model: null, sessionId };
+      translation = { messageId: null, streamed: new Set() };
+      if (typeof costUsd === 'number') Object.assign(translation, { reportedCost: costUsd, sessionCost: costUsd });
+      setState('idle');
+      return { sessionId };
     },
 
     /** Ends the conversation; the next prompt starts a new CLI process and a new session. */

@@ -110,6 +110,39 @@
         "type": "object"
       }
     },
+    "agent.resume": {
+      "direction": "host->engine",
+      "description": "Load an earlier conversation of this folder; the next prompt continues it.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F-]{36}$"
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "agent.sessions": {
+      "direction": "host->engine",
+      "description": "Earlier agent conversations of this folder, newest first.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
     "agent.status": {
       "direction": "host->engine",
       "description": "Available agents, conversation state and workspace mode.",
@@ -207,6 +240,96 @@
         "type": "object",
         "properties": {},
         "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "conversations.archive": {
+      "direction": "host->engine",
+      "description": "Archive or restore a Studio conversation of any listed project (its agent history is never touched).",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "agent": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agent",
+          "sessionId",
+          "archived"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "conversations.list": {
+      "direction": "host->engine",
+      "description": "Studio conversations of each project, newest activity first.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "roots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "includeArchived": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "conversations.rename": {
+      "direction": "host->engine",
+      "description": "Rename a Studio conversation of any listed project.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "agent": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "agent",
+          "sessionId",
+          "title"
+        ],
         "additionalProperties": false
       },
       "resultSchema": {

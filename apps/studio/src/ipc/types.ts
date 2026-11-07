@@ -195,6 +195,10 @@ export interface Rect {
 export interface HostCommandParams {
   'project.open': { path: string };
   'recent.list': Record<string, never>;
+  /** Drops a project from the rail's list; its folder and memory stay. */
+  'recent.remove': { path: string };
+  /** Native folder picker; resolves to the chosen path or `null`. */
+  'project.pick': Record<string, never>;
   'engine.stderr': Record<string, never>;
   'pty.open': { cols?: number; rows?: number; shell?: string };
   'pty.write': { id: string; data: string };
