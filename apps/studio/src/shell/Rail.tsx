@@ -37,7 +37,13 @@ import {
 import { cn, focusRing, press } from '@/components/ui/interaction';
 import type { RecentProject } from '@/ipc/types';
 import { formatAgo, messages } from '@/i18n/messages.es';
-import { type ConversationSummary, rootKey, sameRoot } from '@/stores/conversations';
+import {
+  activityKey,
+  type ConversationActivity,
+  type ConversationSummary,
+  rootKey,
+  sameRoot,
+} from '@/stores/conversations';
 import type { StageTab } from '@/stores/layout';
 import { readJson, writeJson } from '@/stores/storage';
 import { TerminalSessionsDialog } from './TerminalSessionsDialog';
@@ -160,23 +166,41 @@ function RenameField({ title, onDone }: { title: string; onDone(next: string | n
   );
 }
 
+function ActivityDot({ activity }: { activity: ConversationActivity | undefined }) {
+  if (!activity) return null;
+  const label = t.activity[activity] ?? activity;
+  return (
+    <span
+      role="status"
+      aria-label={label}
+      title={label}
+      data-activity={activity}
+      className={cn(
+        'size-2 shrink-0 rounded-full',
+        activity === 'busy' && 'bg-accent motion-safe:animate-pulse',
+        activity === 'permission' && 'bg-breach',
+        activity === 'unread' && 'bg-attested',
+      )}
+    />
+  );
+}
+
 function ConversationRow({
   root,
   conversation,
   active,
-  disabled,
   project,
 }: {
   root: string;
   conversation: ConversationSummary;
   active: boolean;
-  disabled: boolean;
   /** Shown in search results, where conversations of every project mix. */
   project?: string;
 }) {
   const { conversations } = useStudio();
   const actions = useRailActions();
   const [editing, setEditing] = useState(false);
+  const activity = useStore(conversations, state => state.activity[activityKey(root, conversation.sessionId)]);
 
   if (editing)
     return (
@@ -196,12 +220,12 @@ function ConversationRow({
       <button
         type="button"
         aria-current={active ? 'true' : undefined}
-        disabled={disabled}
         title={conversation.title}
         onClick={() => actions.open(root, conversation.sessionId)}
         onDoubleClick={() => setEditing(true)}
         className={cn(rowButton(active), 'ps-2.5 pe-8', conversation.archived && 'opacity-60')}
       >
+        <ActivityDot activity={activity} />
         <span className="min-w-0 flex-1 truncate">
           {conversation.title}
           {project ? <span className="ms-1.5 text-[10px] text-fg-muted">· {project}</span> : null}
@@ -251,7 +275,6 @@ function ProjectNode({
   const open = actions.isOpen(entry.path);
   const list = useStore(conversations, state => state.byRoot[rootKey(entry.path)]) ?? [];
   const currentSession = useStore(project.chat, state => state.sessionId);
-  const busy = useStore(project.chat, state => state.agentState === 'busy' || state.agentState === 'starting');
   const [showArchived, setShowArchived] = useState(false);
   const [all, setAll] = useState(false);
   const [terminal, setTerminal] = useState(false);
@@ -298,7 +321,7 @@ function ProjectNode({
             type="button"
             aria-label={t.newConversationIn(entry.name)}
             title={t.newConversationIn(entry.name)}
-            disabled={entry.missing || (open && busy)}
+            disabled={entry.missing}
             onClick={() => actions.start(entry.path)}
             className={cn(smallIcon, 'disabled:opacity-45')}
           >
@@ -356,7 +379,6 @@ function ProjectNode({
               root={entry.path}
               conversation={conversation}
               active={open && conversation.sessionId === currentSession}
-              disabled={busy && !(open && conversation.sessionId === currentSession)}
             />
           ))}
           {visible.length > FIRST ? (
@@ -391,7 +413,6 @@ export function Rail() {
   const recentList = useStore(recent, state => state.data);
   const byRoot = useStore(conversations, state => state.byRoot);
   const currentSession = useStore(project.chat, state => state.sessionId);
-  const busy = useStore(project.chat, state => state.agentState === 'busy' || state.agentState === 'starting');
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState(() => readJson<Record<string, boolean>>(EXPANDED_KEY, {}, isFlags));
 
@@ -435,7 +456,6 @@ export function Rail() {
       <Button
         variant="primary"
         icon={MessageSquarePlus}
-        disabled={busy}
         title={t.newConversationShortcut}
         onClick={() => dispatch({ type: 'conversation.new' })}
         className="w-full"
@@ -473,7 +493,6 @@ export function Rail() {
                     active={
                       projectId !== null && sameRoot(entry.path, projectId) && conversation.sessionId === currentSession
                     }
-                    disabled={busy}
                   />
                 ))}
               </ul>

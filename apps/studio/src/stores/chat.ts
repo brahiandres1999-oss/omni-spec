@@ -5,6 +5,7 @@
 import { createStore } from 'zustand/vanilla';
 import { type StudioClient, StudioError } from '@/ipc/client';
 import { messages } from '@/i18n/messages.es';
+import { sameRoot } from './conversations';
 import { isPermissionLevel, type PermissionLevel, readSettings } from './settings';
 import { readJson, writeJson } from './storage';
 
@@ -31,6 +32,8 @@ export type ChatItem =
       title: string;
       input: ToolInput;
       reason: string | null;
+      conflictWith?: string | null;
+      conflictFile?: string | null;
       status: 'pending' | 'allow' | 'deny';
     }
   | { type: 'result'; id: string; isError: boolean; durationMs: number | null; costUsd: number | null }
@@ -166,6 +169,8 @@ export function applyAgentEvent(items: readonly ChatItem[], event: AgentEvent): 
           title: str(event.title),
           input: input(event.input),
           reason: str(event.reason) || null,
+          conflictWith: str(event.conflictWith) || null,
+          conflictFile: str(event.conflictFile) || null,
           status: 'pending',
         },
       ];
@@ -200,7 +205,24 @@ export function applyAgentEvent(items: readonly ChatItem[], event: AgentEvent): 
   }
 }
 
+export interface ThreadSnapshot {
+  conversationId: string;
+  sessionId: string | null;
+  items: ChatItem[];
+  agentState: AgentState;
+  model: string | null;
+  applied: AgentOptions | null;
+  usage: AgentUsage;
+  permission: PermissionLevel;
+  queue: QueuedMessage[];
+  draft: string;
+}
+
 export interface ChatState {
+  /** Engine slot id of the conversation on screen (`'default'` for the first conversation). */
+  conversationId: string;
+  /** Conversations kept alive in this project while viewing another one. */
+  threads: Record<string, ThreadSnapshot>;
   items: ChatItem[];
   agentState: AgentState;
   model: string | null;
@@ -252,9 +274,80 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       attached = true;
       client.subscribe('agent.event', onEvent);
     };
+
+    const snapshotOf = (state: ChatState): ThreadSnapshot => ({
+      conversationId: state.conversationId,
+      sessionId: state.sessionId,
+      items: state.items,
+      agentState: state.agentState,
+      model: state.model,
+      applied: state.applied,
+      usage: state.usage,
+      permission: state.permission,
+      queue: state.queue,
+      draft: state.draft,
+    });
+
+    const saveCurrentThread = (state: ChatState): Record<string, ThreadSnapshot> => {
+      if (!state.sessionId && state.items.length === 0 && state.agentState === 'idle') return state.threads;
+      const snap = snapshotOf(state);
+      const next = { ...state.threads, [state.conversationId]: snap };
+      if (state.sessionId) next[state.sessionId] = snap;
+      return next;
+    };
+
+    const applyToThread = (thread: ThreadSnapshot, event: AgentEvent): ThreadSnapshot => {
+      if (event.kind === 'status') {
+        return { ...thread, agentState: str(event.state) as AgentState };
+      }
+      if (event.kind === 'init') {
+        return {
+          ...thread,
+          model: str(event.model) || thread.model,
+          sessionId: str(event.sessionId) || thread.sessionId,
+          items: applyAgentEvent(thread.items, event),
+        };
+      }
+      if (event.kind === 'result') {
+        const usage = thread.usage;
+        return {
+          ...thread,
+          usage: {
+            contextTokens: num(event.contextTokens) ?? usage.contextTokens,
+            contextWindow: num(event.contextWindow) ?? usage.contextWindow,
+            costUsd: num(event.sessionCostUsd) ?? usage.costUsd + (num(event.costUsd) ?? 0),
+            costBasis: str(event.costBasis) || usage.costBasis,
+          },
+          items: applyAgentEvent(thread.items, event),
+        };
+      }
+      return { ...thread, items: applyAgentEvent(thread.items, event) };
+    };
+
     const onEvent = (payload: unknown) => {
       const event = payload as unknown as AgentEvent;
-      if (event.root && projectId !== 'default' && event.root !== projectId) return;
+      if (event.root && projectId !== 'default' && !sameRoot(event.root, projectId)) return;
+      if (event.kind === 'conversations') return;
+
+      const current = get();
+      const eventConv = str(event.conversationId);
+      const eventSession = str(event.sessionId);
+      const targetsCurrent =
+        (!eventConv && !eventSession) ||
+        (eventSession && current.sessionId === eventSession) ||
+        (eventConv && current.conversationId === eventConv);
+
+      if (!targetsCurrent) {
+        const key = eventSession || eventConv;
+        const existing = current.threads[key] ?? current.threads[eventConv] ?? current.threads[eventSession];
+        if (!existing) return;
+        const updated = applyToThread(existing, event);
+        const threads = { ...current.threads, [updated.conversationId]: updated };
+        if (updated.sessionId) threads[updated.sessionId] = updated;
+        set({ threads });
+        return;
+      }
+
       if (event.kind === 'status') {
         const state = str(event.state) as AgentState;
         const was = get().agentState;
@@ -264,7 +357,8 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         return;
       }
       if (event.kind === 'init') {
-        set({ model: str(event.model) || null, sessionId: str(event.sessionId) || get().sessionId });
+        const nextSession = str(event.sessionId) || get().sessionId;
+        set({ model: str(event.model) || null, sessionId: nextSession });
         if (isCommands(event.commands) && event.commands.length > 0) {
           set({ commands: event.commands });
           writeJson(COMMANDS_KEY, event.commands);
@@ -293,8 +387,14 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       void get().send(next.text);
     };
     const busyNow = () => get().agentState === 'busy' || get().agentState === 'starting';
+    const convParam = () => {
+      const id = get().conversationId;
+      return id !== 'default' ? { conversationId: id } : {};
+    };
 
     return {
+      conversationId: 'default',
+      threads: {},
       items: [],
       agentState: 'idle',
       model: null,
@@ -319,7 +419,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       async loadStatus() {
         attach();
         try {
-          const status = (await client.call('agent.status', {})) as AgentStatus;
+          const status = (await client.call('agent.status', convParam())) as AgentStatus;
           set({
             status,
             agentState: status.state,
@@ -334,6 +434,30 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       async resume(sessionId) {
         attach();
         if (sessionId === get().sessionId) return;
+        const threads = saveCurrentThread(get());
+        const live = threads[sessionId];
+        if (
+          live &&
+          (live.agentState === 'busy' ||
+            live.agentState === 'starting' ||
+            live.items.some(item => item.type === 'permission' && item.status === 'pending'))
+        ) {
+          set({
+            threads,
+            conversationId: live.conversationId,
+            sessionId: live.sessionId ?? sessionId,
+            items: live.items,
+            agentState: live.agentState,
+            model: live.model,
+            applied: live.applied,
+            usage: live.usage,
+            permission: live.permission,
+            queue: live.queue,
+            draft: live.draft,
+            error: null,
+          });
+          return;
+        }
         try {
           const history = (await client.call('agent.resume', { sessionId })) as ResumedConversation;
           let items: ChatItem[] = [];
@@ -344,16 +468,23 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           );
           if (history.truncated)
             items.unshift({ type: 'notice', id: nextId('notice'), text: messages.chat.olderHidden });
+          const nextConvId = live?.conversationId ?? (busyNow() ? sessionId : get().conversationId);
           set({
-            items,
+            threads,
+            conversationId: nextConvId,
+            items: live && live.items.length > items.length ? live.items : items,
             sessionId,
-            model: null,
-            applied: null,
+            model: live?.model ?? null,
+            applied: live?.applied ?? null,
             error: null,
-            agentState: 'idle',
-            usage: { ...EMPTY_USAGE, contextTokens: history.contextTokens, costUsd: history.costUsd ?? 0 },
-            queue: [],
-            permission: readSettings().defaultPermission,
+            agentState: live?.agentState ?? 'idle',
+            usage: live?.usage ?? {
+              ...EMPTY_USAGE,
+              contextTokens: history.contextTokens,
+              costUsd: history.costUsd ?? 0,
+            },
+            queue: live?.queue ?? [],
+            permission: live?.permission ?? readSettings().defaultPermission,
           });
         } catch (reason) {
           fail(reason);
@@ -377,6 +508,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         try {
           const { model, effort } = get().options;
           await client.call('agent.prompt', {
+            ...convParam(),
             text: message,
             ...(model ? { model } : {}),
             ...(effort ? { effort: effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } : {}),
@@ -406,21 +538,40 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       },
       async cancel() {
         try {
-          await client.call('agent.cancel', {});
+          await client.call('agent.cancel', convParam());
         } catch (reason) {
           fail(reason);
         }
       },
       async decide(requestId, decision) {
         try {
-          await client.call('agent.permission', { requestId, decision });
+          await client.call('agent.permission', { ...convParam(), requestId, decision });
         } catch (reason) {
           fail(reason);
         }
       },
       async reset() {
+        // When a conversation is working, starting a new one keeps it running in the background (Fase 3, vuelta 3).
+        if (busyNow()) {
+          const threads = saveCurrentThread(get());
+          set({
+            threads,
+            conversationId: nextId('conv'),
+            items: [],
+            agentState: 'idle',
+            model: null,
+            applied: null,
+            error: null,
+            usage: EMPTY_USAGE,
+            sessionId: null,
+            queue: [],
+            draft: '',
+            permission: readSettings().defaultPermission,
+          });
+          return;
+        }
         try {
-          await client.call('agent.reset', {});
+          await client.call('agent.reset', convParam());
           set({
             items: [],
             model: null,

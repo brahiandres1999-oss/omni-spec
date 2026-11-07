@@ -18,7 +18,12 @@
       "description": "Interrupt the running agent turn.",
       "paramsSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "required": [],
         "additionalProperties": false
       },
@@ -40,6 +45,10 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          },
           "requestId": {
             "type": "string",
             "minLength": 1
@@ -70,6 +79,10 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          },
           "text": {
             "type": "string",
             "minLength": 1
@@ -111,7 +124,12 @@
       "description": "End the conversation and start a new one on the next prompt.",
       "paramsSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "required": [],
         "additionalProperties": false
       },
@@ -125,6 +143,10 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          },
           "sessionId": {
             "type": "string",
             "pattern": "^[0-9a-fA-F-]{36}$"
@@ -157,7 +179,12 @@
       "description": "Available agents, conversation state and workspace mode.",
       "paramsSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "required": [],
         "additionalProperties": false
       },

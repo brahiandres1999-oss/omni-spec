@@ -247,11 +247,11 @@ function createHandlers(root, memory, { version, actor, credentials, notify, wor
         indexRepository(root, memory);
         await notify('project.changed', { areas: AREA_ORDER });
       }),
-    'agent.status': () => agents.status(),
+    'agent.status': params => agents.status(params),
     'agent.prompt': params => agents.prompt(params),
-    'agent.cancel': () => agents.cancel(),
+    'agent.cancel': params => agents.cancel(params),
     'agent.permission': params => agents.permission(params),
-    'agent.reset': () => agents.reset(),
+    'agent.reset': params => agents.reset(params),
     'agent.sessions': () => agents.sessions(),
     'agent.resume': params => agents.resume(params),
     'memory.summary': () => memorySummary(memory.db, workspace),

@@ -151,4 +151,42 @@ describe('SH three-column shell', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(document.activeElement).toBe(origin);
   });
+
+  test('SH-15 switching projects keeps a live conversation of the first project running when returning to it', async () => {
+    const fake = scriptStudio(new FakeTransport())
+      .respond('agent.status', {
+        workspace: { mode: 'studio', dir: 'C:/tmp' },
+        active: 'claude',
+        agents: [{ id: 'claude', label: 'Claude Code', available: true, path: 'claude.exe', models: [], efforts: [] }],
+        state: 'idle',
+        model: null,
+        sessionId: null,
+      })
+      .respond('agent.prompt', { accepted: true });
+    const { user } = await mountShell(fake);
+    const rail = screen.getByRole('navigation', { name: 'Conversaciones y proyectos' });
+
+    await user.click(within(rail).getByRole('button', { name: 'Nueva conversación' }));
+    const input = await screen.findByRole('combobox', { name: /Pídele algo/ });
+    await user.type(input, 'mantén viva esta charla{Enter}');
+    expect(await screen.findByText('mantén viva esta charla')).toBeInTheDocument();
+
+    // Switch to omnipage; the first project's conversation keeps receiving events in the background.
+    await user.click(within(rail).getByRole('button', { name: 'omnipage' }));
+    await waitFor(() => expect(fake.lastCall('project.open')).toEqual({ path: 'C:/dev/omnipage' }));
+    act(() => {
+      fake.emit('agent.event', {
+        root: 'C:/dev/omni-spec',
+        kind: 'text',
+        key: 'bg:0',
+        delta: 'Sigo vivo en omni-spec.',
+      });
+    });
+
+    // Switch back to omni-spec: the transcript and streamed background response are still there.
+    await user.click(within(rail).getByRole('button', { name: 'omni-spec' }));
+    await waitFor(() => expect(fake.lastCall('project.open')).toEqual({ path: 'C:/dev/omni-spec' }));
+    expect(await screen.findByText('mantén viva esta charla')).toBeInTheDocument();
+    expect(screen.getByText('Sigo vivo en omni-spec.')).toBeInTheDocument();
+  });
 });

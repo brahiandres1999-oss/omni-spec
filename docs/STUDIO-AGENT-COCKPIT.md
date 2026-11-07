@@ -1,7 +1,7 @@
 # Omni Studio: cockpit agéntico
 
-Estado: prototipo (fases 0–2, 2.5 y 2.6). **La Fase 3 · Cockpit multiagente está en curso** (vueltas 1, 2a y 2b
-hechas; vuelta 3 en curso; ver su sección). Reemplaza el escenario de dashboards de la fase 4, que queda en el tag `studio-dashboard-v0`.
+Estado: prototipo (fases 0–2, 2.5 y 2.6). **La Fase 3 · Cockpit multiagente está en curso** (vueltas 1, 2a, 2b y 3
+hechas; vuelta 4 en curso; ver su sección). Reemplaza el escenario de dashboards de la fase 4, que queda en el tag `studio-dashboard-v0`.
 
 ## Cómo retomar (léelo primero)
 
@@ -56,8 +56,8 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 
 **Método de cada vuelta.**
 1. El usuario manda una captura de la app real y elige el tema.
-2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-24** y el próximo
-   de la UI es **CH-19** (SH-xx para el resto del shell, el próximo **SH-15**; SH-11 pasó a ser la página Memoria).
+2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-25** y el próximo
+   de la UI es **CH-20** (SH-xx para el resto del shell, el próximo **SH-16**; SH-11 pasó a ser la página Memoria).
 3. Pasan las tres comprobaciones de arriba.
 4. El usuario lo prueba en la app (reinicio completo si se tocó el motor) y manda captura.
 5. Se actualiza este documento (tabla de vueltas de la Fase 3, hechos verificados) y se hace **un commit por
@@ -213,7 +213,7 @@ resumen), varias cuentas por agente y una versión comercial.
 | 1 · Panel izquierdo | Árbol Proyectos → Conversaciones, selector de carpetas, índice en la memoria, títulos, renombrar, archivar, buscador, «Retomar sesión de la terminal…» (Claude), specs fuera del panel. Su commit incluye el trabajo pendiente de la Fase 2.6 vuelta 2 | **Probada en la app el 2026-11-06**: todo funciona salvo Ctrl+N, que abría una ventana nueva de WebView2 (corregido; falta volver a probarlo) |
 | 2a · Estructura | Fuera pestañas y Dock; ruta «Proyecto / Título» arriba; páginas Specs, Memoria y Uso en el panel izquierdo; panel derecho «Resumen» (Revisión, Archivos, Terminal) cerrado por defecto; Ctrl+B y Ctrl+J | **Hecha**: commit `bf154d8`, probada en la app |
 | 2b · Compositor y revisión | Modelo agrupado por agente con razonamiento, permisos, cola y «+» en el compositor; Revisión de esta conversación con +N −M e Impacto; Ajustes modal con Skills en Personalizaciones | **Hecha** (pruebas que requieren turno de LLM quedan en el checklist acumulativo hasta integrar más agentes) |
-| 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | |
+| 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | **Hecha** (`AG-24`, `CH-19`, `SH-15`; pruebas con LLM en checklist acumulativo) |
 | 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | |
 | 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | |
 | 6 · ACP y Antigravity | Driver ACP genérico; Antigravity experimental; modelos de Claude leídos de su `initialize` | |

@@ -5,24 +5,33 @@ export const MAX_FRAME_BYTES = 8388608 as const;
 
 /** Engine requests the frontend may issue through the host (`engine_call`). */
 export interface EngineRequestParams {
-  readonly 'agent.cancel': Record<string, never>;
+  readonly 'agent.cancel': {
+    readonly conversationId?: string;
+  };
   readonly 'agent.permission': {
+    readonly conversationId?: string;
     readonly requestId: string;
     readonly decision: 'allow' | 'deny';
     readonly message?: string;
   };
   readonly 'agent.prompt': {
+    readonly conversationId?: string;
     readonly text: string;
     readonly model?: string;
     readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     readonly permission?: 'ask' | 'default' | 'auto' | 'bypass' | 'plan';
   };
-  readonly 'agent.reset': Record<string, never>;
+  readonly 'agent.reset': {
+    readonly conversationId?: string;
+  };
   readonly 'agent.resume': {
+    readonly conversationId?: string;
     readonly sessionId: string;
   };
   readonly 'agent.sessions': Record<string, never>;
-  readonly 'agent.status': Record<string, never>;
+  readonly 'agent.status': {
+    readonly conversationId?: string;
+  };
   readonly 'blastRadius.heat': {
     readonly target: string;
     readonly symbols?: string[];

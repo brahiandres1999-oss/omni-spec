@@ -111,6 +111,12 @@ function PermissionCard({ item, chat }: { item: Extract<ChatItem, { type: 'permi
         <span className="font-medium text-fg">{t.permissionTitle(item.toolName)}</span>
         <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')}>{item.title}</span>
       </div>
+      {item.conflictWith ? (
+        <p role="status" className="flex items-center gap-1.5 text-xs text-pretty text-breach">
+          <Icon icon={CircleAlert} className="shrink-0" />
+          {t.conflictWarning(item.conflictWith, item.conflictFile ?? item.title)}
+        </p>
+      ) : null}
       {item.reason ? <p className="text-xs text-pretty text-fg-muted">{item.reason}</p> : null}
       <ToolPreview input={item.input} />
       {pending ? (
@@ -315,7 +321,7 @@ export function ChatHeader() {
         variant="ghost"
         aria-label={t.reset}
         title={t.reset}
-        disabled={!hasItems || busy}
+        disabled={!hasItems && !busy}
         onClick={() => void chat.getState().reset()}
       >
         <Icon icon={RotateCcw} />
@@ -325,7 +331,7 @@ export function ChatHeader() {
 }
 
 export function ChatView() {
-  const { project, dispatch, ui, projectId } = useStudio();
+  const { project, dispatch, ui, projectId, conversations } = useStudio();
   const chat = project.chat;
   const items = useStore(chat, state => state.items);
   const agentState = useStore(chat, state => state.agentState);
@@ -334,6 +340,7 @@ export function ChatView() {
   const error = useStore(chat, state => state.error);
   const options = useStore(chat, state => state.options);
   const applied = useStore(chat, state => state.applied);
+  const sessionId = useStore(chat, state => state.sessionId);
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const busy = agentState === 'busy' || agentState === 'starting';
@@ -344,6 +351,11 @@ export function ChatView() {
   useEffect(() => {
     void chat.getState().loadStatus();
   }, [chat]);
+
+  useEffect(() => {
+    conversations.getState().setActiveView(projectId ?? '', sessionId);
+    return () => conversations.getState().setActiveView('', null);
+  }, [conversations, projectId, sessionId]);
 
   // A conversation clicked in the rail under another project opens once this project's engine is up.
   useEffect(() => {

@@ -168,12 +168,18 @@ const ENGINE = 'engine->host';
 
 /** Every Studio IPC method, frozen. Sorted by name so the generated schema is stable. */
 export const STUDIO_METHODS = Object.freeze({
-  'agent.cancel': method(HOST, object(), anyObject, 'Interrupt the running agent turn.'),
+  'agent.cancel': method(
+    HOST,
+    object({ conversationId: string({ minLength: 1 }) }),
+    anyObject,
+    'Interrupt the running agent turn.',
+  ),
   'agent.event': method(ENGINE, anyObject, null, 'Provider-independent agent event (text, tool, permission, result).'),
   'agent.permission': method(
     HOST,
     object(
       {
+        conversationId: string({ minLength: 1 }),
         requestId: string({ minLength: 1 }),
         decision: { enum: ['allow', 'deny'] },
         message: string(),
@@ -187,6 +193,7 @@ export const STUDIO_METHODS = Object.freeze({
     HOST,
     object(
       {
+        conversationId: string({ minLength: 1 }),
         text: string({ minLength: 1 }),
         model: string({ minLength: 1 }),
         effort: { enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
@@ -197,15 +204,31 @@ export const STUDIO_METHODS = Object.freeze({
     anyObject,
     'Send one user message to the agent; the answer arrives as agent.event notifications.',
   ),
-  'agent.reset': method(HOST, object(), anyObject, 'End the conversation and start a new one on the next prompt.'),
+  'agent.reset': method(
+    HOST,
+    object({ conversationId: string({ minLength: 1 }) }),
+    anyObject,
+    'End the conversation and start a new one on the next prompt.',
+  ),
   'agent.resume': method(
     HOST,
-    object({ sessionId: string({ pattern: '^[0-9a-fA-F-]{36}$' }) }, ['sessionId']),
+    object(
+      {
+        conversationId: string({ minLength: 1 }),
+        sessionId: string({ pattern: '^[0-9a-fA-F-]{36}$' }),
+      },
+      ['sessionId'],
+    ),
     anyObject,
     'Load an earlier conversation of this folder; the next prompt continues it.',
   ),
   'agent.sessions': method(HOST, object(), anyObject, 'Earlier agent conversations of this folder, newest first.'),
-  'agent.status': method(HOST, object(), anyObject, 'Available agents, conversation state and workspace mode.'),
+  'agent.status': method(
+    HOST,
+    object({ conversationId: string({ minLength: 1 }) }),
+    anyObject,
+    'Available agents, conversation state and workspace mode.',
+  ),
   'blastRadius.heat': method(
     HOST,
     object(

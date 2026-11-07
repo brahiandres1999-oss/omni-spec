@@ -44,7 +44,8 @@ pub const COMMANDS: &[&str] = &[
 
 /// Shared host state.
 pub struct StudioState {
-    supervisor: tokio::sync::Mutex<Option<Arc<Supervisor>>>,
+    supervisors: tokio::sync::Mutex<HashMap<PathBuf, Arc<Supervisor>>>,
+    active_root: Mutex<Option<PathBuf>>,
     watcher: Mutex<Option<ProjectWatcher>>,
     terminals: Mutex<HashMap<String, Arc<Pty>>>,
     terminals_job: Mutex<Option<Job>>,
@@ -69,7 +70,8 @@ impl StudioState {
             .map(|path| RecentProjects::load(&path))
             .unwrap_or_else(|_| RecentProjects::load(Path::new("recent.json")));
         Ok(StudioState {
-            supervisor: tokio::sync::Mutex::new(None),
+            supervisors: tokio::sync::Mutex::new(HashMap::new()),
+            active_root: Mutex::new(None),
             watcher: Mutex::new(None),
             terminals: Mutex::new(HashMap::new()),
             terminals_job: Mutex::new(Some(Job::kill_on_close()?)),
@@ -85,22 +87,28 @@ impl StudioState {
         *lock(&self.caption)
     }
 
-    /// Closes every terminal and the terminals job, and shuts the engine down (tray "Salir").
+    /// Closes every terminal and the terminals job, and shuts every project engine down (tray "Salir").
     pub fn shutdown(&self) -> Vec<Job> {
         for (_, terminal) in lock(&self.terminals).drain() {
             let _ = terminal.close();
         }
         lock(&self.watcher).take();
-        let supervisor = self.supervisor.try_lock().ok().and_then(|mut s| s.take());
-        drop(supervisor); // dropping the supervisor closes the engine job
+        *lock(&self.active_root) = None;
+        if let Ok(mut map) = self.supervisors.try_lock() {
+            map.clear(); // dropping every supervisor closes its engine job
+        }
         lock(&self.terminals_job).take().into_iter().collect()
     }
 
     async fn current(&self) -> Result<Arc<Supervisor>> {
-        self.supervisor
+        let root = lock(&self.active_root)
+            .clone()
+            .ok_or(StudioError::EngineDisconnected)?;
+        self.supervisors
             .lock()
             .await
-            .clone()
+            .get(&root)
+            .cloned()
             .ok_or(StudioError::EngineDisconnected)
     }
 }
@@ -127,7 +135,8 @@ fn engine_entry_for(app: &AppHandle) -> Result<PathBuf> {
     bundled
 }
 
-/// Starts (or switches) the engine and the watcher for `root`, and records it as recent.
+/// Starts (or reuses) the engine for `root`, switches the active project to it without stopping
+/// background engines, starts the watcher for `root`, and records it as recent (Fase 3, vuelta 3).
 async fn open_project(app: &AppHandle, root: &Path) -> Result<()> {
     let state = app.state::<StudioState>();
     lock(&state.recent).open(root)?;
@@ -136,20 +145,18 @@ async fn open_project(app: &AppHandle, root: &Path) -> Result<()> {
             .canonicalize()
             .map_err(|_| StudioError::ProjectInvalid)?,
     );
-    let mut slot = state.supervisor.lock().await;
-    match slot.as_ref() {
-        Some(supervisor) => supervisor.switch_project(&root).await?,
-        None => {
-            let node = resolve_system_node()?;
-            let entry = engine_entry_for(app)?;
-            let supervisor = Arc::new(
-                Supervisor::start(EngineConfig::new(node.path, entry, root.clone())).await?,
-            );
-            forward_engine_events(app.clone(), &supervisor);
-            *slot = Some(supervisor);
-        }
+    let mut map = state.supervisors.lock().await;
+    if !map.contains_key(&root) {
+        let node = resolve_system_node()?;
+        let entry = engine_entry_for(app)?;
+        let supervisor = Arc::new(
+            Supervisor::start(EngineConfig::new(node.path, entry, root.clone())).await?,
+        );
+        forward_engine_events(app.clone(), &supervisor);
+        map.insert(root.clone(), supervisor);
     }
-    drop(slot);
+    *lock(&state.active_root) = Some(root.clone());
+    drop(map);
     start_watcher(app, &root)
 }
 

@@ -95,14 +95,19 @@ export function StudioProvider({ client, children, onAction, terminalFactory = n
   const projectRef = useRef(project);
   projectRef.current = project;
 
-  const adoptSnapshot = useCallback((snapshot: SnapshotPayload) => {
-    setProjectId(current => {
-      if (current === snapshot.root) return current;
-      // A switch starts from fresh stores: every view goes back to Loading (EG-08, SH-05).
-      projects.current.delete(snapshot.root);
-      return snapshot.root;
-    });
-  }, []);
+  const adoptSnapshot = useCallback(
+    (snapshot: SnapshotPayload) => {
+      setProjectId(current => {
+        if (current === snapshot.root) return current;
+        // Domain resources reload on switch (EG-08, SH-05), while live conversations of that project stay alive.
+        const keptChat = projects.current.get(snapshot.root)?.chat;
+        if (keptChat) projects.current.set(snapshot.root, createProjectStores(client, snapshot.root, keptChat));
+        else projects.current.delete(snapshot.root);
+        return snapshot.root;
+      });
+    },
+    [client],
+  );
 
   const openProject = useCallback(
     async (path: string) => {

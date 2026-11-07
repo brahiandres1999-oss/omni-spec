@@ -9,6 +9,7 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { createClaudeDriver, locateClaude, translateClaudeMessage } from '../src/studio/agents/claude.mjs';
 import { claudeSessionsDir, listClaudeSessions, readClaudeSession } from '../src/studio/agents/claude-sessions.mjs';
+import { createAgentHub } from '../src/studio/agents/index.mjs';
 import { resolveWorkspace, workspaceId } from '../src/studio/workspace.mjs';
 import { makeStudioProject } from '../test-support/studio-fixtures.mjs';
 import { startStudioHost } from '../test-support/studio-host.mjs';
@@ -382,6 +383,109 @@ describe('AG permission levels and commands', () => {
     );
     assert.deepEqual(init.commands, ['omni-specify', 'compact']);
     assert.deepEqual(translateClaudeMessage({ type: 'system', subtype: 'init' }, fresh())[0].commands, []);
+  });
+
+  test('AG-24 parallel conversations run independently and warn both sides when they touch the same file', async () => {
+    const events = [];
+    const drivers = [];
+    const hub = createAgentHub({
+      root: 'C:/dev/omni-spec',
+      workspace: { mode: 'studio', dir: 'C:/tmp' },
+      notify: async (_method, params) => {
+        events.push(params);
+      },
+      locate: async () => ({ file: 'claude.exe', prefix: [], path: 'claude.exe' }),
+      createDriver: ({ emit }) => {
+        let state = 'idle';
+        let sessionId = null;
+        const responses = [];
+        const instance = {
+          emit,
+          responses,
+          status: () => ({ state, model: 'claude-opus-5-5', sessionId }),
+          prompt: async () => {
+            state = 'busy';
+            emit({ kind: 'status', state: 'busy' });
+            return { accepted: true };
+          },
+          cancel: async () => ({ cancelled: true }),
+          respond: (requestId, decision) => {
+            responses.push({ requestId, decision });
+            emit({ kind: 'permission_resolved', requestId, decision });
+            return { requestId, decision };
+          },
+          resume: id => {
+            sessionId = id;
+            return { sessionId };
+          },
+          reset: () => {
+            state = 'idle';
+            sessionId = null;
+            return { reset: true };
+          },
+          dispose: () => undefined,
+          setSession: id => {
+            sessionId = id;
+          },
+        };
+        drivers.push(instance);
+        return instance;
+      },
+    });
+
+    await hub.prompt({ conversationId: 'conv-1', text: 'Arregla login\nDetalles' });
+    await hub.prompt({ conversationId: 'conv-2', text: 'Refactoriza sesión' });
+    const [, first, second] = drivers;
+    first.setSession('S-1');
+    first.emit({ kind: 'init', sessionId: 'S-1', model: 'claude-opus-5-5' });
+    second.setSession('S-2');
+    second.emit({ kind: 'init', sessionId: 'S-2', model: 'claude-opus-5-5' });
+
+    first.emit({
+      kind: 'tool',
+      id: 't1',
+      name: 'Edit',
+      title: 'src/auth.ts',
+      input: { file_path: 'C:/dev/omni-spec/src/auth.ts', old_string: 'a', new_string: 'b' },
+    });
+
+    second.emit({
+      kind: 'permission',
+      requestId: 'req-2',
+      toolName: 'Edit',
+      title: 'src/auth.ts',
+      input: { file_path: 'src/auth.ts', old_string: 'b', new_string: 'c' },
+    });
+
+    const perm = events.find(event => event.kind === 'permission' && event.requestId === 'req-2');
+    assert.equal(perm.conversationId, 'conv-2');
+    assert.equal(perm.conflictWith, 'Arregla login');
+    assert.equal(perm.conflictFile, 'src/auth.ts');
+
+    // Answering by requestId routes to conv-2 even without passing conversationId.
+    hub.permission({ requestId: 'req-2', decision: 'allow' });
+    assert.deepEqual(second.responses, [{ requestId: 'req-2', decision: 'allow' }]);
+
+    second.emit({
+      kind: 'tool',
+      id: 't2',
+      name: 'Edit',
+      title: 'src/auth.ts',
+      input: { file_path: 'src/auth.ts', old_string: 'b', new_string: 'c' },
+    });
+
+    const notices = events.filter(event => event.kind === 'notice' && event.conflict);
+    assert.equal(notices.length, 2, 'both conversations are warned once');
+    assert.deepEqual(
+      notices.map(notice => [notice.conversationId, notice.conflict.file, notice.conflict.otherConversation]),
+      [
+        ['conv-2', 'src/auth.ts', 'Arregla login'],
+        ['conv-1', 'src/auth.ts', 'Refactoriza sesión'],
+      ],
+    );
+
+    const status = await hub.status({ conversationId: 'conv-2' });
+    assert.equal(status.live.length, 2);
   });
 });
 

@@ -562,6 +562,105 @@ describe('CH conversations in the rail', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     restoreLayout();
   });
+
+  test('CH-19 parallel conversations keep working in the background with status dots, desktop notifications and collision warnings', async () => {
+    const notifications: Array<{ title: string; body?: string }> = [];
+    class FakeNotification {
+      constructor(title: string, options?: { body?: string }) {
+        notifications.push({ title, body: options?.body });
+      }
+    }
+    const previousNotification = (globalThis as { Notification?: unknown }).Notification;
+    (globalThis as { Notification?: unknown }).Notification = FakeNotification;
+
+    const { fake, user, rail, entry, restoreLayout } = await mountRail();
+    try {
+      // Open S1 and send a prompt so it becomes busy.
+      await user.click(entry);
+      await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'S1' }));
+      const input = await screen.findByRole('combobox', { name: /Pídele algo/ });
+      await user.type(input, 'trabaja en S1{Enter}');
+      act(() => {
+        fake.emit('agent.event', {
+          root: OPEN,
+          conversationId: 'default',
+          sessionId: 'S1',
+          kind: 'status',
+          state: 'busy',
+        });
+      });
+
+      // Start a new conversation while S1 is still busy: S1 stays alive in the background with a «Trabajando» dot.
+      await user.click(within(rail).getByRole('button', { name: 'Nueva conversación' }));
+      expect(within(entry).getByRole('status', { name: 'Trabajando' })).toHaveAttribute('data-activity', 'busy');
+
+      // S1 asks for permission in the background, with a file collision warning from another live conversation.
+      act(() => {
+        fake.emit('agent.event', {
+          root: OPEN,
+          conversationId: 'default',
+          sessionId: 'S1',
+          kind: 'permission',
+          requestId: 'r-bg',
+          toolName: 'Edit',
+          title: 'src/auth.ts',
+          conflictWith: 'Otra conversación',
+          conflictFile: 'src/auth.ts',
+          input: { file_path: 'src/auth.ts', old_string: 'a', new_string: 'b' },
+        });
+      });
+      expect(within(entry).getByRole('status', { name: 'Esperando aprobación' })).toHaveAttribute(
+        'data-activity',
+        'permission',
+      );
+      expect(notifications).toContainEqual({
+        title: 'omni-spec · Esperando aprobación',
+        body: 'Plan del login — src/auth.ts',
+      });
+
+      // Clicking S1 brings back its live transcript with the collision warning on the permission card.
+      await user.click(entry);
+      expect(
+        await screen.findByText('Otra conversación viva («Otra conversación») también modificó src/auth.ts.'),
+      ).toBeInTheDocument();
+
+      // Switch away to a new conversation again; S1 finishes in the background → «Terminada sin leer» dot + toast.
+      await user.click(within(rail).getByRole('button', { name: 'Nueva conversación' }));
+      act(() => {
+        fake.emit('agent.event', {
+          root: OPEN,
+          conversationId: 'default',
+          sessionId: 'S1',
+          kind: 'result',
+          isError: false,
+          durationMs: 900,
+          costUsd: 0.02,
+        });
+        fake.emit('agent.event', {
+          root: OPEN,
+          conversationId: 'default',
+          sessionId: 'S1',
+          kind: 'status',
+          state: 'ready',
+        });
+      });
+      expect(within(entry).getByRole('status', { name: 'Terminada sin leer' })).toHaveAttribute(
+        'data-activity',
+        'unread',
+      );
+      expect(notifications).toContainEqual({
+        title: 'omni-spec · Turno terminado',
+        body: 'Plan del login',
+      });
+
+      // Opening S1 clears the «Terminada sin leer» dot.
+      await user.click(entry);
+      await waitFor(() => expect(within(entry).queryByRole('status', { name: 'Terminada sin leer' })).toBeNull());
+    } finally {
+      (globalThis as { Notification?: unknown }).Notification = previousNotification;
+      restoreLayout();
+    }
+  });
 });
 
 describe('CH line diff', () => {
