@@ -17,6 +17,7 @@
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:package": "vitest run --config tests/vitest.package.config.ts",
     "gen:ipc": "node scripts/gen-ipc-types.mjs",
+    "gen:app-icons": "node scripts/build-app-icons.mjs",
     "gen:tray-icons": "node scripts/build-tray-icons.mjs",
     "bench:studio": "node scripts/bench-studio.mjs",
     "tauri": "tauri"

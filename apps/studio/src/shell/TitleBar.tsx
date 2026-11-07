@@ -6,7 +6,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useEnsureLoaded, useStudio } from '@/app/studio-context';
-import { GitBranch, Icon, Search, Sparkles } from '@/components/ui/icon';
+import { GitBranch, Icon, Search } from '@/components/ui/icon';
+import { StudioLogo } from '@/components/ui/StudioLogo';
 import { cn, focusRing, mono, press } from '@/components/ui/interaction';
 import { isTauri } from '@/ipc/transport';
 import { messages } from '@/i18n/messages.es';
@@ -90,7 +91,7 @@ export function TitleBar() {
         data-tauri-drag-region
         className="flex min-w-0 items-center gap-1.5 text-xs"
       >
-        <Icon icon={Sparkles} className="text-accent" />
+        <StudioLogo size={16} className="shrink-0" />
         <span className="font-semibold text-fg">{messages.app.name}</span>
         {/* Project and branch appear together once known: inserting them shifts nothing (CLS = 0). */}
         {data ? (
