@@ -1,8 +1,9 @@
 /**
  * Omni Studio shell (STUDIO-DESIGN-SYSTEM.md §1–§2, plan §11.5): seamless title bar over three elastic
- * columns — rail, stage with the floating cockpit dock, collapsible Inspector — plus the command palette.
+ * columns — rail, stage (one page: the conversation, Specs, Memoria, Uso…) and the «Resumen» panel — plus the
+ * command palette (docs/STUDIO-AGENT-COCKPIT.md, Fase 3 vuelta 2a).
  *
- * Shortcuts: Ctrl+1…Ctrl+5 stage tabs, Ctrl+J Inspector, Ctrl+K palette.
+ * Shortcuts: Ctrl+N new conversation, Ctrl+B left rail, Ctrl+J Resumen panel, Ctrl+K palette.
  */
 import { Dialog } from 'radix-ui';
 import { useEffect, useMemo, useRef } from 'react';
@@ -11,6 +12,7 @@ import { useEnsureLoaded, useRefreshOn, useStudio } from '@/app/studio-context';
 import { Button } from '@/components/ui/button';
 import { CommandPalette, type PaletteItem } from '@/components/ui/command-palette';
 import {
+  Brain,
   File,
   FileDiff,
   Gauge,
@@ -48,6 +50,7 @@ export function AppShell() {
   const projectRef = useRef(project);
   projectRef.current = project;
   const collapsed = useStore(layout, state => state.inspectorCollapsed);
+  const railCollapsed = useStore(layout, state => state.railCollapsed);
   useEnsureLoaded(snapshot);
   useRefreshOn(['board'], snapshot);
   const current = useStore(snapshot, state => state.data);
@@ -118,30 +121,32 @@ export function AppShell() {
       if (!event.ctrlKey || event.altKey || event.metaKey) return;
       const key = event.key.toLowerCase();
       if (key === 'j') dispatch({ type: 'inspector.toggle' });
+      else if (key === 'b') layout.getState().toggleRail();
       else if (key === 'k') ui.getState().setPaletteOpen(!ui.getState().paletteOpen);
       else if (key === 'n') dispatch({ type: 'conversation.new' });
-      else if (/^[1-6]$/.test(key)) {
-        const tab = STAGE_TABS[Number(key) - 1];
-        if (tab) dispatch({ type: 'stage.open', tab });
-      } else return;
+      else return;
       event.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dispatch, ui]);
+  }, [dispatch, layout, ui]);
 
+  const rail = railCollapsed ? '0rem' : 'clamp(13rem,16vw,16rem)';
+  const panel = collapsed ? '0rem' : 'clamp(18rem,28vw,30rem)';
   return (
     <div className="flex h-dvh flex-col bg-canvas text-fg">
       <TitleBar />
       <div
+        data-rail={railCollapsed ? 'collapsed' : 'expanded'}
         data-inspector={collapsed ? 'collapsed' : 'expanded'}
+        style={{ gridTemplateColumns: `${rail} minmax(0,1fr) ${panel}` }}
         className={cn(
-          'grid min-h-0 flex-1 grid-cols-[clamp(13rem,16vw,16rem)_minmax(0,1fr)_clamp(18rem,28vw,30rem)]',
-          'data-[inspector=collapsed]:grid-cols-[clamp(13rem,16vw,16rem)_minmax(0,1fr)_0rem]',
+          'grid min-h-0 flex-1',
           'motion-safe:transition-[grid-template-columns] motion-safe:duration-200 motion-safe:ease-out',
         )}
       >
-        <Rail />
+        {/* A folded rail leaves the tab order too. */}
+        {railCollapsed ? <div aria-hidden="true" /> : <Rail />}
         <Stage />
         <Inspector />
       </div>
@@ -176,6 +181,7 @@ function EngineNotice() {
 const VIEW_ICONS = {
   chat: MessageSquare,
   kanban: KanbanSquare,
+  memory: Brain,
   cartography: Network,
   diffs: FileDiff,
   finops: Gauge,

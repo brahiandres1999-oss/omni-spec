@@ -35,6 +35,7 @@ export {
   ArchiveRestore,
   ArrowDownWideNarrow,
   ArrowRight,
+  Brain,
   Check,
   ChevronDown,
   ChevronRight,

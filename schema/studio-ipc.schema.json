@@ -474,6 +474,19 @@
         "type": "object"
       }
     },
+    "memory.summary": {
+      "direction": "host->engine",
+      "description": "What the project memory holds: counts, recent learnings and decisions.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
     "project.changed": {
       "direction": "engine->host",
       "description": "Areas whose data changed since the last request.",

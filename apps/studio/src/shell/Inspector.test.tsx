@@ -9,11 +9,9 @@ import {
   fileTree,
   installLayoutStub,
   scriptStudio,
-  snapshot,
   stubCanvas,
   stubWorker,
   threeHunkFile,
-  TREE_OID,
 } from '@/test/fixtures';
 
 let restoreLayout: () => void = () => undefined;
@@ -27,7 +25,7 @@ afterEach(() => {
   restoreLayout();
 });
 
-const inspectorTabs = () => within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('tablist');
+const inspectorTabs = () => within(screen.getByRole('complementary', { name: 'Resumen' })).getByRole('tablist');
 
 async function openInspectorTab(user: ReturnType<typeof userEvent.setup>, name: string): Promise<HTMLElement> {
   const tab = within(inspectorTabs()).getByRole('tab', { name });
@@ -40,70 +38,65 @@ async function openInspectorTab(user: ReturnType<typeof userEvent.setup>, name: 
   });
 }
 
-/** The leaf element whose text is exactly `text`. */
-function leaf(scope: HTMLElement, text: string): HTMLElement {
-  return within(scope).getByText(
-    (_content, element) => element?.textContent?.trim() === text && element.children.length === 0,
-  );
-}
-
 describe('SH inspector', () => {
-  test('SH-03 inspector tabs Terminal, Overview, FinOps, Files with arrow-key navigation', async () => {
+  test('SH-03 the Resumen panel has Revisión, Archivos and Terminal with arrow-key navigation', async () => {
     const fake = scriptStudio(new FakeTransport());
     const user = userEvent.setup();
     renderWithStudio(<AppShell />, { transport: fake });
-    await screen.findByRole('complementary', { name: 'Inspector' });
+    await screen.findByRole('complementary', { name: 'Resumen' });
 
     const tabs = within(inspectorTabs()).getAllByRole('tab');
-    expect(tabs.map(tab => tab.textContent?.trim())).toEqual(['Terminal', 'Overview', 'FinOps', 'Files']);
+    expect(tabs.map(tab => tab.textContent?.trim())).toEqual(['Revisión', 'Archivos', 'Terminal']);
 
-    const [terminal, overview] = tabs;
-    if (!terminal || !overview) throw new Error('missing inspector tabs');
-    await user.click(terminal);
-    expect(terminal).toHaveAttribute('aria-selected', 'true');
+    const [review, files] = tabs;
+    if (!review || !files) throw new Error('missing panel tabs');
+    await user.click(review);
+    expect(review).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{ArrowRight}');
-    expect(document.activeElement).toBe(overview);
-    expect(overview).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(files);
+    expect(files).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{ArrowLeft}');
-    expect(document.activeElement).toBe(terminal);
+    expect(document.activeElement).toBe(review);
   });
 
-  test('SH-11 the Overview tab shows breaker state, WAL size, tree OID and tasks in mono; no subagents or $', async () => {
-    for (const [walBytes, walText] of [
-      [0, '0 B'],
-      [12_698, '12.4 KB'],
-    ] as const) {
-      const fake = scriptStudio(new FakeTransport()).respond(
-        'project.snapshot',
-        snapshot({ memory: { walBytes, specsTreeOid: TREE_OID } }),
-      );
-      const user = userEvent.setup();
-      const view = renderWithStudio(<AppShell />, { transport: fake });
-      await screen.findByRole('complementary', { name: 'Inspector' });
-      const panel = await openInspectorTab(user, 'Overview');
+  test('SH-11 the Memoria page shows what the memory holds, with the empty states', async () => {
+    const fake = scriptStudio(new FakeTransport()).respond('memory.summary', {
+      mode: 'studio',
+      path: 'C:/Users/me/AppData/Local/OmniStudio/workspaces/abc/memory.db',
+      counts: { observations: 1, decisions: 0, conversations: 3, modules: 119, dependencies: 479 },
+      observations: [
+        {
+          category: 'gotcha',
+          scope: 'auth',
+          summary: 'El login usa cookies httpOnly',
+          createdAt: '2026-11-06T10:00:00Z',
+        },
+      ],
+      decisions: [],
+    });
+    const user = userEvent.setup();
+    renderWithStudio(<AppShell />, { transport: fake });
+    const rail = await screen.findByRole('navigation', { name: 'Conversaciones y proyectos' });
+    await user.click(
+      within(within(rail).getByRole('list', { name: 'Páginas' })).getByRole('button', { name: 'Memoria' }),
+    );
 
-      const values = await waitFor(() => [
-        leaf(panel, 'CLOSED'),
-        leaf(panel, walText),
-        leaf(panel, TREE_OID.slice(0, 7)),
-        leaf(panel, '4/7'),
-      ]);
-      for (const value of values) expect(value, value.textContent ?? '').toHaveClass('font-mono');
-      expect(panel.textContent).not.toContain(TREE_OID);
-      expect(panel.textContent).not.toMatch(/subagente/i);
-      expect(panel.textContent).not.toContain('$');
-      view.unmount();
-    }
+    const page = await screen.findByRole('region', { name: 'Memoria' });
+    expect(await within(page).findByText('El login usa cookies httpOnly')).toBeInTheDocument();
+    expect(within(page).getByText(/Trampa · auth/)).toBeInTheDocument();
+    expect(within(page).getByText('119')).toBeInTheDocument();
+    expect(within(page).getByText('Todavía no hay decisiones registradas.')).toBeInTheDocument();
+    expect(page).toHaveTextContent('Modo Studio');
   });
 
-  test('SH-12 the Files tab: virtualized files.tree, overscroll-contain, git marks; a modified file opens its diff', async () => {
+  test('SH-12 the Archivos tab: virtualized files.tree, overscroll-contain, git marks; a modified file opens its diff', async () => {
     const fake = scriptStudio(new FakeTransport())
       .respond('files.tree', fileTree(3_000))
       .respond('diff.get', diff([threeHunkFile(), threeHunkFile('CHANGELOG.md')]));
     const user = userEvent.setup();
     renderWithStudio(<AppShell />, { transport: fake });
-    await screen.findByRole('complementary', { name: 'Inspector' });
-    const panel = await openInspectorTab(user, 'Files');
+    await screen.findByRole('complementary', { name: 'Resumen' });
+    const panel = await openInspectorTab(user, 'Archivos');
 
     const tree = await within(panel).findByRole('tree');
     const region = panel.querySelector<HTMLElement>('[data-scroll-region="files"]');
@@ -121,8 +114,9 @@ describe('SH inspector', () => {
     expect(within(tree).getByRole('treeitem', { name: /README\.md/ })).not.toHaveAttribute('data-git', 'modified');
 
     await user.click(changelog);
-    const diffs = within(screen.getByRole('tablist', { name: 'Vistas' })).getByRole('tab', { name: 'Diffs' });
-    await waitFor(() => expect(diffs).toHaveAttribute('aria-selected', 'true'));
+    // A changed file opens in Revisión, in the same panel.
+    const review = within(inspectorTabs()).getByRole('tab', { name: 'Revisión' });
+    await waitFor(() => expect(review).toHaveAttribute('aria-selected', 'true'));
     await waitFor(() => expect(document.querySelector('[data-diff-file="CHANGELOG.md"]')).not.toBeNull());
   });
 });

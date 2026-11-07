@@ -35,6 +35,7 @@ import {
   STUDIO_METHODS,
 } from './protocol.mjs';
 import { addRemark, approveGate2, decideHunk, getDiff, getDiffFile, stageApproved } from './review.mjs';
+import { memorySummary } from './memory-summary.mjs';
 import { createConversationIndex, listConversationsAt, updateConversationAt } from './conversations.mjs';
 import { resolveWorkspace, sameRoot } from './workspace.mjs';
 
@@ -253,6 +254,7 @@ function createHandlers(root, memory, { version, actor, credentials, notify, wor
     'agent.reset': () => agents.reset(),
     'agent.sessions': () => agents.sessions(),
     'agent.resume': params => agents.resume(params),
+    'memory.summary': () => memorySummary(memory.db, workspace),
     // The rail lists every project: the open one from this engine's memory, the others read-only from theirs.
     'conversations.list': async ({ roots = [root], includeArchived = false }) => ({
       projects: await Promise.all(

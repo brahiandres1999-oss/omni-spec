@@ -276,6 +276,12 @@ export const STUDIO_METHODS = Object.freeze({
     anyObject,
     'Approve human gate 1 or 2 when its governance conditions hold.',
   ),
+  'memory.summary': method(
+    HOST,
+    object(),
+    anyObject,
+    'What the project memory holds: counts, recent learnings and decisions.',
+  ),
   'project.changed': method(
     ENGINE,
     object({ areas: { type: 'array', items: { enum: ['board', 'graph', 'diff', 'files', 'finops', 'skills'] } } }, [

@@ -17,17 +17,15 @@ afterEach(() => {
   restoreLayout();
 });
 
-const STAGE_TABS = ['Chat', 'Kanban', 'Cartografía', 'Diffs', 'FinOps', 'Skills'];
-
-function stageTabs(): HTMLElement {
-  return screen.getByRole('tablist', { name: 'Vistas' });
+/** The page the stage shows, as the breadcrumb says it («Proyecto / Specs»). */
+function currentPage(): string | null {
+  const crumb = screen.getByRole('navigation', { name: 'Ruta de la página' });
+  return crumb.querySelector('[aria-current="page"]')?.textContent?.trim() ?? null;
 }
 
-function selectedStageTab(): string | null {
-  const selected = within(stageTabs())
-    .getAllByRole('tab')
-    .find(tab => tab.getAttribute('aria-selected') === 'true');
-  return selected?.textContent?.trim() ?? null;
+function pageButton(name: string): HTMLElement {
+  const rail = screen.getByRole('navigation', { name: 'Conversaciones y proyectos' });
+  return within(within(rail).getByRole('list', { name: 'Páginas' })).getByRole('button', { name });
 }
 
 function viewState(name: string): string | null {
@@ -42,25 +40,25 @@ async function mountShell(fake = scriptStudio(new FakeTransport())) {
 }
 
 describe('SH three-column shell', () => {
-  test('SH-01 four landmark regions; the dock floats over the stage', async () => {
+  test('SH-01 four landmark regions and no dock: the stage shows one page', async () => {
     await mountShell();
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Conversaciones y proyectos' })).toBeInTheDocument();
-    const main = screen.getByRole('main');
-    expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument();
-    const dock = screen.getByRole('region', { name: 'Dock' });
-    expect(main).toContainElement(dock);
-    expect([...dock.classList].some(name => name === 'absolute' || name === 'fixed')).toBe(true);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Resumen' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Dock' })).toBeNull();
+    expect(screen.queryByRole('tablist', { name: 'Vistas' })).toBeNull();
+    expect(currentPage()).toBe('Specs');
   });
 
-  test('SH-02 the Inspector collapses with its button and Ctrl+J, motion-safe only, and the state persists', async () => {
+  test('SH-02 the Resumen panel folds with its button and Ctrl+J, the rail with Ctrl+B, motion-safe only, and both persist', async () => {
     const { fake, user, view } = await mountShell();
     const shell = () => {
       const element = document.querySelector<HTMLElement>('[data-inspector]');
       if (!element) throw new Error('the shell root must expose data-inspector');
       return element;
     };
-    const toggle = () => screen.getByRole('button', { name: 'Alternar Inspector' });
+    const toggle = () => screen.getByRole('button', { name: 'Mostrar u ocultar el panel Resumen' });
     expect(shell()).toHaveAttribute('data-inspector', 'expanded');
     expect(toggle()).toHaveAttribute('aria-expanded', 'true');
 
@@ -80,6 +78,13 @@ describe('SH three-column shell', () => {
 
     await user.keyboard('{Control>}j{/Control}');
     expect(shell()).toHaveAttribute('data-inspector', 'expanded');
+
+    expect(shell()).toHaveAttribute('data-rail', 'expanded');
+    await user.keyboard('{Control>}b{/Control}');
+    expect(shell()).toHaveAttribute('data-rail', 'collapsed');
+    expect(screen.queryByRole('navigation', { name: 'Conversaciones y proyectos' })).toBeNull();
+    await user.keyboard('{Control>}b{/Control}');
+    expect(shell()).toHaveAttribute('data-rail', 'expanded');
   });
 
   test('SH-05 switching project from the rail calls project.open, resets the stores and shows Loading', async () => {
@@ -96,38 +101,25 @@ describe('SH three-column shell', () => {
     expect(fake.calls('board.get').length).toBeGreaterThanOrEqual(2);
   });
 
-  test('SH-07 stage tabs switch with Ctrl+1…Ctrl+6 and the active tab persists', async () => {
+  test('SH-07 the rail opens the pages Specs, Memoria and Uso; the page persists', async () => {
     const { fake, user, view } = await mountShell();
-    const visibleTabs = () =>
-      within(stageTabs())
-        .getAllByRole('tab')
-        .map(tab => tab.textContent?.trim());
-    // Chat and Diffs stay on the bar; a view from "Más vistas" shows as a tab while it is open.
-    expect(visibleTabs()).toEqual(['Chat', 'Kanban', 'Diffs']);
-    expect(selectedStageTab()).toBe('Kanban');
-    expect(screen.getByRole('button', { name: /Más vistas/ })).toBeInTheDocument();
-    expect(STAGE_TABS).toHaveLength(6);
+    expect(pageButton('Specs')).toHaveAttribute('aria-current', 'page');
 
-    for (const [key, name] of [
-      ['3', 'Cartografía'],
-      ['6', 'Skills'],
-      ['1', 'Chat'],
-      ['4', 'Diffs'],
-      ['2', 'Kanban'],
-      ['5', 'FinOps'],
-    ] as const) {
-      await user.keyboard(`{Control>}${key}{/Control}`);
-      expect(selectedStageTab(), `Ctrl+${key}`).toBe(name);
-    }
+    await user.click(pageButton('Memoria'));
+    expect(currentPage()).toBe('Memoria');
+    expect(screen.getByRole('region', { name: 'Memoria' })).toBeInTheDocument();
+    await user.click(pageButton('Uso'));
+    expect(currentPage()).toBe('Uso');
+    expect(pageButton('Uso')).toHaveAttribute('aria-current', 'page');
 
     view.unmount();
     renderWithStudio(<AppShell />, { transport: fake });
-    await waitFor(() => expect(selectedStageTab()).toBe('FinOps'));
+    await waitFor(() => expect(currentPage()).toBe('Uso'));
   });
 
   test('SH-10 Ctrl+K opens a modal palette with fuzzy search; Esc closes it and restores focus', async () => {
     const { user } = await mountShell();
-    const origin = within(stageTabs()).getByRole('tab', { name: 'Kanban' });
+    const origin = pageButton('Specs');
     act(() => origin.focus());
 
     await user.keyboard('{Control>}k{/Control}');

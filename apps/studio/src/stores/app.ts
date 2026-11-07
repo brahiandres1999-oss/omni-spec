@@ -1,6 +1,6 @@
 /**
  * App-level stores: the project snapshot and recent projects (one per window), transient UI state (palette,
- * dock draft, focus requests) and the per-project domain stores, recreated when the project switches (EG-08).
+ * focus requests, a conversation pending a project switch) and the per-project domain stores, recreated when the project switches (EG-08).
  */
 import { createStore } from 'zustand/vanilla';
 import type { StudioClient } from '@/ipc/client';
@@ -78,16 +78,12 @@ export interface UiState {
   /** Element focused when the palette opened; focus returns there on close (SH-10). */
   paletteOrigin: HTMLElement | null;
   settingsOpen: boolean;
-  dock: { mode: string | null; draft: string; focusNonce: number };
   diffFocus: { path: string; nonce: number } | null;
   /** Engine lifecycle shown by the shell banner. */
   engine: { status: 'ok' | 'restarting' | 'dead' | 'error'; message?: string };
   setEngine(engine: UiState['engine']): void;
   setPaletteOpen(open: boolean): void;
   setSettingsOpen(open: boolean): void;
-  setDockMode(mode: string): void;
-  setDockDraft(draft: string): void;
-  focusDock(patch?: { mode?: string; draft?: string }): void;
   focusDiffFile(path: string): void;
   /** Conversation to open once the engine of another project is up (a click in the rail switched project). */
   pendingConversation: { root: string; sessionId: string } | null;
@@ -99,7 +95,6 @@ export function createUiStore() {
     paletteOpen: false,
     paletteOrigin: null,
     settingsOpen: false,
-    dock: { mode: null, draft: '', focusNonce: 0 },
     diffFocus: null,
     engine: { status: 'ok' },
     pendingConversation: null,
@@ -115,9 +110,6 @@ export function createUiStore() {
           : { paletteOpen },
       ),
     setSettingsOpen: settingsOpen => set({ settingsOpen }),
-    setDockMode: mode => set({ dock: { ...get().dock, mode } }),
-    setDockDraft: draft => set({ dock: { ...get().dock, draft } }),
-    focusDock: (patch = {}) => set({ dock: { ...get().dock, ...patch, focusNonce: get().dock.focusNonce + 1 } }),
     focusDiffFile: path => set({ diffFocus: { path, nonce: (get().diffFocus?.nonce ?? 0) + 1 } }),
   }));
 }

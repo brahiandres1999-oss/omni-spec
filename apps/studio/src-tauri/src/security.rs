@@ -26,6 +26,7 @@ pub const ALLOWED_ENGINE_METHODS: &[&str] = &[
     "files.tree",
     "finops.snapshot",
     "gate.approve",
+    "memory.summary",
     "project.snapshot",
     "review.addRemark",
     "review.decideHunk",

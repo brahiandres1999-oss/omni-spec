@@ -588,6 +588,13 @@ export function scriptStudio(fake: FakeTransport): FakeTransport {
     .respond('conversations.list', (args: InvokeArgs) => ({
       projects: ((args.roots as string[] | undefined) ?? []).map(root => ({ root, conversations: [] })),
     }))
+    .respond('memory.summary', {
+      mode: 'project',
+      path: 'C:/dev/omni-spec/specs/.omni/memory.db',
+      counts: { observations: 0, decisions: 0, conversations: 0, modules: 0, dependencies: 0 },
+      observations: [],
+      decisions: [],
+    })
     .respond('project.pick', null)
     .respond('recent.remove', { entries: [] })
     .respond('pty.open', { id: 'pty-1' })

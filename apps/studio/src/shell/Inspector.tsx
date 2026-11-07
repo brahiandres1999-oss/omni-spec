@@ -1,6 +1,7 @@
 /**
- * Inspector (SH-03, SH-11, SH-12): Terminal, Overview (breaker, WAL, Git tree OID, tasks — all mono, no
- * subagents and no dollar cost, D-20), live FinOps meter and the project file tree.
+ * «Resumen» panel (docs/STUDIO-AGENT-COCKPIT.md, Fase 3 Q14; SH-03, SH-11, SH-12): Revisión (the working tree
+ * diff for now; per conversation in vuelta 2b), Archivos and Terminal. It starts closed and never opens by
+ * itself: Ctrl+J or the button at the end of the top row. Overview and FinOps left it; FinOps is the Uso page.
  */
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type KeyboardEvent, useRef, useState } from 'react';
@@ -9,13 +10,11 @@ import { useEnsureLoaded, useRefreshOn, useStudio } from '@/app/studio-context';
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen, Icon } from '@/components/ui/icon';
 import { InspectorDrawer } from '@/components/ui/inspector-drawer';
 import { cn, focusRingInset, mono } from '@/components/ui/interaction';
-import { BreakerPill } from '@/components/ui/status-pill';
 import { ErrorState, rowHeightClass, SkeletonRow } from '@/components/ui/view-state';
 import { rowHeights } from '@/design/tokens';
-import { formatBytes, formatInt, messages } from '@/i18n/messages.es';
-import { worstBreaker } from '@/stores/app';
+import { messages } from '@/i18n/messages.es';
 import { flattenTree } from '@/stores/files';
-import { useLiveFinops, credentialLabel, Sparkline } from '@/views/FinopsView';
+import { DiffView } from '@/views/DiffView';
 import { TerminalPanel } from './TerminalPanel';
 
 export function Inspector() {
@@ -29,93 +28,23 @@ export function Inspector() {
       tab={tab}
       onTabChange={value => layout.getState().setInspectorTab(value)}
       panels={[
+        { value: 'review', label: labels.review, content: <ReviewPanel /> },
+        { value: 'files', label: labels.files, content: <FilesPanel /> },
         {
           value: 'terminal',
           label: labels.terminal,
           content: <TerminalPanel visible={tab === 'terminal' && !collapsed} />,
           keepMounted: true,
         },
-        { value: 'overview', label: labels.overview, content: <OverviewPanel /> },
-        { value: 'finops', label: labels.finops, content: <FinopsPanel /> },
-        { value: 'files', label: labels.files, content: <FilesPanel /> },
       ]}
     />
   );
 }
 
-function OverviewPanel() {
-  const { snapshot, project } = useStudio();
-  useEnsureLoaded(snapshot);
-  const data = useStore(snapshot, state => state.data);
-  const board = useStore(
-    useStore(project.board, state => state.resource),
-    state => state.data,
-  );
-  if (!data)
-    return (
-      <div className="space-y-2 p-3">
-        {[0, 1, 2, 3].map(key => (
-          <SkeletonRow key={key} token="list" />
-        ))}
-      </div>
-    );
-  const activeId = data.activeSpec?.id;
-  const card = board?.lanes.flatMap(lane => lane.cards).find(entry => entry.id === activeId);
-  const tasks = data.activeSpec?.tasks ?? card?.tasks ?? undefined;
-  return (
-    <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 p-4 text-xs">
-      <dt className="text-fg-muted">{messages.overview.breaker}</dt>
-      <dd className="justify-self-end">
-        <BreakerPill state={worstBreaker(data)} />
-      </dd>
-      <dt className="text-fg-muted">{messages.overview.wal}</dt>
-      <dd className={cn('justify-self-end text-fg', mono)}>{formatBytes(data.memory.walBytes)}</dd>
-      <dt className="text-fg-muted">{messages.overview.tree}</dt>
-      <dd className={cn('justify-self-end text-fg', mono)} title={data.memory.specsTreeOid}>
-        {data.memory.specsTreeOid.slice(0, 7)}
-      </dd>
-      <dt className="min-w-0 truncate text-fg-muted">
-        {messages.overview.tasks}
-        {data.activeSpec ? <span className={cn('ms-1', mono)}>{data.activeSpec.slug}</span> : null}
-      </dt>
-      <dd className={cn('justify-self-end text-fg', mono)}>
-        {tasks ? `${tasks.done}/${tasks.total}` : messages.overview.noSpec}
-      </dd>
-    </dl>
-  );
-}
-
-function FinopsPanel() {
-  const { project } = useStudio();
-  const resource = useLiveFinops(project.finops);
-  const data = useStore(resource, state => state.data);
-  const samples = useStore(project.finops, state => state.history);
-  if (!data)
-    return (
-      <div className="space-y-2 p-3">
-        {[0, 1, 2].map(key => (
-          <SkeletonRow key={key} token="list" />
-        ))}
-      </div>
-    );
-  const worst = data.tasks.find(task => task.state === 'OPEN') ?? data.tasks[0];
-  const source = credentialLabel(data.credentialSource);
-  return (
-    <div className="flex flex-col gap-3 p-4 text-xs">
-      <span className={cn('text-2xl font-semibold text-fg', mono)}>{`${formatInt(data.tokensPerSecond)} t/s`}</span>
-      <Sparkline samples={samples} />
-      <span className="text-fg-muted">
-        {messages.finops.session}: <span className={cn('text-fg', mono)}>{formatInt(data.session.tokens)}</span> /{' '}
-        <span className={mono}>{formatInt(data.limits.tokenBudget)}</span>
-      </span>
-      {worst ? (
-        <span className="flex items-center gap-2 text-fg-muted">
-          {messages.overview.breaker} <BreakerPill state={worst.state} />
-        </span>
-      ) : null}
-      {source ? <span className="text-fg-muted">{source}</span> : null}
-    </div>
-  );
+function ReviewPanel() {
+  const { snapshot } = useStudio();
+  const spec = useStore(snapshot, state => state.data?.activeSpec?.id ?? '');
+  return <DiffView spec={spec} />;
 }
 
 function FilesPanel() {

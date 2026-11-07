@@ -67,6 +67,7 @@ export interface EngineRequestParams {
     readonly gate: 1 | 2;
     readonly actor?: string;
   };
+  readonly 'memory.summary': Record<string, never>;
   readonly 'project.snapshot': Record<string, never>;
   readonly 'review.addRemark': {
     readonly spec?: string;
@@ -118,5 +119,5 @@ export interface EngineEventPayloads {
 export type EngineRequest = keyof EngineRequestParams;
 export type EngineEvent = keyof EngineEventPayloads;
 
-export const ENGINE_REQUESTS: readonly EngineRequest[] = ['agent.cancel', 'agent.permission', 'agent.prompt', 'agent.reset', 'agent.resume', 'agent.sessions', 'agent.status', 'blastRadius.heat', 'board.get', 'cartography.graph', 'conversations.archive', 'conversations.list', 'conversations.rename', 'diff.get', 'diff.getFile', 'files.tree', 'finops.snapshot', 'gate.approve', 'project.snapshot', 'review.addRemark', 'review.decideHunk', 'review.stageApproved', 'skills.list', 'skills.toggle', 'studio.challenge'];
+export const ENGINE_REQUESTS: readonly EngineRequest[] = ['agent.cancel', 'agent.permission', 'agent.prompt', 'agent.reset', 'agent.resume', 'agent.sessions', 'agent.status', 'blastRadius.heat', 'board.get', 'cartography.graph', 'conversations.archive', 'conversations.list', 'conversations.rename', 'diff.get', 'diff.getFile', 'files.tree', 'finops.snapshot', 'gate.approve', 'memory.summary', 'project.snapshot', 'review.addRemark', 'review.decideHunk', 'review.stageApproved', 'skills.list', 'skills.toggle', 'studio.challenge'];
 export const ENGINE_EVENTS: readonly EngineEvent[] = ['agent.event', 'finops.tick', 'project.changed'];

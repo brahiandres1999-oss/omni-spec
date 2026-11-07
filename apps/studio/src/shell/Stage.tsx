@@ -1,36 +1,29 @@
 /**
- * Central stage (SH-01, SH-07): Chat and Diffs on the tab bar, the other views under "Más vistas" (all on
- * Ctrl+1…Ctrl+6, persisted), and the floating dock outside the chat. On the chat, the same row carries the
- * agent status, so the chat starts right under the tabs.
- * Only the active view is mounted; its data stays in the stores, so switching back is instant.
+ * Central stage (docs/STUDIO-AGENT-COCKPIT.md, Fase 3 vuelta 2a): one page at a time, chosen from the rail —
+ * the conversation, or Specs, Memoria, Uso (Cartografía, Diffs and Skills stay reachable from Ctrl+K until
+ * they move into the panel and Ajustes). The top row says where you are («Proyecto / Título») and, on the
+ * conversation, carries the agent status; the last button folds the «Resumen» panel (Ctrl+J).
+ * Only the active page is mounted; its data stays in the stores, so switching back is instant.
  */
 import { useStore } from 'zustand';
 import { useStudio } from '@/app/studio-context';
 import { Button } from '@/components/ui/button';
-import {
-  FileDiff,
-  Gauge,
-  Icon,
-  KanbanSquare,
-  LayoutGrid,
-  MessageSquare,
-  Network,
-  PanelRight,
-  Sparkles,
-} from '@/components/ui/icon';
-import { OptionMenu } from '@/components/ui/option-menu';
+import { ChevronRight, Icon, PanelRight } from '@/components/ui/icon';
 import { ProtectedState } from '@/components/ui/ProtectedState';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorState, SkeletonBar } from '@/components/ui/view-state';
 import { messages } from '@/i18n/messages.es';
-import { STAGE_TABS, type StageTab } from '@/stores/layout';
+import { rootKey } from '@/stores/conversations';
+import type { StageTab } from '@/stores/layout';
 import { BoardView } from '@/views/BoardView';
 import { CartographyView } from '@/views/CartographyView';
 import { ChatHeader, ChatView } from '@/views/ChatView';
 import { DiffView } from '@/views/DiffView';
 import { FinopsView } from '@/views/FinopsView';
+import { MemoryView } from '@/views/MemoryView';
 import { SkillsView } from '@/views/SkillsView';
-import { Dock } from './Dock';
+import { projectName } from './TitleBar';
+
+const t = messages.shell;
 
 function InspectorToggle() {
   const { layout, dispatch } = useStudio();
@@ -39,9 +32,9 @@ function InspectorToggle() {
     <Button
       size="icon-sm"
       variant="ghost"
-      aria-label={messages.shell.toggleInspector}
+      aria-label={t.toggleInspector}
       aria-expanded={!collapsed}
-      title={`${messages.shell.toggleInspector} (Ctrl+J)`}
+      title={`${t.toggleInspector} (Ctrl+J)`}
       onClick={() => dispatch({ type: 'inspector.toggle' })}
     >
       <Icon icon={PanelRight} />
@@ -49,20 +42,7 @@ function InspectorToggle() {
   );
 }
 
-const ICONS = {
-  chat: MessageSquare,
-  kanban: KanbanSquare,
-  cartography: Network,
-  diffs: FileDiff,
-  finops: Gauge,
-  skills: Sparkles,
-} as const;
-
-/** Views always on the tab bar; the others live in "Más vistas" and show as a tab while open. */
-const PRIMARY_TABS: readonly StageTab[] = ['chat', 'diffs'];
-const SECONDARY_TABS = STAGE_TABS.filter(value => !PRIMARY_TABS.includes(value));
-
-function ActiveView({ tab }: { tab: StageTab }) {
+function ActivePage({ tab }: { tab: StageTab }) {
   const { snapshot } = useStudio();
   const spec = useStore(snapshot, state => state.data?.activeSpec?.id ?? '');
   switch (tab) {
@@ -70,15 +50,42 @@ function ActiveView({ tab }: { tab: StageTab }) {
       return <ChatView />;
     case 'kanban':
       return <BoardView />;
+    case 'memory':
+      return <MemoryView />;
+    case 'finops':
+      return <FinopsView />;
     case 'cartography':
       return <CartographyView />;
     case 'diffs':
       return <DiffView spec={spec} />;
-    case 'finops':
-      return <FinopsView />;
     case 'skills':
       return <SkillsView />;
   }
+}
+
+/** «Proyecto / Título»: the conversation's title on the chat, the page's name elsewhere. */
+function Breadcrumb({ tab }: { tab: StageTab }) {
+  const { projectId, project, conversations } = useStudio();
+  const sessionId = useStore(project.chat, state => state.sessionId);
+  const title = useStore(conversations, state =>
+    projectId && sessionId
+      ? state.byRoot[rootKey(projectId)]?.find(entry => entry.sessionId === sessionId)?.title
+      : undefined,
+  );
+  const here = tab === 'chat' ? (title ?? t.untitledConversation) : t.tabs[tab];
+  return (
+    <nav aria-label={t.breadcrumb} className="flex min-w-0 items-center gap-1.5 text-[13px]">
+      {projectId ? (
+        <>
+          <span className="shrink-0 text-fg-muted">{projectName(projectId)}</span>
+          <Icon icon={ChevronRight} className="text-fg-muted/70" />
+        </>
+      ) : null}
+      <span aria-current="page" className="truncate font-medium text-fg" title={here}>
+        {here}
+      </span>
+    </nav>
+  );
 }
 
 export function Stage() {
@@ -89,55 +96,35 @@ export function Stage() {
 
   return (
     <main className="relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] bg-canvas">
-      <Tabs value={tab} onValueChange={value => layout.getState().setStageTab(value as StageTab)} className="contents">
-        {/* A size container: the chat status drops detail as this row narrows, not the window. */}
-        <div className="@container flex h-11 min-w-0 items-center gap-2 border-b border-divider px-3">
-          <TabsList aria-label={messages.shell.stageTabs}>
-            {STAGE_TABS.filter(value => PRIMARY_TABS.includes(value) || value === tab).map(value => (
-              <TabsTrigger key={value} value={value} className="ps-2.5 pe-3.5">
-                <Icon icon={ICONS[value]} />
-                {messages.shell.tabs[value]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <OptionMenu
-            label={messages.shell.moreViews}
-            value={SECONDARY_TABS.includes(tab) ? tab : ''}
-            options={SECONDARY_TABS.map(value => ({ value, label: messages.shell.tabs[value] }))}
-            icon={LayoutGrid}
-            display={messages.shell.moreViews}
-            side="bottom"
-            onChange={value => layout.getState().setStageTab(value as StageTab)}
-          />
-          <span className="flex-1" />
-          {tab === 'chat' && projectId !== null ? (
-            <>
-              <ChatHeader />
-              <span aria-hidden="true" className="h-5 w-px shrink-0 bg-divider" />
-            </>
-          ) : null}
-          <InspectorToggle />
+      {/* A size container: the chat status drops detail as this row narrows, not the window. */}
+      <div className="@container flex h-11 min-w-0 items-center gap-2 border-b border-divider px-4">
+        <Breadcrumb tab={tab} />
+        <span className="flex-1" />
+        {tab === 'chat' && projectId !== null ? (
+          <>
+            <ChatHeader />
+            <span aria-hidden="true" className="h-5 w-px shrink-0 bg-divider" />
+          </>
+        ) : null}
+        <InspectorToggle />
+      </div>
+      {projectId === null ? (
+        <div className="min-h-0">
+          {snapshotStatus === 'error' ? (
+            <ErrorState error={snapshotError} onRetry={() => void snapshot.getState().retry()} />
+          ) : snapshotStatus === 'protected' ? (
+            <ProtectedState reason={snapshotError?.detail ?? ''} />
+          ) : (
+            <div aria-busy="true" className="flex h-12 items-center gap-3 border-b border-divider px-4">
+              <SkeletonBar className="w-48" />
+            </div>
+          )}
         </div>
-        {projectId === null ? (
-          <div className="min-h-0">
-            {snapshotStatus === 'error' ? (
-              <ErrorState error={snapshotError} onRetry={() => void snapshot.getState().retry()} />
-            ) : snapshotStatus === 'protected' ? (
-              <ProtectedState reason={snapshotError?.detail ?? ''} />
-            ) : (
-              <div aria-busy="true" className="flex h-12 items-center gap-3 border-b border-divider px-4">
-                <SkeletonBar className="w-48" />
-              </div>
-            )}
-          </div>
-        ) : (
-          <TabsContent value={tab} className="min-h-0">
-            <ActiveView key={projectId} tab={tab} />
-          </TabsContent>
-        )}
-      </Tabs>
-      {/* The chat has its own composer; the terminal dock stays for the other views. */}
-      {tab === 'chat' ? null : <Dock />}
+      ) : (
+        <div className="min-h-0">
+          <ActivePage key={projectId} tab={tab} />
+        </div>
+      )}
     </main>
   );
 }

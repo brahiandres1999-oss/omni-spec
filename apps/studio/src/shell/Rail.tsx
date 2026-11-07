@@ -15,14 +15,18 @@ import { Button } from '@/components/ui/button';
 import {
   Archive,
   ArchiveRestore,
+  Brain,
   ChevronDown,
   ChevronRight,
   Ellipsis,
   Folder,
   FolderOpen,
   FolderPlus,
+  Gauge,
   History,
   Icon,
+  KanbanSquare,
+  type LucideIcon,
   MessageSquarePlus,
   Pencil,
   Plus,
@@ -34,6 +38,7 @@ import { cn, focusRing, press } from '@/components/ui/interaction';
 import type { RecentProject } from '@/ipc/types';
 import { formatAgo, messages } from '@/i18n/messages.es';
 import { type ConversationSummary, rootKey, sameRoot } from '@/stores/conversations';
+import type { StageTab } from '@/stores/layout';
 import { readJson, writeJson } from '@/stores/storage';
 import { TerminalSessionsDialog } from './TerminalSessionsDialog';
 import { projectName } from './TitleBar';
@@ -69,6 +74,35 @@ const smallIcon = cn(
   press,
   focusRing,
 );
+
+/** Pages of the project, opened in the center (Fase 3, Q11). */
+const PAGES: ReadonlyArray<{ tab: StageTab; icon: LucideIcon }> = [
+  { tab: 'kanban', icon: KanbanSquare },
+  { tab: 'memory', icon: Brain },
+  { tab: 'finops', icon: Gauge },
+];
+
+function Pages() {
+  const { layout } = useStudio();
+  const current = useStore(layout, state => state.stageTab);
+  return (
+    <ul aria-label={t.pages} className="flex flex-col gap-0.5">
+      {PAGES.map(page => (
+        <li key={page.tab}>
+          <button
+            type="button"
+            aria-current={current === page.tab ? 'page' : undefined}
+            onClick={() => layout.getState().setStageTab(page.tab)}
+            className={cn(rowButton(current === page.tab), 'ps-2.5 pe-2')}
+          >
+            <Icon icon={page.icon} className={current === page.tab ? 'text-accent' : undefined} />
+            {t.tabs[page.tab]}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** Accent- and case-insensitive text for the search. */
 const fold = (text: string) =>
@@ -422,6 +456,7 @@ export function Rail() {
           className="min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-fg-muted"
         />
       </label>
+      <Pages />
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain">
         {results ? (
           <section aria-label={t.searchConversations}>

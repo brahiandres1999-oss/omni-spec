@@ -19,12 +19,12 @@ if (typeof HTMLElement !== 'undefined' && !('draggable' in HTMLElement.prototype
   });
 }
 
-// The governance-view tests predate the chat tab: they start from the layout that opened on Kanban. Chat
-// tests clear this key to get the real first-run default.
+// The governance-view tests predate the chat: they start on the Specs page (kanban) with the Resumen panel open.
+// Chat tests clear this key to get the real first-run default (chat, panel closed).
 beforeEach(() => {
   globalThis.localStorage?.setItem(
-    'omni-studio:layout.v2',
-    JSON.stringify({ inspectorCollapsed: false, inspectorTab: 'overview', stageTab: 'kanban' }),
+    'omni-studio:layout.v3',
+    JSON.stringify({ railCollapsed: false, inspectorCollapsed: false, inspectorTab: 'files', stageTab: 'kanban' }),
   );
 });
 

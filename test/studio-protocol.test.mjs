@@ -188,6 +188,7 @@ describe('PR method registry and schema', () => {
       'fs.changed',
       'fs.rescan',
       'gate.approve',
+      'memory.summary',
       'project.changed',
       'project.snapshot',
       'review.addRemark',

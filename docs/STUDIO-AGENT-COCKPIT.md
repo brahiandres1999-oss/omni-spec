@@ -56,8 +56,8 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 
 **Método de cada vuelta.**
 1. El usuario manda una captura de la app real y elige el tema.
-2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-21** y el próximo
-   de la UI es **CH-15** (SH-xx para el resto del shell).
+2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-22** y el próximo
+   de la UI es **CH-15** (SH-xx para el resto del shell; SH-11 pasó a ser la página Memoria).
 3. Pasan las tres comprobaciones de arriba.
 4. El usuario lo prueba en la app (reinicio completo si se tocó el motor) y manda captura.
 5. Se actualiza este documento (tabla de vueltas de la Fase 3, hechos verificados) y se hace **un commit por
@@ -75,7 +75,9 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 | Tests del driver (AG-xx) y CLI simulada | `test/studio-agents.test.mjs`, `test-support/fake-claude.mjs` |
 | Estado del chat (eventos → transcript, uso, opciones) | `apps/studio/src/stores/chat.ts` |
 | Chat, compositor y `ChatHeader` (estado del agente) | `apps/studio/src/views/ChatView.tsx` |
-| Fila de pestañas donde vive `ChatHeader` | `apps/studio/src/shell/Stage.tsx` |
+| Centro: una página a la vez, ruta «Proyecto / Título» y `ChatHeader` | `apps/studio/src/shell/Stage.tsx` (páginas en `stores/layout.ts`, layout `v3`) |
+| Página Memoria y su resumen en el motor | `apps/studio/src/views/MemoryView.tsx`, `src/studio/memory-summary.mjs` (método `memory.summary`, test AG-21) |
+| Panel derecho «Resumen» (Revisión, Archivos, Terminal) | `apps/studio/src/shell/Inspector.tsx` (tests SH-03, SH-12) |
 | Panel izquierdo: «Nueva conversación», buscador, árbol Proyectos → Conversaciones | `apps/studio/src/shell/Rail.tsx`, store `apps/studio/src/stores/conversations.ts`, tests SH-04 y CH-11 a CH-14 |
 | «Retomar sesión de la terminal…» | `apps/studio/src/shell/TerminalSessionsDialog.tsx` |
 | Proyectos recientes, quitar uno y selector de carpetas (host) | `apps/studio/src-tauri/src/recent.rs`, `commands.rs` (`recent_remove`, `project_pick`); tests RP-01 a RP-04 |
@@ -202,7 +204,8 @@ resumen), varias cuentas por agente y una versión comercial.
 | Vuelta | Contenido | Estado |
 |---|---|---|
 | 1 · Panel izquierdo | Árbol Proyectos → Conversaciones, selector de carpetas, índice en la memoria, títulos, renombrar, archivar, buscador, «Retomar sesión de la terminal…» (Claude), specs fuera del panel. Su commit incluye el trabajo pendiente de la Fase 2.6 vuelta 2 | **Probada en la app el 2026-11-06**: todo funciona salvo Ctrl+N, que abría una ventana nueva de WebView2 (corregido; falta volver a probarlo) |
-| 2 · Layout | Ruta y compositor con selectores, cola y «+»; panel Resumen; páginas Specs, Memoria y Uso; Ajustes modal; fuera pestañas, Dock e Inspector | |
+| 2a · Estructura | Fuera pestañas y Dock; ruta «Proyecto / Título» arriba; páginas Specs, Memoria y Uso en el panel izquierdo; panel derecho «Resumen» (Revisión, Archivos, Terminal) cerrado por defecto; Ctrl+B y Ctrl+J | **Hecha en código, falta probarla en la app** (ver abajo) |
+| 2b · Compositor y revisión | Modelo agrupado por agente con razonamiento, permisos, cola y «+» en el compositor; Revisión de esta conversación con +N −M e Impacto; Ajustes modal con Skills en Personalizaciones | |
 | 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | |
 | 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | |
 | 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | |
@@ -224,6 +227,18 @@ Codex; la memoria después, para probarla con dos proveedores.
 7. Ctrl+N abre una conversación nueva. WebView2 reserva ese atajo para «ventana nueva»: el host rechaza toda ventana
    nueva (`on_new_window` en `lib.rs`, test WN-05) y los enlaces web del chat se abren en el navegador.
 8. Pendiente de la Fase 2.6: el aviso de cambio de modelo.
+
+**Vuelta 2a · por comprobar en la app** (reinicio completo: cambiaron el motor y el host):
+1. No hay pestañas ni Dock. Arriba del centro, «ClubGixxerMedellin › título de la conversación» (o «Nueva conversación»).
+2. En el panel izquierdo, debajo del buscador: Specs, Memoria y Uso abren su página en el centro; un clic en una
+   conversación vuelve al chat.
+3. Memoria muestra cuántos aprendizajes, decisiones, conversaciones y módulos guarda el proyecto (hoy casi todo en
+   cero salvo el grafo: los agentes empiezan a escribir en la vuelta 5).
+4. El panel derecho «Resumen» arranca cerrado y no se abre solo; Ctrl+J o el botón del final de la fila lo abren,
+   con Revisión, Archivos y Terminal. Un archivo cambiado en Archivos se abre en Revisión.
+5. Ctrl+B oculta y muestra el panel izquierdo.
+6. «Nueva Spec» (Ctrl+K) abre el chat con `/omni-specify ` escrito.
+7. Cartografía, Diffs y Skills siguen en Ctrl+K hasta la vuelta 2b.
 
 **Límites conocidos de la vuelta 1** (se resuelven más adelante): cambiar de proyecto todavía reinicia el motor y
 corta la conversación en curso (vuelta 3); «Retomar sesión de la terminal…» solo está en el proyecto abierto;
@@ -313,6 +328,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose
 | `agent.reset` | host→engine | Cierra la conversación y empieza una nueva |
 | `agent.sessions` | host→engine | Conversaciones anteriores de la carpeta, la más reciente primero: `{id, title, updatedAt}` |
 | `agent.resume` | host→engine | Carga una conversación anterior (`sessionId`): devuelve su historial como `agent.event` (más `user` para los prompts), su título, el contexto y el costo guardados; el próximo mensaje la continúa con `--resume`. Si venía de la terminal, entra en el índice |
+| `memory.summary` | host→engine | Lo que guarda la memoria del proyecto: conteos, últimos aprendizajes y decisiones, modo y ruta |
 | `conversations.list` | host→engine | Conversaciones de Studio de cada proyecto (`roots`), la de actividad más reciente primero. La del proyecto abierto sale de su memoria; las otras se leen sin crear nada |
 | `conversations.rename` / `conversations.archive` | host→engine | Renombra o archiva una conversación de cualquier proyecto de la lista; nunca toca el historial del agente |
 | `recent.remove` / `project.pick` | host (Rust) | Quita un proyecto de la lista (sin tocar su carpeta) / abre el selector de carpetas nativo |

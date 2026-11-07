@@ -129,17 +129,21 @@ export function StudioProvider({ client, children, onAction, terminalFactory = n
           layout.getState().toggleInspector();
           break;
         case 'spec.new':
-          ui.getState().focusDock({ mode: 'omni-specify' });
+          // The chat is the cockpit: a new spec starts as a conversation that runs the OmniSpec skill.
+          layout.getState().setStageTab('chat');
+          current.chat.getState().setDraft('/omni-specify ');
           break;
         case 'spec.hotfix':
-          ui.getState().focusDock({ mode: 'omni-specify', draft: '--light ' });
+          layout.getState().setStageTab('chat');
+          current.chat.getState().setDraft('/omni-specify --light ');
           break;
         case 'spec.focus':
           layout.getState().setStageTab('kanban');
           current.board.getState().requestFocus(action.id);
           break;
         case 'file.open':
-          layout.getState().setStageTab('diffs');
+          layout.getState().setInspectorCollapsed(false);
+          layout.getState().setInspectorTab('review');
           ui.getState().focusDiffFile(action.path);
           break;
         case 'project.scan':

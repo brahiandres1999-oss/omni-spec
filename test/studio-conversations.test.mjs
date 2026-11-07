@@ -166,3 +166,18 @@ describe('AG Studio conversation index', () => {
     assert.doesNotThrow(() => emit({ kind: 'init', sessionId: 'S2' }));
   });
 });
+
+describe('AG memory summary', () => {
+  test('AG-21 the Memoria page counts what the memory holds, including Studio conversations', async () => {
+    const { memorySummary } = await import('../src/studio/memory-summary.mjs');
+    const db = new DatabaseSync(':memory:');
+    db.exec(`CREATE TABLE observations (category TEXT, scope TEXT, summary TEXT, created_at TEXT);
+      CREATE TABLE decisions (topic TEXT, status TEXT, basis TEXT, recorded_at TEXT);
+      INSERT INTO observations VALUES ('gotcha', 'auth', 'El login usa cookies httpOnly', '2026-11-06T10:00:00Z');`);
+    createConversationIndex(db).record({ agent: 'claude', sessionId: 'a', title: 'hola' });
+    const summary = memorySummary(db, { mode: 'studio', memoryPath: 'C:wsmemory.db' });
+    assert.deepEqual(summary.counts, { observations: 1, decisions: 0, conversations: 1, modules: 0, dependencies: 0 });
+    assert.equal(summary.observations[0].summary, 'El login usa cookies httpOnly');
+    assert.equal(summary.mode, 'studio');
+  });
+});

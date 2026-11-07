@@ -66,13 +66,15 @@ describe('CH chat view', () => {
     globalThis.localStorage?.clear();
   });
 
-  test('CH-03 first run opens on the chat and the terminal dock is not shown there', async () => {
+  test('CH-03 first run opens on the conversation with the Resumen panel closed, and there is no dock', async () => {
     const restoreLayout = installLayoutStub();
     stubCanvas();
     stubWorker();
     renderWithStudio(<AppShell />, { transport: scriptStudio(chatTransport()) });
     await screen.findByRole('region', { name: 'Chat con el agente' });
-    expect(screen.getByRole('tab', { name: /Chat/ })).toHaveAttribute('aria-selected', 'true');
+    const crumb = screen.getByRole('navigation', { name: 'Ruta de la página' });
+    expect(crumb.querySelector('[aria-current="page"]')).toHaveTextContent('Nueva conversación');
+    expect(document.querySelector('[data-inspector]')).toHaveAttribute('data-inspector', 'collapsed');
     expect(screen.queryByRole('region', { name: 'Dock' })).toBeNull();
     restoreLayout();
   });
