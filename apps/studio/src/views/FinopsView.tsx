@@ -197,6 +197,8 @@ function Meter({
 }
 
 function TaskList({ data }: { data: FinopsPayload }) {
+  const { project } = useStudio();
+  const rateLimits = useStore(project.chat, state => state.rateLimits);
   const { limits } = data;
   return (
     <section
@@ -205,6 +207,28 @@ function TaskList({ data }: { data: FinopsPayload }) {
       tabIndex={0}
       className={cn('min-h-0 overflow-y-auto overscroll-contain px-5 pt-4 pb-24', focusRingInset)}
     >
+      {rateLimits.length > 0 ? (
+        <div className="mb-6">
+          <h2 className="mb-2 text-xs font-semibold text-fg-muted">{messages.finops.rateLimits}</h2>
+          <ul className="grid gap-3 rounded-xl border border-divider p-4 sm:grid-cols-2">
+            {rateLimits.map(entry => (
+              <li key={entry.window} className="grid gap-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-fg">{entry.window}</span>
+                  <span className={cn('text-fg-muted', mono)}>{messages.finops.usedPercent(entry.usedPercent)}</span>
+                </div>
+                <Meter
+                  label={`${messages.finops.rateLimits}: ${entry.window}`}
+                  value={entry.usedPercent}
+                  max={100}
+                  tone={entry.usedPercent >= 90 ? 'bg-breach' : entry.usedPercent >= 75 ? 'bg-heat-high' : 'bg-accent'}
+                  valueText={messages.finops.usedPercent(entry.usedPercent)}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <h2 className="mb-2 text-xs font-semibold text-fg-muted">{messages.finops.tasks}</h2>
       {data.tasks.length === 0 ? (
         <p className="text-xs text-fg-muted">{messages.finops.idle}</p>

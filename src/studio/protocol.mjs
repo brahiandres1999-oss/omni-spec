@@ -194,6 +194,7 @@ export const STUDIO_METHODS = Object.freeze({
     object(
       {
         conversationId: string({ minLength: 1 }),
+        agent: { enum: ['claude', 'codex'] },
         text: string({ minLength: 1 }),
         model: string({ minLength: 1 }),
         effort: { enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
@@ -215,6 +216,7 @@ export const STUDIO_METHODS = Object.freeze({
     object(
       {
         conversationId: string({ minLength: 1 }),
+        agent: { enum: ['claude', 'codex'] },
         sessionId: string({ pattern: '^[0-9a-fA-F-]{36}$' }),
       },
       ['sessionId'],
@@ -222,7 +224,12 @@ export const STUDIO_METHODS = Object.freeze({
     anyObject,
     'Load an earlier conversation of this folder; the next prompt continues it.',
   ),
-  'agent.sessions': method(HOST, object(), anyObject, 'Earlier agent conversations of this folder, newest first.'),
+  'agent.sessions': method(
+    HOST,
+    object({ agent: { enum: ['claude', 'codex'] } }),
+    anyObject,
+    'Earlier agent conversations of this folder, newest first.',
+  ),
   'agent.status': method(
     HOST,
     object({ conversationId: string({ minLength: 1 }) }),

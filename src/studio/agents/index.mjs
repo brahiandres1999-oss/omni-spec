@@ -1,11 +1,12 @@
 import { StudioError } from '../protocol.mjs';
 import { CLAUDE_EFFORTS, CLAUDE_MODELS, CLAUDE_PERMISSION_MODES, createClaudeDriver, locateClaude } from './claude.mjs';
 import { listClaudeSessions, readClaudeSession } from './claude-sessions.mjs';
+import { CODEX_EFFORTS, CODEX_MODELS, CODEX_PERMISSION_MODES, createCodexDriver, locateCodex } from './codex.mjs';
+import { listCodexSessions, readCodexSession } from './codex-sessions.mjs';
 
 /**
  * The agents Omni Studio can drive (docs/STUDIO-AGENT-COCKPIT.md). Every driver emits the same
  * provider-independent `agent.event` payloads, so the UI does not know which CLI is behind the chat.
- * This prototype ships the Claude Code driver; Codex (`app-server`) and ACP drivers plug in here.
  */
 export const AGENTS = Object.freeze([
   {
@@ -16,7 +17,22 @@ export const AGENTS = Object.freeze([
     // Studio's permission levels this agent has (Q25); a level an agent lacks is not offered.
     permissions: Object.freeze(Object.keys(CLAUDE_PERMISSION_MODES)),
   },
+  {
+    id: 'codex',
+    label: 'Codex',
+    models: CODEX_MODELS,
+    efforts: CODEX_EFFORTS,
+    permissions: Object.freeze(Object.keys(CODEX_PERMISSION_MODES)),
+  },
 ]);
+
+export function agentForModel(model) {
+  if (!model) return null;
+  for (const agent of AGENTS) {
+    if (agent.models.includes(model)) return agent.id;
+  }
+  return null;
+}
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
@@ -60,9 +76,13 @@ export function createAgentHub({
   log = () => undefined,
   conversations = null,
   createDriver = createClaudeDriver,
+  createCodex = createCodexDriver,
   locate = locateClaude,
+  locateCodexImpl = locateCodex,
   listSessions = listClaudeSessions,
   readSession = readClaudeSession,
+  listCodex = listCodexSessions,
+  readCodex = readCodexSession,
 }) {
   const send = event =>
     notify('agent.event', { agent: 'claude', root, at: Date.now(), ...event }).catch(error =>
@@ -79,7 +99,7 @@ export function createAgentHub({
     }
   };
 
-  /** @type {Map<string, {id: string, sessionId: string|null, title: string, firstPrompt: string|null, files: Set<string>, driver: ReturnType<typeof createClaudeDriver>}>} */
+  /** @type {Map<string, {id: string, agent: string, sessionId: string|null, title: string, firstPrompt: string|null, files: Set<string>, driver: any}>} */
   const slots = new Map();
   const bySession = new Map();
   const requestSlot = new Map();
@@ -89,10 +109,16 @@ export function createAgentHub({
   const labelOf = slot => slot.title || slot.sessionId || slot.id;
   const sendFor = (slot, event) =>
     send({
+      agent: slot.agent,
       conversationId: slot.id,
       ...(slot.sessionId ? { sessionId: slot.sessionId } : {}),
       ...event,
     });
+
+  const makeDriver = slot =>
+    slot.agent === 'codex'
+      ? createCodex({ cwd: root, emit: event => onSlotEvent(slot, event), locate: locateCodexImpl })
+      : createDriver({ cwd: root, emit: event => onSlotEvent(slot, event), locate });
 
   const onSlotEvent = (slot, event) => {
     if (event.kind === 'init' && event.sessionId) {
@@ -114,7 +140,7 @@ export function createAgentHub({
 
     if (event.kind === 'init' && event.sessionId)
       index('recorded', store =>
-        store.record({ agent: 'claude', sessionId: event.sessionId, title: slot.firstPrompt ?? '' }),
+        store.record({ agent: slot.agent, sessionId: event.sessionId, title: slot.firstPrompt ?? '' }),
       );
     if (event.kind === 'tool') {
       const file = editedFile(root, event.name, event.input);
@@ -140,38 +166,48 @@ export function createAgentHub({
     }
     if (event.kind === 'result') {
       const sessionId = slot.driver.status().sessionId ?? slot.sessionId;
-      if (sessionId) index('touched', store => store.touch('claude', sessionId));
+      if (sessionId) index('touched', store => store.touch(slot.agent, sessionId));
     }
   };
 
-  const slotFor = (conversationId = 'default') => {
+  const slotFor = (conversationId = 'default', agent = 'claude') => {
     const existing = slots.get(conversationId) ?? bySession.get(conversationId);
-    if (existing) return existing;
+    if (existing) {
+      if (agent && existing.agent !== agent && !existing.sessionId && existing.driver.status().state === 'idle') {
+        existing.driver.dispose();
+        existing.agent = agent;
+        existing.driver = makeDriver(existing);
+      }
+      return existing;
+    }
     const slot = {
       id: conversationId,
+      agent: agent || 'claude',
       sessionId: null,
       title: '',
       firstPrompt: null,
       files: new Set(),
       driver: null,
     };
-    slot.driver = createDriver({ cwd: root, emit: event => onSlotEvent(slot, event) });
+    slot.driver = makeDriver(slot);
     slots.set(conversationId, slot);
     return slot;
   };
 
   // Default conversation slot created eagerly so existing single-conversation callers work unchanged.
-  slotFor('default');
+  slotFor('default', 'claude');
 
   return {
     async status({ conversationId = 'default' } = {}) {
-      const location = await locate();
+      const [claudeLoc, codexLoc] = await Promise.all([locate(), locateCodexImpl ? locateCodexImpl() : locateCodex()]);
+      const locations = { claude: claudeLoc, codex: codexLoc };
       const slot = slotFor(conversationId);
       const live = allSlots()
         .map(entry => {
           const st = entry.driver.status();
           return {
             conversationId: entry.id,
+            agent: entry.agent,
             sessionId: st.sessionId ?? entry.sessionId,
             state: st.state,
             files: [...entry.files],
@@ -180,15 +216,20 @@ export function createAgentHub({
         .filter(entry => entry.state !== 'idle' || entry.sessionId !== null);
       return {
         workspace: { mode: workspace.mode, dir: workspace.dir },
-        active: 'claude',
-        agents: AGENTS.map(agent => ({ ...agent, available: Boolean(location), path: location?.path ?? null })),
+        active: slot.agent,
+        agents: AGENTS.map(agent => ({
+          ...agent,
+          available: Boolean(locations[agent.id]),
+          path: locations[agent.id]?.path ?? null,
+        })),
         ...slot.driver.status(),
         live,
       };
     },
-    prompt({ conversationId = 'default', text, model, effort, permission }) {
+    prompt({ conversationId = 'default', agent, text, model, effort, permission }) {
       if (!text.trim()) throw new StudioError('EMPTY_PROMPT', 'Escribe un mensaje antes de enviarlo.');
-      const slot = slotFor(conversationId);
+      const chosenAgent = agent ?? agentForModel(model) ?? undefined;
+      const slot = slotFor(conversationId, chosenAgent);
       if (!slot.driver.status().sessionId && !slot.sessionId) {
         slot.firstPrompt = text;
         if (!slot.title) slot.title = firstLine(text);
@@ -200,16 +241,40 @@ export function createAgentHub({
       const slot = requestSlot.get(requestId) ?? slotFor(conversationId ?? 'default');
       return slot.driver.respond(requestId, decision, message);
     },
-    /** Claude Code sessions of this folder, newest first (the «Retomar sesión de la terminal…» picker). */
-    sessions: async () => ({ sessions: await listSessions({ root }) }),
+    /** Earlier sessions of this folder across Claude Code and Codex, newest first. */
+    async sessions({ agent } = {}) {
+      if (agent === 'claude') return { sessions: await listSessions({ root }) };
+      if (agent === 'codex') return { sessions: await listCodex({ root }) };
+      const [claudeList, codexList] = await Promise.all([listSessions({ root }), listCodex({ root }).catch(() => [])]);
+      const combined = [...claudeList, ...codexList].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return { sessions: combined };
+    },
     /** Loads one earlier conversation; the next prompt continues it. A terminal session joins the index. */
-    async resume({ conversationId, sessionId }) {
-      const history = await readSession({ root, sessionId });
+    async resume({ conversationId, agent, sessionId }) {
+      let resolvedAgent = agent ?? 'claude';
+      let history;
+      if (agent === 'codex') {
+        history = await readCodex({ root, sessionId });
+      } else if (agent === 'claude') {
+        history = await readSession({ root, sessionId });
+      } else {
+        try {
+          history = await readSession({ root, sessionId });
+          resolvedAgent = 'claude';
+        } catch (error) {
+          try {
+            history = await readCodex({ root, sessionId });
+            resolvedAgent = 'codex';
+          } catch {
+            throw error;
+          }
+        }
+      }
       const defaultSlot = slotFor('default');
       const defaultBusy =
         defaultSlot.driver.status().state === 'busy' || defaultSlot.driver.status().state === 'starting';
       const targetId = conversationId ?? (bySession.has(sessionId) || defaultBusy ? sessionId : 'default');
-      const slot = slotFor(targetId);
+      const slot = slotFor(targetId, resolvedAgent);
       slot.sessionId = sessionId;
       slot.title = history.title || slot.title;
       bySession.set(sessionId, slot);
@@ -223,7 +288,7 @@ export function createAgentHub({
         slot.driver.resume(sessionId, { costUsd: history.costUsd });
       }
       index('recorded', store =>
-        store.record({ agent: 'claude', sessionId, title: history.title, titleSource: history.titleSource }),
+        store.record({ agent: resolvedAgent, sessionId, title: history.title, titleSource: history.titleSource }),
       );
       return history;
     },

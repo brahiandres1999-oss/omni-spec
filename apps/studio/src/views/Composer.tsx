@@ -88,11 +88,32 @@ function rankCommands(commands: readonly string[], query: string): string[] {
 function ModelMenu({ agent }: { agent: Agent | undefined }) {
   const { project } = useStudio();
   const options = useStore(project.chat, state => state.options);
-  const models = agent?.models ?? Object.keys(t.models);
+  const status = useStore(project.chat, state => state.status);
+  const locked = useStore(project.chat, state => state.sessionId !== null || state.items.length > 0);
+  const agents = useMemo(() => {
+    const all = status?.agents ?? (agent ? [agent] : []);
+    if (locked && agent) return [agent];
+    return all;
+  }, [status?.agents, agent, locked]);
   const efforts = agent?.efforts ?? [];
   const modelLabel = options.model ? (t.models[options.model] ?? options.model) : t.defaultOption;
   const effortLabel = options.effort ? (t.efforts[options.effort] ?? options.effort) : t.defaultOption;
-  const set = (patch: { model?: string | null; effort?: string | null }) => project.chat.getState().setOptions(patch);
+  const set = (patch: { agent?: string | null; model?: string | null; effort?: string | null }) =>
+    project.chat.getState().setOptions(patch);
+  const currentValue = options.model ?? DEFAULT;
+  const pickModel = (value: string) => {
+    if (!value) {
+      set({ model: null });
+      return;
+    }
+    const owner = agents.find(entry => (entry.models ?? []).includes(value));
+    const nextAgent = owner?.id ?? agent?.id ?? null;
+    const permission = project.chat.getState().permission;
+    if (owner?.permissions && !owner.permissions.includes(permission)) {
+      project.chat.getState().setPermission('ask');
+    }
+    set({ agent: nextAgent, model: value });
+  };
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger aria-label={`${t.modelLabel}: ${modelLabel}`} className={pill}>
@@ -104,19 +125,40 @@ function ModelMenu({ agent }: { agent: Agent | undefined }) {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content side="top" align="start" sideOffset={6} className={menuContent}>
-          {/* Grouped by agent: picking a model picks its agent (one agent until Codex and ACP arrive). */}
-          <DropdownMenu.Label className={menuLabel}>{agent?.label ?? t.agent}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup
-            value={options.model ?? DEFAULT}
-            onValueChange={value => set({ model: value || null })}
-          >
-            {[DEFAULT, ...models].map(value => (
-              <DropdownMenu.RadioItem key={value || 'default'} value={value} className={menuItem}>
-                <DropdownMenu.ItemIndicator className="absolute start-2 inline-flex">
-                  <Icon icon={Check} className="text-accent" />
-                </DropdownMenu.ItemIndicator>
-                {value ? (t.models[value] ?? value) : t.defaultOption}
-              </DropdownMenu.RadioItem>
+          <DropdownMenu.RadioGroup value={currentValue} onValueChange={pickModel}>
+            {(agents.length > 0
+              ? agents
+              : [
+                  {
+                    id: 'claude',
+                    label: t.agent,
+                    available: true,
+                    path: null,
+                    models: ['fable', 'opus', 'sonnet', 'haiku'],
+                    efforts: [],
+                  },
+                ]
+            ).map((entry, index) => (
+              <DropdownMenu.Group key={entry.id}>
+                {index > 0 ? <DropdownMenu.Separator className="my-1 h-px bg-divider" /> : null}
+                <DropdownMenu.Label className={menuLabel}>{entry.label}</DropdownMenu.Label>
+                {index === 0 ? (
+                  <DropdownMenu.RadioItem value={DEFAULT} className={menuItem}>
+                    <DropdownMenu.ItemIndicator className="absolute start-2 inline-flex">
+                      <Icon icon={Check} className="text-accent" />
+                    </DropdownMenu.ItemIndicator>
+                    {t.defaultOption}
+                  </DropdownMenu.RadioItem>
+                ) : null}
+                {(entry.models ?? Object.keys(t.models)).map(value => (
+                  <DropdownMenu.RadioItem key={`${entry.id}:${value}`} value={value} className={menuItem}>
+                    <DropdownMenu.ItemIndicator className="absolute start-2 inline-flex">
+                      <Icon icon={Check} className="text-accent" />
+                    </DropdownMenu.ItemIndicator>
+                    {t.models[value] ?? value}
+                  </DropdownMenu.RadioItem>
+                ))}
+              </DropdownMenu.Group>
             ))}
           </DropdownMenu.RadioGroup>
           {efforts.length > 0 ? (

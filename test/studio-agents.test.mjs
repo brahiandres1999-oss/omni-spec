@@ -9,6 +9,8 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { createClaudeDriver, locateClaude, translateClaudeMessage } from '../src/studio/agents/claude.mjs';
 import { claudeSessionsDir, listClaudeSessions, readClaudeSession } from '../src/studio/agents/claude-sessions.mjs';
+import { createCodexDriver } from '../src/studio/agents/codex.mjs';
+import { codexSessionsDir, listCodexSessions, readCodexSession } from '../src/studio/agents/codex-sessions.mjs';
 import { createAgentHub } from '../src/studio/agents/index.mjs';
 import { resolveWorkspace, workspaceId } from '../src/studio/workspace.mjs';
 import { makeStudioProject } from '../test-support/studio-fixtures.mjs';
@@ -714,5 +716,134 @@ describe('AG engine in studio mode', () => {
       execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: project.root, encoding: 'utf8' }),
       '',
     );
+  });
+});
+
+describe('AG Codex app-server driver and sessions', () => {
+  test('AG-25 Codex app-server handshake, turns, approvals, rate limits and rollout sessions', async () => {
+    const proc = fakeProcess();
+    const spawned = [];
+    const events = [];
+    const driver = createCodexDriver({
+      cwd: 'C:\\repo',
+      emit: event => events.push(event),
+      locate: async () => ({ file: 'codex.exe', prefix: [], path: 'codex.exe' }),
+      spawnImpl: (_file, args) => {
+        spawned.push(args);
+        return proc;
+      },
+    });
+
+    const promptDone = driver.prompt('Revisa src/auth.ts', {
+      model: 'gpt-5.3-codex',
+      effort: 'high',
+      permission: 'ask',
+    });
+    await tick();
+    assert.deepEqual(spawned[0], ['app-server']);
+    assert.equal(proc.written[0].method, 'initialize');
+
+    // Respond to initialize → driver sends initialized + thread/start
+    proc.send({ id: proc.written[0].id, result: { serverInfo: { name: 'codex' } } });
+    await tick();
+    assert.equal(proc.written[1].method, 'initialized');
+    assert.equal(proc.written[2].method, 'thread/start');
+    assert.equal(proc.written[2].params.approvalPolicy, 'untrusted');
+    assert.equal(proc.written[2].params.sandbox, 'read-only');
+
+    // Respond to thread/start → driver emits init and sends turn/start
+    proc.send({ id: proc.written[2].id, result: { threadId: 'th-codex-1', model: 'gpt-5.3-codex' } });
+    await tick();
+    assert.equal(proc.written[3].method, 'turn/start');
+    assert.equal(proc.written[3].params.threadId, 'th-codex-1');
+    assert.equal(proc.written[3].params.model, 'gpt-5.3-codex');
+    assert.equal(proc.written[3].params.effort, 'high');
+    proc.send({ id: proc.written[3].id, result: { turnId: 'turn-1' } });
+    assert.deepEqual(await promptDone, { accepted: true });
+
+    // Stream text delta, command execution and approval request
+    proc.send({ method: 'item/agentMessage/delta', params: { itemId: 'msg-1', delta: 'Analizando…' } });
+    proc.send({
+      method: 'item/started',
+      params: { item: { id: 'cmd-1', type: 'commandExecution', command: ['npm', 'test'] } },
+    });
+    proc.send({
+      id: 'srv-1',
+      method: 'item/commandExecution/requestApproval',
+      params: { command: 'npm test', reason: 'Ejecutar pruebas' },
+    });
+    proc.send({
+      method: 'account/rateLimits/updated',
+      params: {
+        rateLimits: {
+          fiveHour: { usedPercent: 32 },
+          weekly: { usedPercent: 14 },
+        },
+      },
+    });
+    await tick();
+
+    const perm = events.find(event => event.kind === 'permission');
+    assert.equal(perm.toolName, 'Bash');
+    assert.equal(perm.title, 'npm test');
+    driver.respond(perm.requestId, 'allow');
+    await tick();
+    assert.deepEqual(proc.written.at(-1), { jsonrpc: '2.0', id: 'srv-1', result: { decision: 'accept' } });
+
+    proc.send({
+      method: 'item/completed',
+      params: { item: { id: 'cmd-1', type: 'commandExecution', exitCode: 0, aggregatedOutput: 'ok' } },
+    });
+    proc.send({
+      method: 'turn/completed',
+      params: { usage: { totalTokens: 4200, modelContextWindow: 200000 }, durationMs: 650 },
+    });
+    await tick();
+
+    assert.equal(driver.status().state, 'ready');
+    assert.equal(driver.status().rateLimits.length, 2);
+    const result = events.find(event => event.kind === 'result');
+    assert.equal(result.contextTokens, 4200);
+    assert.equal(result.contextWindow, 200000);
+    driver.dispose();
+
+    // Rollout session listing and reading
+    const codexHome = mkdtempSync(join(tmpdir(), 'omni-codex-home-'));
+    try {
+      const env = { CODEX_HOME: codexHome };
+      const dayDir = join(codexSessionsDir(env), '2026', '11', '06');
+      mkdirSync(dayDir, { recursive: true });
+      const sid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+      writeFileSync(
+        join(dayDir, `rollout-2026-11-06T12-00-00-${sid}.jsonl`),
+        `${[
+          JSON.stringify({ type: 'session_meta', payload: { id: sid, cwd: 'C:\\repo' } }),
+          JSON.stringify({
+            type: 'response_item',
+            payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Arregla el bug' }] },
+          }),
+          JSON.stringify({
+            type: 'response_item',
+            payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Listo.' }] },
+          }),
+        ].join('\n')}\n`,
+      );
+      const list = await listCodexSessions({ root: 'C:\\repo', env });
+      assert.deepEqual(
+        list.map(entry => ({ id: entry.id, title: entry.title, agent: entry.agent })),
+        [{ id: sid, title: 'Arregla el bug', agent: 'codex' }],
+      );
+      const history = await readCodexSession({ root: 'C:\\repo', sessionId: sid, env });
+      assert.equal(history.title, 'Arregla el bug');
+      assert.deepEqual(
+        history.events.map(event => [event.kind, event.text ?? event.delta]),
+        [
+          ['user', 'Arregla el bug'],
+          ['text', 'Listo.'],
+        ],
+      );
+    } finally {
+      rmSync(codexHome, { recursive: true, force: true });
+    }
   });
 });

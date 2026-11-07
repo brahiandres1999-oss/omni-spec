@@ -483,6 +483,10 @@ describe('CH conversations in the rail', () => {
     return { fake, user, rail, entry, restoreLayout };
   }
 
+  beforeEach(() => {
+    globalThis.localStorage?.clear();
+  });
+
   test('CH-11 one click opens a conversation with its history; «Nueva conversación» starts over', async () => {
     const { fake, user, rail, entry, restoreLayout } = await mountRail();
     expect(entry).toHaveTextContent('hace 5 min');
@@ -660,6 +664,84 @@ describe('CH conversations in the rail', () => {
       (globalThis as { Notification?: unknown }).Notification = previousNotification;
       restoreLayout();
     }
+  });
+
+  test('CH-20 ModelMenu groups Claude Code and Codex, picking a Codex model sends agent: codex and adapts permissions, and Uso shows rate limits', async () => {
+    const restoreLayout = installLayoutStub();
+    stubCanvas();
+    stubWorker();
+    const user = userEvent.setup();
+    const fake = railTransport().respond('agent.status', {
+      ...STATUS,
+      agents: [
+        {
+          id: 'claude',
+          label: 'Claude Code',
+          available: true,
+          path: 'claude.exe',
+          models: ['fable', 'opus', 'sonnet', 'haiku'],
+          efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+          permissions: ['ask', 'default', 'auto', 'bypass', 'plan'],
+        },
+        {
+          id: 'codex',
+          label: 'Codex',
+          available: true,
+          path: 'codex.exe',
+          models: ['gpt-5.3-codex', 'gpt-5.2-codex', 'o4-mini'],
+          efforts: ['low', 'medium', 'high', 'xhigh'],
+          permissions: ['ask', 'default', 'auto', 'bypass'],
+        },
+      ],
+    });
+
+    renderWithStudio(<AppShell />, { transport: fake });
+    await waitFor(() => expect(fake.calls('agent.status').length).toBeGreaterThan(0));
+
+    // Open ModelMenu: both Claude Code and Codex groups appear
+    await user.click(screen.getByRole('button', { name: /^Modelo:/ }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('Claude Code')).toBeInTheDocument();
+    expect(within(menu).getByText('Codex')).toBeInTheDocument();
+    await user.click(within(menu).getByRole('menuitemradio', { name: 'GPT-5.3 Codex' }));
+
+    // PermissionMenu adapts to Codex (no «Planificar»)
+    await user.click(screen.getByRole('button', { name: /^Permisos:/ }));
+    expect(await screen.findByRole('menuitemradio', { name: /Preguntar siempre/ })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemradio', { name: /Planificar/ })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    // Send a prompt: agent: 'codex' and model: 'gpt-5.3-codex' are sent
+    const input = screen.getByRole('combobox', { name: /Pídele algo/ });
+    await user.type(input, 'revisa el módulo{Enter}');
+    await waitFor(() =>
+      expect(fake.lastCall('agent.prompt')).toEqual({
+        agent: 'codex',
+        text: 'revisa el módulo',
+        model: 'gpt-5.3-codex',
+        permission: 'ask',
+      }),
+    );
+
+    // Emit Codex rate limits and switch to the Uso page
+    act(() => {
+      fake.emit('agent.event', {
+        kind: 'rate_limits',
+        windows: [
+          { window: '5 h', usedPercent: 42 },
+          { window: 'Semanal', usedPercent: 18 },
+        ],
+      });
+    });
+
+    const rail = screen.getByRole('navigation', { name: 'Conversaciones y proyectos' });
+    await user.click(within(rail).getByRole('button', { name: 'Uso' }));
+    expect(await screen.findByText('Ventanas de límite del agente')).toBeInTheDocument();
+    expect(screen.getByText('5 h')).toBeInTheDocument();
+    expect(screen.getByText('42 % usado')).toBeInTheDocument();
+    expect(screen.getByText('Semanal')).toBeInTheDocument();
+    expect(screen.getByText('18 % usado')).toBeInTheDocument();
+    restoreLayout();
   });
 });
 

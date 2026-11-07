@@ -49,8 +49,16 @@ export interface AgentEvent {
 
 /** What the user picked for the next turns; `null` keeps the CLI's own default. */
 export interface AgentOptions {
+  agent?: string | null;
   model: string | null;
   effort: string | null;
+}
+
+/** Provider rate-limit window (e.g. Codex 5h and weekly limits). */
+export interface RateLimitWindow {
+  window: string;
+  usedPercent: number;
+  resetsAt?: string | null;
 }
 
 /** A message waiting for the agent to finish its turn (Q17): visible, editable and cancelable. */
@@ -73,10 +81,20 @@ const isOptions = (value: unknown): value is AgentOptions => {
   const entry = value as Partial<AgentOptions> | null;
   return (
     !!entry &&
+    (entry.agent === undefined || entry.agent === null || typeof entry.agent === 'string') &&
     (entry.model === null || typeof entry.model === 'string') &&
     (entry.effort === null || typeof entry.effort === 'string')
   );
 };
+const isRateLimits = (value: unknown): value is RateLimitWindow[] =>
+  Array.isArray(value) &&
+  value.every(
+    entry =>
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as RateLimitWindow).window === 'string' &&
+      typeof (entry as RateLimitWindow).usedPercent === 'number',
+  );
 const EMPTY_USAGE: AgentUsage = { contextTokens: null, contextWindow: null, costUsd: 0, costBasis: null };
 
 // The last slash commands the agent reported, so the «/» list works before the first message starts it.
@@ -118,6 +136,8 @@ export interface AgentStatus {
   sessionId: string | null;
   /** Model, effort and permission level the running CLI was started with. */
   options?: AgentOptions & { permission?: string };
+  /** Rate-limit windows reported by the agent (e.g. Codex 5h / weekly). */
+  rateLimits?: RateLimitWindow[];
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -207,6 +227,7 @@ export function applyAgentEvent(items: readonly ChatItem[], event: AgentEvent): 
 
 export interface ThreadSnapshot {
   conversationId: string;
+  agent: string;
   sessionId: string | null;
   items: ChatItem[];
   agentState: AgentState;
@@ -234,6 +255,8 @@ export interface ChatState {
   /** Model and effort the conversation runs with; `options` differ from it until the next message. */
   applied: AgentOptions | null;
   usage: AgentUsage;
+  /** Rate-limit windows reported by the agent (e.g. Codex 5 h and weekly). */
+  rateLimits: RateLimitWindow[];
   /** Id of the CLI session on screen; `null` before the first message of a new conversation. */
   sessionId: string | null;
   /** Permission level of this conversation (Q25); a new conversation starts with the one set in Ajustes. */
@@ -277,6 +300,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
 
     const snapshotOf = (state: ChatState): ThreadSnapshot => ({
       conversationId: state.conversationId,
+      agent: state.options.agent ?? state.status?.active ?? 'claude',
       sessionId: state.sessionId,
       items: state.items,
       agentState: state.agentState,
@@ -328,6 +352,11 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       const event = payload as unknown as AgentEvent;
       if (event.root && projectId !== 'default' && !sameRoot(event.root, projectId)) return;
       if (event.kind === 'conversations') return;
+
+      if (event.kind === 'rate_limits') {
+        if (isRateLimits(event.windows)) set({ rateLimits: event.windows });
+        return;
+      }
 
       const current = get();
       const eventConv = str(event.conversationId);
@@ -401,9 +430,10 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       status: null,
       draft: '',
       error: null,
-      options: readJson<AgentOptions>(OPTIONS_KEY, { model: null, effort: null }, isOptions),
+      options: readJson<AgentOptions>(OPTIONS_KEY, { agent: null, model: null, effort: null }, isOptions),
       applied: null,
       usage: EMPTY_USAGE,
+      rateLimits: [],
       sessionId: null,
       permission: readSettings().defaultPermission,
       queue: [],
@@ -426,6 +456,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             model: status.model ?? get().model,
             applied: status.model && isOptions(status.options) ? status.options : get().applied,
             sessionId: status.sessionId ?? get().sessionId,
+            rateLimits: isRateLimits(status.rateLimits) ? status.rateLimits : get().rateLimits,
           });
         } catch (reason) {
           fail(reason);
@@ -506,15 +537,16 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           agentState: 'starting',
         });
         try {
-          const { model, effort } = get().options;
+          const { agent, model, effort } = get().options;
           await client.call('agent.prompt', {
             ...convParam(),
+            ...(agent && agent !== 'claude' ? { agent: agent as 'codex' } : {}),
             text: message,
             ...(model ? { model } : {}),
             ...(effort ? { effort: effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } : {}),
             permission: get().permission,
           });
-          set({ applied: { model, effort } });
+          set({ applied: { agent: agent ?? null, model, effort } });
         } catch (reason) {
           set({ agentState: 'idle', draft: message });
           fail(reason);

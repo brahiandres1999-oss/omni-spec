@@ -291,9 +291,12 @@ export function ChatHeader() {
   const agentState = useStore(chat, state => state.agentState);
   const model = useStore(chat, state => state.model);
   const status = useStore(chat, state => state.status);
+  const options = useStore(chat, state => state.options);
+  const sessionId = useStore(chat, state => state.sessionId);
   const usage = useStore(chat, state => state.usage);
   const busy = agentState === 'busy' || agentState === 'starting';
-  const agent = status?.agents.find(entry => entry.id === status.active);
+  const activeAgentId = !sessionId && !hasItems && options.agent ? options.agent : status?.active;
+  const agent = status?.agents.find(entry => entry.id === activeAgentId) ?? status?.agents[0];
   const available = agent?.available ?? true;
   return (
     // biome-ignore lint/a11y/useSemanticElements: a labelled group of status items, not a form fieldset
@@ -344,7 +347,8 @@ export function ChatView() {
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const busy = agentState === 'busy' || agentState === 'starting';
-  const agent = status?.agents.find(entry => entry.id === status.active);
+  const activeAgentId = !sessionId && items.length === 0 && options.agent ? options.agent : status?.active;
+  const agent = status?.agents.find(entry => entry.id === activeAgentId) ?? status?.agents[0];
   const available = agent?.available ?? true;
   const pending = pendingChange(model, applied, options);
 

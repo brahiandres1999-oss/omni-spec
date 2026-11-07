@@ -16,6 +16,7 @@ export interface EngineRequestParams {
   };
   readonly 'agent.prompt': {
     readonly conversationId?: string;
+    readonly agent?: 'claude' | 'codex';
     readonly text: string;
     readonly model?: string;
     readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -26,9 +27,12 @@ export interface EngineRequestParams {
   };
   readonly 'agent.resume': {
     readonly conversationId?: string;
+    readonly agent?: 'claude' | 'codex';
     readonly sessionId: string;
   };
-  readonly 'agent.sessions': Record<string, never>;
+  readonly 'agent.sessions': {
+    readonly agent?: 'claude' | 'codex';
+  };
   readonly 'agent.status': {
     readonly conversationId?: string;
   };

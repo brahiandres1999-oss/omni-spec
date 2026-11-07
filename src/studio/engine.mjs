@@ -252,7 +252,7 @@ function createHandlers(root, memory, { version, actor, credentials, notify, wor
     'agent.cancel': params => agents.cancel(params),
     'agent.permission': params => agents.permission(params),
     'agent.reset': params => agents.reset(params),
-    'agent.sessions': () => agents.sessions(),
+    'agent.sessions': params => agents.sessions(params),
     'agent.resume': params => agents.resume(params),
     'memory.summary': () => memorySummary(memory.db, workspace),
     // The rail lists every project: the open one from this engine's memory, the others read-only from theirs.
