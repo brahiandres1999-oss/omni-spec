@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, readFile, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { delimiter, dirname, extname, join } from 'node:path';
 import { StudioError } from '../protocol.mjs';
 import { clipInput, DEFAULT_PERMISSION, toolTitle } from './claude.mjs';
@@ -241,8 +242,94 @@ export function translateAcpNotification(message, state) {
 }
 
 /**
- * Loads the history of an ACP session via `session/load` (which streams `user_message_chunk`,
- * `agent_message_chunk`, `tool_call` and `session_info_update` notifications before resolving).
+ * Reads an Antigravity conversation directly from its brain transcript on disk in < 1ms,
+ * avoiding the heavy overhead of spawning a full CLI subprocess.
+ */
+export async function readAntigravityBrainSession(sessionId, env = process.env) {
+  if (!sessionId || typeof sessionId !== 'string') return null;
+  const home = env.USERPROFILE || env.HOME || homedir();
+  const candidates = [
+    join(home, '.gemini', 'antigravity-cli', 'brain', sessionId, '.system_generated', 'logs', 'transcript.jsonl'),
+    join(home, '.gemini', 'antigravity', 'brain', sessionId, '.system_generated', 'logs', 'transcript.jsonl'),
+  ];
+  let transcriptFile = null;
+  for (const c of candidates) {
+    if (await isFile(c)) {
+      transcriptFile = c;
+      break;
+    }
+  }
+  if (!transcriptFile) return null;
+
+  try {
+    const raw = await readFile(transcriptFile, 'utf8');
+    const events = [];
+    let modelTurn = 0;
+    let contextTokens = null;
+    let title = '';
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      try {
+        const step = JSON.parse(line);
+        if (step.type === 'USER_INPUT') {
+          let text = typeof step.content === 'string' ? step.content : '';
+          const match = /<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/.exec(text);
+          if (match) text = match[1].trim();
+          if (!title && text) title = text.split(/\r?\n/)[0].trim();
+          events.push({ kind: 'user', text });
+        } else if (step.type === 'PLANNER_RESPONSE') {
+          modelTurn += 1;
+          if (typeof step.input_tokens === 'number') {
+            contextTokens = (step.input_tokens ?? 0) + (step.output_tokens ?? 0);
+          }
+          if (step.content) {
+            events.push({ kind: 'text', key: `acp-msg-${step.step_index ?? modelTurn}`, delta: step.content });
+          }
+          if (Array.isArray(step.tool_calls)) {
+            for (const tc of step.tool_calls) {
+              const rawName = tc.tool_name ?? tc.name ?? 'tool';
+              const isEdit = ['edit_file', 'write_file', 'patch_file'].includes(rawName);
+              const name = isEdit ? 'Edit' : rawName === 'run_command' ? 'Bash' : rawName;
+              const input = tc.call_parameters ?? tc.input ?? {};
+              events.push({
+                kind: 'tool',
+                id: String(tc.id ?? `tool-${step.step_index}`),
+                name,
+                title: toolTitle(name, input),
+                input: clipInput(input),
+              });
+            }
+          }
+        } else if (step.type === 'GENERIC') {
+          events.push({
+            kind: 'tool_result',
+            toolUseId: `tool-${step.step_index - 1}`,
+            isError: step.status === 'ERROR',
+            output: typeof step.content === 'string' ? step.content.slice(0, 4000) : '',
+          });
+        }
+      } catch {
+        // guardian-allow SLOP_EMPTY_CATCH: skip malformed JSONL line in brain transcript
+      }
+    }
+    return {
+      id: sessionId,
+      title: title || sessionId,
+      titleSource: 'prompt',
+      events,
+      contextTokens,
+      costUsd: null,
+      truncated: false,
+    };
+  } catch {
+    // guardian-allow SLOP_SWALLOWED_ERROR: transcript missing or unreadable falls back to null
+    return null;
+  }
+}
+
+/**
+ * Loads the history of an ACP session: first checks disk brain logs (< 1ms), and falls back
+ * to `session/load` over stdio RPC for other ACP agents (OpenCode, Cline).
  */
 export async function readAcpSession({
   root,
@@ -252,6 +339,9 @@ export async function readAcpSession({
   env = process.env,
   timeoutMs = 4500,
 }) {
+  const diskSession = await readAntigravityBrainSession(sessionId, env);
+  if (diskSession && diskSession.events.length > 0) return diskSession;
+
   const location = await locate({ env });
   if (!location) {
     return {
@@ -279,7 +369,7 @@ export async function readAcpSession({
         proc.stdin?.end();
         proc.kill();
       } catch {
-        // ignore cleanup error
+        // guardian-allow SLOP_EMPTY_CATCH: best-effort process cleanup
       }
       resolve({
         id: sessionId,
@@ -438,7 +528,14 @@ export function createAcpDriver({
       const params = message.params ?? {};
       const toolCall = params.toolCall ?? params;
       const isEdit = toolCall.kind === 'edit' || toolCall.name === 'Edit' || toolCall.name === 'Write';
-      const toolName = isEdit ? 'Edit' : 'Bash';
+      const isExec = toolCall.kind === 'execute' || toolCall.name === 'run_command' || toolCall.name === 'Bash';
+      const toolName = isEdit
+        ? 'Edit'
+        : isExec
+          ? label === 'Antigravity'
+            ? 'Terminal'
+            : 'Bash'
+          : toolCall.name || 'Terminal';
       const input =
         toolCall.rawInput && typeof toolCall.rawInput === 'object'
           ? toolCall.rawInput

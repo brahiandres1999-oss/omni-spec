@@ -72,7 +72,11 @@ function ToolCard({ item }: { item: Extract<ChatItem, { type: 'tool' }> }) {
       >
         <Icon icon={open ? ChevronDown : ChevronRight} className="text-fg-muted" />
         <span className="font-medium text-fg">{item.name}</span>
-        <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')}>{item.title}</span>
+        {item.title && item.title !== item.name ? (
+          <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')}>{item.title}</span>
+        ) : (
+          <span className="flex-1" />
+        )}
         <span className={cn('flex items-center gap-1.5 text-xs', tone)}>
           <span
             aria-hidden="true"
@@ -96,11 +100,19 @@ function ToolCard({ item }: { item: Extract<ChatItem, { type: 'tool' }> }) {
   );
 }
 
-function PermissionCard({ item, chat }: { item: Extract<ChatItem, { type: 'permission' }>; chat: ChatStore }) {
+function PermissionCard({
+  item,
+  chat,
+  agentName = 'El agente',
+}: {
+  item: Extract<ChatItem, { type: 'permission' }>;
+  chat: ChatStore;
+  agentName?: string;
+}) {
   const pending = item.status === 'pending';
   return (
     <section
-      aria-label={t.permissionTitle(item.toolName)}
+      aria-label={t.permissionTitle(item.toolName, agentName)}
       className={cn(
         'grid gap-2.5 rounded-xl border p-3',
         pending ? 'border-accent/50 bg-accent/5' : 'border-divider bg-surface',
@@ -108,8 +120,10 @@ function PermissionCard({ item, chat }: { item: Extract<ChatItem, { type: 'permi
     >
       <div className="flex min-w-0 items-center gap-2 text-[13px]">
         <Icon icon={ShieldAlert} className={pending ? 'text-accent' : 'text-fg-muted'} />
-        <span className="font-medium text-fg">{t.permissionTitle(item.toolName)}</span>
-        <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')}>{item.title}</span>
+        <span className="font-medium text-fg">{t.permissionTitle(item.toolName, agentName)}</span>
+        {item.title && item.title !== item.toolName ? (
+          <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')}>{item.title}</span>
+        ) : null}
       </div>
       {item.conflictWith ? (
         <p role="status" className="flex items-center gap-1.5 text-xs text-pretty text-breach">
@@ -145,7 +159,17 @@ function PermissionCard({ item, chat }: { item: Extract<ChatItem, { type: 'permi
   );
 }
 
-function Entry({ item, chat, onOpenTerminal }: { item: ChatItem; chat: ChatStore; onOpenTerminal(): void }) {
+function Entry({
+  item,
+  chat,
+  agentName,
+  onOpenTerminal,
+}: {
+  item: ChatItem;
+  chat: ChatStore;
+  agentName?: string;
+  onOpenTerminal(): void;
+}) {
   switch (item.type) {
     case 'user':
       return (
@@ -160,7 +184,7 @@ function Entry({ item, chat, onOpenTerminal }: { item: ChatItem; chat: ChatStore
     case 'tool':
       return <ToolCard item={item} />;
     case 'permission':
-      return <PermissionCard item={item} chat={chat} />;
+      return <PermissionCard item={item} chat={chat} agentName={agentName} />;
     case 'result':
       return (
         <p className={cn('text-xs tabular-nums', item.isError ? 'text-breach' : 'text-fg-muted')}>
@@ -405,7 +429,15 @@ export function ChatView() {
               ) : null}
             </div>
           ) : (
-            items.map(item => <Entry key={item.id} item={item} chat={chat} onOpenTerminal={openTerminal} />)
+            items.map(item => (
+              <Entry
+                key={item.id}
+                item={item}
+                chat={chat}
+                agentName={agent?.label ?? 'El agente'}
+                onOpenTerminal={openTerminal}
+              />
+            ))
           )}
           {error ? (
             <div role="alert" className="rounded-xl border border-breach/50 bg-breach/5 p-3 text-[13px] text-fg">

@@ -349,7 +349,7 @@ export const messages = {
       busy: 'Trabajando…',
     } as Record<string, string>,
     unavailable: 'Claude Code no está instalado o no está en el PATH.',
-    permissionTitle: (tool: string) => `Claude quiere usar ${tool}`,
+    permissionTitle: (tool: string, agent = 'El agente') => `${agent} quiere usar ${tool}`,
     conflictWarning: (other: string, file: string) => `Otra conversación viva («${other}») también modificó ${file}.`,
     notifyPermissionTitle: (project: string) => `${project} · Esperando aprobación`,
     notifyDoneTitle: (project: string) => `${project} · Turno terminado`,

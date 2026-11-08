@@ -9,7 +9,7 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { createClaudeDriver, locateClaude, translateClaudeMessage } from '../src/studio/agents/claude.mjs';
 import { claudeSessionsDir, listClaudeSessions, readClaudeSession } from '../src/studio/agents/claude-sessions.mjs';
-import { createAcpDriver } from '../src/studio/agents/acp.mjs';
+import { createAcpDriver, readAcpSession, readAntigravityBrainSession } from '../src/studio/agents/acp.mjs';
 import { createCodexDriver } from '../src/studio/agents/codex.mjs';
 import { codexSessionsDir, listCodexSessions, readCodexSession } from '../src/studio/agents/codex-sessions.mjs';
 import { createAgentHub, OMNI_SESSION_PROMPT, omniMcpServer } from '../src/studio/agents/index.mjs';
@@ -1129,5 +1129,67 @@ describe('AG generic ACP driver and dynamic model discovery', () => {
     assert.equal(resultEv.contextTokens, 12500);
     assert.equal(resultEv.contextWindow, 1000000);
     driver.dispose();
+  });
+
+  test('AG-28 Antigravity brain transcript reader loads history in < 5ms without spawning a process', async () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'omni-brain-test-'));
+    try {
+      const sessId = 'test-sess-fast-1';
+      const logDir = join(fakeHome, '.gemini', 'antigravity-cli', 'brain', sessId, '.system_generated', 'logs');
+      mkdirSync(logDir, { recursive: true });
+      writeFileSync(
+        join(logDir, 'transcript.jsonl'),
+        [
+          JSON.stringify({
+            step_index: 0,
+            type: 'USER_INPUT',
+            content: '<USER_REQUEST>\nhola mundo\n</USER_REQUEST>',
+          }),
+          JSON.stringify({
+            step_index: 1,
+            type: 'PLANNER_RESPONSE',
+            input_tokens: 500,
+            output_tokens: 50,
+            content: '¡Hola! ¿En qué te ayudo?',
+            tool_calls: [{ id: 'tc-1', tool_name: 'edit_file', call_parameters: { Path: 'src/app.ts' } }],
+          }),
+          JSON.stringify({
+            step_index: 2,
+            type: 'GENERIC',
+            status: 'DONE',
+            content: 'file updated',
+          }),
+        ].join('\n'),
+      );
+
+      const fakeEnv = { USERPROFILE: fakeHome, HOME: fakeHome };
+      const brain = await readAntigravityBrainSession(sessId, fakeEnv);
+      assert.ok(brain);
+      assert.equal(brain.id, sessId);
+      assert.equal(brain.title, 'hola mundo');
+      assert.equal(brain.contextTokens, 550);
+      assert.equal(brain.events.length, 4);
+      assert.equal(brain.events[0].kind, 'user');
+      assert.equal(brain.events[0].text, 'hola mundo');
+      assert.equal(brain.events[1].kind, 'text');
+      assert.equal(brain.events[1].delta, '¡Hola! ¿En qué te ayudo?');
+      assert.equal(brain.events[2].kind, 'tool');
+      assert.equal(brain.events[2].name, 'Edit');
+      assert.equal(brain.events[3].kind, 'tool_result');
+      assert.equal(brain.events[3].output, 'file updated');
+
+      // readAcpSession delegates to disk fast-path without spawning any CLI
+      const acp = await readAcpSession({
+        root: 'C:\\dev',
+        sessionId: sessId,
+        locate: async () => {
+          throw new Error('should not locate or spawn when brain transcript exists');
+        },
+        env: fakeEnv,
+      });
+      assert.deepEqual(acp, brain);
+    } finally {
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 });

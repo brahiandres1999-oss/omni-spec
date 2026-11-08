@@ -79,7 +79,19 @@ export function clipInput(input) {
 
 /** One-line label of a tool call: the command, the file or the pattern it works on. */
 export function toolTitle(name, input) {
-  for (const key of ['command', 'file_path', 'path', 'notebook_path', 'pattern', 'url', 'query', 'description'])
+  for (const key of [
+    'command',
+    'CommandLine',
+    'toolSummary',
+    'file_path',
+    'path',
+    'Path',
+    'notebook_path',
+    'pattern',
+    'url',
+    'query',
+    'description',
+  ])
     if (typeof input?.[key] === 'string' && input[key].trim()) return input[key].trim().split('\n')[0];
   return name;
 }

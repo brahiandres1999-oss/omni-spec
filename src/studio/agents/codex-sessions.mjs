@@ -114,6 +114,7 @@ export async function listCodexSessions({ root, env = process.env, limit = 40 })
       try {
         return { path, info: await stat(path) };
       } catch {
+        // guardian-allow SLOP_SWALLOWED_ERROR: deleted session files are skipped during enumeration
         return null;
       }
     }),

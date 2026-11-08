@@ -490,12 +490,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         if (sessionId === get().sessionId) return;
         const threads = saveCurrentThread(get());
         const live = threads[sessionId];
-        if (
-          live &&
-          (live.agentState === 'busy' ||
-            live.agentState === 'starting' ||
-            live.items.some(item => item.type === 'permission' && item.status === 'pending'))
-        ) {
+        if (live) {
           set({
             threads,
             conversationId: live.conversationId,
@@ -510,6 +505,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             draft: live.draft,
             error: null,
           });
+          void client.call('agent.resume', { sessionId }).catch(() => undefined);
           return;
         }
         try {
@@ -524,44 +520,26 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           );
           if (history.truncated)
             items.unshift({ type: 'notice', id: nextId('notice'), text: messages.chat.olderHidden });
-          const nextConvId = live?.conversationId ?? (busyNow() ? sessionId : get().conversationId);
-          const resumedAgent =
-            live?.agent ?? (typeof history.agent === 'string' && history.agent ? history.agent : null);
+          const nextConvId = busyNow() ? sessionId : get().conversationId;
+          const resumedAgent = typeof history.agent === 'string' && history.agent ? history.agent : null;
           set({
             threads,
             conversationId: nextConvId,
-            items: live && live.items.length > items.length ? live.items : items,
+            items,
             sessionId,
-            model: live?.model ?? null,
-            applied: live?.applied ?? (resumedAgent ? { agent: resumedAgent, model: null, effort: null } : null),
+            model: null,
+            applied: resumedAgent ? { agent: resumedAgent, model: null, effort: null } : null,
             error: null,
-            agentState: live?.agentState ?? 'idle',
-            usage: live?.usage ?? {
+            agentState: 'idle',
+            usage: {
               ...EMPTY_USAGE,
               contextTokens: history.contextTokens,
               costUsd: history.costUsd ?? 0,
             },
-            queue: live?.queue ?? [],
-            permission: live?.permission ?? readSettings().defaultPermission,
+            queue: [],
+            permission: readSettings().defaultPermission,
           });
         } catch (reason) {
-          if (live && live.items.length > 0) {
-            set({
-              threads,
-              conversationId: live.conversationId,
-              sessionId: live.sessionId ?? sessionId,
-              items: live.items,
-              agentState: live.agentState,
-              model: live.model,
-              applied: live.applied,
-              usage: live.usage,
-              permission: live.permission,
-              queue: live.queue,
-              draft: live.draft,
-              error: null,
-            });
-            return;
-          }
           fail(reason);
         }
       },

@@ -57,7 +57,7 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 **Método de cada vuelta.**
 1. El usuario manda una captura de la app real y elige el tema.
 2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-25** y el próximo
-   los números existentes: el próximo test del motor es **AG-28** y el de la UI es **CH-22** (SH-xx para el resto del shell, el próximo **SH-16**; SH-11 pasó a ser la página Memoria).
+   los números existentes: el próximo test del motor es **AG-29** y el de la UI es **CH-22** (SH-xx para el resto del shell, el próximo **SH-16**; SH-11 pasó a ser la página Memoria).
 3. Pasan las tres comprobaciones de arriba.
 4. El usuario lo prueba en la app (reinicio completo si se tocó el motor) y manda captura.
 5. Se actualiza este documento (tabla de vueltas de la Fase 3, hechos verificados) y se hace **un commit por
@@ -72,7 +72,7 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 | Sesiones de Claude Code de la carpeta (listar, leer historial) | `src/studio/agents/claude-sessions.mjs` |
 | Driver de Codex (`codex app-server`, modelos, permisos, aprobaciones, cuotas, MCP) | `src/studio/agents/codex.mjs` (test AG-25) |
 | Sesiones de Codex de la carpeta (`~/.codex/sessions/…/rollout-*.jsonl`) | `src/studio/agents/codex-sessions.mjs` |
-| Driver ACP genérico (Antigravity `agy acp`, OpenCode, Cline; `session/set_config_option`, permisos, MCP) | `src/studio/agents/acp.mjs` (test AG-27) |
+| Driver ACP genérico (Antigravity `agy acp`, OpenCode, Cline; `session/set_config_option`, permisos, MCP, lector rápido de transcript) | `src/studio/agents/acp.mjs` (tests AG-27, AG-28) |
 | Servidor MCP compartido en ambos modos (`omni-spec mcp --studio`) | `src/mcp-server.mjs`, `src/cli.mjs` (test AG-26) |
 | Índice de conversaciones y trabajo activo (`studio_conversations`, `studio_active_work`) | `src/studio/conversations.mjs`; tests AG-18 a AG-20 en `test/studio-conversations.test.mjs` |
 | Hub de agentes y métodos `agent.*` (conversaciones paralelas y avisos de choque) | `src/studio/agents/index.mjs`, `src/studio/engine.mjs`, `src/studio/protocol.mjs` |
@@ -220,7 +220,7 @@ resumen), varias cuentas por agente y una versión comercial.
 | 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | **Hecha**: commit `af860d9` (`AG-24`, `CH-19`, `SH-15`; pruebas con LLM en checklist acumulativo) |
 | 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | **Hecha**: commit `2c7bebe` (`AG-25`, `CH-20`; pruebas con LLM en checklist acumulativo) |
 | 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | **Hecha**: commit `b993a3b` (`AG-26`; pruebas con LLM en checklist acumulativo) |
-| 6 · ACP y Antigravity | Driver ACP genérico; Antigravity experimental; modelos de Claude leídos de su `initialize` | **Hecha** (`AG-27`, `CH-21`; lista para probar en la app con el checklist acumulativo) |
+| 6 · ACP y Antigravity | Driver ACP genérico; Antigravity experimental; modelos de Claude leídos de su `initialize` y lector de transcripts | **Hecha** (`AG-27`, `AG-28`, `CH-21`; lista para probar en la app con el checklist acumulativo) |
 
 Orden: primero lo visible; el paralelo antes que Codex para que Claude y Codex trabajen juntos el día que llegue
 Codex; la memoria después, para probarla con dos proveedores.
