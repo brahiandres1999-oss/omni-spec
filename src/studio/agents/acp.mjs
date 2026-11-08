@@ -740,28 +740,39 @@ export function createAcpDriver({
       }
       running = wanted;
       setState('busy');
-      const promptResult = await rpc('session/prompt', {
+      const promptPromise = rpc('session/prompt', {
         sessionId: session.sessionId,
         prompt: [{ type: 'text', text }],
       });
-      if (promptResult && typeof promptResult === 'object') {
-        const isError = promptResult.stopReason === 'error' || Boolean(promptResult.error);
-        emit({
-          kind: 'result',
-          isError,
-          subtype: promptResult.stopReason ?? 'end_turn',
-          text: typeof promptResult.text === 'string' ? promptResult.text : '',
-          costUsd: translation.costUsd,
-          sessionCostUsd: translation.costUsd,
-          durationMs: typeof promptResult.durationMs === 'number' ? promptResult.durationMs : null,
-          numTurns: 1,
-          contextTokens: translation.contextTokens,
-          contextWindow: translation.contextWindow,
-          costBasis: null,
+      void promptPromise
+        .then(promptResult => {
+          if (promptResult && typeof promptResult === 'object') {
+            const isError = promptResult.stopReason === 'error' || Boolean(promptResult.error);
+            emit({
+              kind: 'result',
+              isError,
+              subtype: promptResult.stopReason ?? 'end_turn',
+              text: typeof promptResult.text === 'string' ? promptResult.text : '',
+              costUsd: translation.costUsd,
+              sessionCostUsd: translation.costUsd,
+              durationMs: typeof promptResult.durationMs === 'number' ? promptResult.durationMs : null,
+              numTurns: 1,
+              contextTokens: translation.contextTokens,
+              contextWindow: translation.contextWindow,
+              costBasis: null,
+            });
+            translation = { ...translation, streamed: new Set() };
+            setState('ready');
+          }
+        })
+        .catch(error => {
+          emit({
+            kind: 'error',
+            code: 'PROMPT_FAILED',
+            message: error.message || `${label} falló durante el turno.`,
+          });
+          setState('ready');
         });
-        translation = { ...translation, streamed: new Set() };
-        setState('ready');
-      }
       return { accepted: true };
     },
 

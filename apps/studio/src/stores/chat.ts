@@ -473,21 +473,25 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         attach();
         try {
           const status = (await client.call('agent.status', convParam())) as AgentStatus;
+          const targetSession = status.sessionId ?? get().sessionId;
           set({
             status,
             agentState: status.state,
             model: status.model ?? get().model,
             applied: status.model && isOptions(status.options) ? status.options : get().applied,
-            sessionId: status.sessionId ?? get().sessionId,
+            sessionId: targetSession,
             rateLimits: isRateLimits(status.rateLimits) ? status.rateLimits : get().rateLimits,
           });
+          if (targetSession && get().items.length === 0) {
+            void get().resume(targetSession);
+          }
         } catch (reason) {
           fail(reason);
         }
       },
       async resume(sessionId) {
         attach();
-        if (sessionId === get().sessionId) return;
+        if (sessionId === get().sessionId && get().items.length > 0) return;
         const threads = saveCurrentThread(get());
         const live = threads[sessionId];
         if (live) {
@@ -591,7 +595,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           });
           set({ applied: { agent: activeAgent, model, effort } });
         } catch (reason) {
-          set({ agentState: 'idle', draft: message });
+          set({ items: beforeState.items, agentState: 'idle', draft: message });
           fail(reason);
         }
       },
