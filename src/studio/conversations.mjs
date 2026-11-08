@@ -22,6 +22,15 @@ const TABLE = `CREATE TABLE IF NOT EXISTS studio_conversations (
   updated_at TEXT NOT NULL,
   archived_at TEXT,
   PRIMARY KEY (agent, session_id)
+);
+CREATE TABLE IF NOT EXISTS studio_active_work (
+  conversation_id TEXT PRIMARY KEY,
+  agent TEXT NOT NULL,
+  session_id TEXT,
+  title TEXT NOT NULL,
+  state TEXT NOT NULL,
+  files_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 )`;
 const COLUMNS = 'agent, session_id, title, title_source, created_at, updated_at, archived_at';
 const MAX_TITLE = 80;
@@ -55,6 +64,21 @@ function statements(db) {
       `UPDATE studio_conversations SET title = ?, title_source = 'user' WHERE agent = ? AND session_id = ?`,
     ),
     archive: db.prepare('UPDATE studio_conversations SET archived_at = ? WHERE agent = ? AND session_id = ?'),
+    clearWork: db.prepare('DELETE FROM studio_active_work'),
+    upsertWork: db.prepare(
+      `INSERT INTO studio_active_work (conversation_id, agent, session_id, title, state, files_json, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(conversation_id) DO UPDATE SET
+         agent = excluded.agent,
+         session_id = excluded.session_id,
+         title = excluded.title,
+         state = excluded.state,
+         files_json = excluded.files_json,
+         updated_at = excluded.updated_at`,
+    ),
+    listWork: db.prepare(
+      'SELECT conversation_id, agent, session_id, title, state, files_json, updated_at FROM studio_active_work ORDER BY updated_at DESC',
+    ),
   };
 }
 
@@ -90,6 +114,33 @@ export function createConversationIndex(db, { now = () => new Date().toISOString
     },
     archive(agent, sessionId, archived) {
       if (sql.archive.run(archived ? now() : null, agent, sessionId).changes === 0) throw unknown();
+    },
+    /** Publishes the project's live conversations and touched files so any agent's MCP can query them (Q26). */
+    setActiveWork(entries = []) {
+      const at = now();
+      sql.clearWork.run();
+      for (const entry of entries) {
+        sql.upsertWork.run(
+          String(entry.conversationId ?? 'default'),
+          String(entry.agent ?? 'claude'),
+          entry.sessionId ?? null,
+          titleFrom(entry.title ?? ''),
+          String(entry.state ?? 'idle'),
+          JSON.stringify(Array.isArray(entry.files) ? entry.files : []),
+          at,
+        );
+      }
+    },
+    listActiveWork() {
+      return sql.listWork.all().map(row => ({
+        conversationId: row.conversation_id,
+        agent: row.agent,
+        sessionId: row.session_id,
+        title: row.title,
+        state: row.state,
+        files: JSON.parse(row.files_json || '[]'),
+        updatedAt: row.updated_at,
+      }));
     },
   };
 }

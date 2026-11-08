@@ -242,6 +242,8 @@ export function createCodexDriver({
   env = process.env,
   spawnImpl = spawn,
   locate = () => locateCodex({ env }),
+  mcpServer = null,
+  developerInstructions = null,
 }) {
   let child = null;
   let state = 'idle';
@@ -352,7 +354,16 @@ export function createCodexDriver({
     const permission = options.permission ?? DEFAULT_PERMISSION;
     running = { model: options.model ?? null, effort: options.effort ?? null, permission };
     stderr = '';
-    const proc = spawnImpl(location.file, [...location.prefix, 'app-server'], {
+    const args = [...location.prefix, 'app-server'];
+    if (mcpServer?.command) {
+      args.push(
+        '-c',
+        `mcp_servers.omni.command=${JSON.stringify(mcpServer.command)}`,
+        '-c',
+        `mcp_servers.omni.args=${JSON.stringify(mcpServer.args ?? [])}`,
+      );
+    }
+    const proc = spawnImpl(location.file, args, {
       cwd,
       env,
       windowsHide: true,
@@ -409,6 +420,7 @@ export function createCodexDriver({
       cwd,
       ...(session.sessionId ? { threadId: session.sessionId } : {}),
       ...(options.model ? { model: options.model } : {}),
+      ...(developerInstructions ? { developerInstructions } : {}),
       approvalPolicy: mode.approvalPolicy,
       sandbox: mode.sandbox,
     });

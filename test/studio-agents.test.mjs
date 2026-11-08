@@ -11,7 +11,11 @@ import { createClaudeDriver, locateClaude, translateClaudeMessage } from '../src
 import { claudeSessionsDir, listClaudeSessions, readClaudeSession } from '../src/studio/agents/claude-sessions.mjs';
 import { createCodexDriver } from '../src/studio/agents/codex.mjs';
 import { codexSessionsDir, listCodexSessions, readCodexSession } from '../src/studio/agents/codex-sessions.mjs';
-import { createAgentHub } from '../src/studio/agents/index.mjs';
+import { createAgentHub, OMNI_SESSION_PROMPT, omniMcpServer } from '../src/studio/agents/index.mjs';
+import { createConversationIndex } from '../src/studio/conversations.mjs';
+import { memorySummary } from '../src/studio/memory-summary.mjs';
+import { openMemory } from '../src/memory.mjs';
+import { runMcpServer } from '../src/mcp-server.mjs';
 import { resolveWorkspace, workspaceId } from '../src/studio/workspace.mjs';
 import { makeStudioProject } from '../test-support/studio-fixtures.mjs';
 import { startStudioHost } from '../test-support/studio-host.mjs';
@@ -844,6 +848,152 @@ describe('AG Codex app-server driver and sessions', () => {
       );
     } finally {
       rmSync(codexHome, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('AG shared memory MCP across agents and modes', () => {
+  test('AG-26 Omni MCP works in Studio mode without repo files, records observations and decisions, reports active work, and is wired into Claude and Codex', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'omni-mcp-studio-repo-'));
+    const home = mkdtempSync(join(tmpdir(), 'omni-mcp-studio-home-'));
+    const prevHome = process.env.OMNI_STUDIO_HOME;
+    process.env.OMNI_STUDIO_HOME = home;
+    try {
+      const workspace = await resolveWorkspace(repo, { env: { OMNI_STUDIO_HOME: home } });
+      assert.equal(workspace.mode, 'studio');
+      const memory = openMemory(workspace.memoryPath);
+      const conversations = createConversationIndex(memory.db);
+
+      const claudeSpawned = [];
+      const codexSpawned = [];
+      const claudeProc = fakeProcess();
+      const codexProc = fakeProcess();
+
+      const hub = createAgentHub({
+        root: repo,
+        workspace,
+        conversations,
+        notify: async () => undefined,
+        locate: async () => ({ file: 'claude.exe', prefix: [], path: 'claude.exe' }),
+        locateCodexImpl: async () => ({ file: 'codex.exe', prefix: [], path: 'codex.exe' }),
+        createDriver: opts =>
+          createClaudeDriver({
+            ...opts,
+            spawnImpl: (_file, args) => {
+              claudeSpawned.push(args);
+              return claudeProc;
+            },
+          }),
+        createCodex: opts =>
+          createCodexDriver({
+            ...opts,
+            spawnImpl: (_file, args) => {
+              codexSpawned.push(args);
+              return codexProc;
+            },
+          }),
+      });
+
+      // Start a Claude turn and simulate an edit so active work is recorded in memory.db
+      await hub.prompt({ conversationId: 'conv-claude', agent: 'claude', text: 'Edita src/api.ts' });
+      await tick();
+      const mcpFlagIdx = claudeSpawned[0].indexOf('--mcp-config');
+      assert.ok(mcpFlagIdx !== -1, 'Claude receives --mcp-config');
+      const parsedMcp = JSON.parse(claudeSpawned[0][mcpFlagIdx + 1]);
+      assert.deepEqual(parsedMcp.mcpServers.omni, omniMcpServer());
+      const promptFlagIdx = claudeSpawned[0].indexOf('--append-system-prompt');
+      assert.equal(claudeSpawned[0][promptFlagIdx + 1], OMNI_SESSION_PROMPT);
+
+      claudeProc.send({ type: 'system', subtype: 'init', model: 'sonnet', session_id: 's-claude-1', tools: [] });
+      claudeProc.send({
+        type: 'assistant',
+        message: {
+          id: 'm1',
+          content: [{ type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: 'src/api.ts' } }],
+        },
+      });
+      await tick();
+
+      // Start a Codex turn and check -c mcp_servers.omni.* and developerInstructions
+      const codexPrompt = hub.prompt({ conversationId: 'conv-codex', agent: 'codex', text: 'Revisa el proyecto' });
+      await tick();
+      assert.ok(codexSpawned[0].some(arg => arg.startsWith('mcp_servers.omni.command=')));
+      codexProc.send({ id: codexProc.written[0].id, result: { serverInfo: { name: 'codex' } } });
+      await tick();
+      assert.equal(codexProc.written[2].params.developerInstructions, OMNI_SESSION_PROMPT);
+      codexProc.send({ id: codexProc.written[2].id, result: { threadId: 'th-codex-9', model: 'gpt-5.3-codex' } });
+      await tick();
+      codexProc.send({ id: codexProc.written[3].id, result: { turnId: 'turn-9' } });
+      await codexPrompt;
+
+      // Run MCP server in Studio mode over in-memory streams
+      const mcpIn = new PassThrough();
+      const mcpOut = new PassThrough();
+      const mcpReplies = [];
+      let outBuf = '';
+      mcpOut.on('data', chunk => {
+        outBuf += String(chunk);
+        let nl = outBuf.indexOf('\n');
+        while (nl !== -1) {
+          const line = outBuf.slice(0, nl).trim();
+          outBuf = outBuf.slice(nl + 1);
+          if (line) mcpReplies.push(JSON.parse(line));
+          nl = outBuf.indexOf('\n');
+        }
+      });
+      const serverPromise = runMcpServer({
+        root: repo,
+        version: '0.8.1',
+        studio: true,
+        input: mcpIn,
+        output: mcpOut,
+      });
+
+      const callTool = async (id, name, args = {}) => {
+        mcpIn.write(
+          `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } })}\n`,
+        );
+        while (!mcpReplies.some(reply => reply.id === id)) await tick();
+        const reply = mcpReplies.find(entry => entry.id === id);
+        return JSON.parse(reply.result.content[0].text);
+      };
+
+      const obs = await callTool(1, 'omni_record_observation', {
+        category: 'gotcha',
+        scope: 'src/api.ts',
+        summary: 'Los endpoints requieren validación de cabeceras.',
+      });
+      assert.equal(obs.category, 'gotcha');
+
+      const dec = await callTool(2, 'omni_record_decision', {
+        topic: 'shared-memory-wal',
+        basis: 'Usar SQLite WAL fuera del repositorio cuando Omni corre en modo Studio.',
+      });
+      assert.equal(dec.file_path, null);
+      assert.deepEqual(readdirSync(repo), [], 'zero files written to the repository in Studio mode');
+
+      const search = await callTool(3, 'omni_search_context', { query: 'cabeceras' });
+      assert.equal(search.results.length, 1);
+      assert.equal(search.results[0].source_id, obs.id);
+
+      const work = await callTool(4, 'omni_active_work');
+      assert.ok(work.live.some(entry => entry.agent === 'claude' && entry.files.includes('src/api.ts')));
+      assert.ok(work.live.some(entry => entry.agent === 'codex' && entry.sessionId === 'th-codex-9'));
+
+      mcpIn.end();
+      await serverPromise;
+
+      const summary = memorySummary(memory.db, workspace);
+      assert.equal(summary.counts.observations, 1);
+      assert.equal(summary.counts.decisions, 1);
+
+      hub.dispose();
+      memory.close();
+    } finally {
+      if (prevHome === undefined) delete process.env.OMNI_STUDIO_HOME;
+      else process.env.OMNI_STUDIO_HOME = prevHome;
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   });
 });

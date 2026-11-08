@@ -295,6 +295,8 @@ export function createClaudeDriver({
   env = process.env,
   spawnImpl = spawn,
   locate = () => locateClaude({ env }),
+  mcpConfig = null,
+  systemPrompt = null,
 }) {
   let child = null;
   let state = 'idle'; // idle | starting | ready | busy
@@ -370,6 +372,8 @@ export function createClaudeDriver({
     }
     const permission = options.permission ?? DEFAULT_PERMISSION;
     const args = [...location.prefix, ...CLAUDE_BASE_ARGS, '--permission-mode', CLAUDE_PERMISSION_MODES[permission]];
+    if (mcpConfig) args.push('--mcp-config', typeof mcpConfig === 'string' ? mcpConfig : JSON.stringify(mcpConfig));
+    if (systemPrompt) args.push('--append-system-prompt', systemPrompt);
     if (options.model) args.push('--model', options.model);
     if (options.effort) args.push('--effort', options.effort);
     if (session.sessionId) args.push('--resume', session.sessionId);

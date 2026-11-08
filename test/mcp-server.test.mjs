@@ -10,7 +10,14 @@ import { decisionFileName, memoryPath, uuidv7 } from '../src/memory.mjs';
 import { SPECS_GITIGNORE } from '../src/assets.mjs';
 
 const CLI = fileURLToPath(new URL('../bin/omni-spec.mjs', import.meta.url));
-const TOOL_NAMES = ['omni_check_blast_radius', 'omni_get_active_spec', 'omni_record_decision', 'omni_search_context'];
+const TOOL_NAMES = [
+  'omni_active_work',
+  'omni_check_blast_radius',
+  'omni_get_active_spec',
+  'omni_record_decision',
+  'omni_record_observation',
+  'omni_search_context',
+];
 
 let root;
 let servers;

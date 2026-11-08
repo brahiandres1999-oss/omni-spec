@@ -1,8 +1,22 @@
+import { fileURLToPath } from 'node:url';
 import { StudioError } from '../protocol.mjs';
 import { CLAUDE_EFFORTS, CLAUDE_MODELS, CLAUDE_PERMISSION_MODES, createClaudeDriver, locateClaude } from './claude.mjs';
 import { listClaudeSessions, readClaudeSession } from './claude-sessions.mjs';
 import { CODEX_EFFORTS, CODEX_MODELS, CODEX_PERMISSION_MODES, createCodexDriver, locateCodex } from './codex.mjs';
 import { listCodexSessions, readCodexSession } from './codex-sessions.mjs';
+
+const OMNI_BIN = fileURLToPath(new URL('../../../bin/omni-spec.mjs', import.meta.url));
+
+/** Short per-session instruction telling every agent when to consult and record shared project memory (Q26). */
+export const OMNI_SESSION_PROMPT =
+  'Memoria compartida de Omni: antes de modificar código, consulta `omni_search_context` y `omni_active_work` (y `omni_check_blast_radius` si cambias contratos o módulos compartidos). Cuando descubras un patrón, trampa, convención o restricción del proyecto, regístralo con `omni_record_observation`; cuando tomes una decisión de arquitectura, regístrala con `omni_record_decision`.';
+
+export function omniMcpServer() {
+  return {
+    command: process.execPath,
+    args: [OMNI_BIN, 'mcp', '--studio'],
+  };
+}
 
 /**
  * The agents Omni Studio can drive (docs/STUDIO-AGENT-COCKPIT.md). Every driver emits the same
@@ -115,10 +129,45 @@ export function createAgentHub({
       ...event,
     });
 
+  const syncActiveWork = () => {
+    if (!conversations || typeof conversations.setActiveWork !== 'function') return;
+    try {
+      const entries = allSlots()
+        .map(entry => {
+          const st = entry.driver.status();
+          return {
+            conversationId: entry.id,
+            agent: entry.agent,
+            sessionId: st.sessionId ?? entry.sessionId,
+            title: labelOf(entry),
+            state: st.state,
+            files: [...entry.files],
+          };
+        })
+        .filter(entry => entry.state !== 'idle' || entry.sessionId !== null || entry.files.length > 0);
+      conversations.setActiveWork(entries);
+    } catch (error) {
+      log(`[studio-engine] active work not updated: ${error.message}`);
+    }
+  };
+
+  const mcp = omniMcpServer();
   const makeDriver = slot =>
     slot.agent === 'codex'
-      ? createCodex({ cwd: root, emit: event => onSlotEvent(slot, event), locate: locateCodexImpl })
-      : createDriver({ cwd: root, emit: event => onSlotEvent(slot, event), locate });
+      ? createCodex({
+          cwd: root,
+          emit: event => onSlotEvent(slot, event),
+          locate: locateCodexImpl,
+          mcpServer: mcp,
+          developerInstructions: OMNI_SESSION_PROMPT,
+        })
+      : createDriver({
+          cwd: root,
+          emit: event => onSlotEvent(slot, event),
+          locate,
+          mcpConfig: { mcpServers: { omni: mcp } },
+          systemPrompt: OMNI_SESSION_PROMPT,
+        });
 
   const onSlotEvent = (slot, event) => {
     if (event.kind === 'init' && event.sessionId) {
@@ -167,6 +216,9 @@ export function createAgentHub({
     if (event.kind === 'result') {
       const sessionId = slot.driver.status().sessionId ?? slot.sessionId;
       if (sessionId) index('touched', store => store.touch(slot.agent, sessionId));
+    }
+    if (event.kind === 'status' || event.kind === 'init' || event.kind === 'tool' || event.kind === 'result') {
+      syncActiveWork();
     }
   };
 
@@ -290,6 +342,7 @@ export function createAgentHub({
       index('recorded', store =>
         store.record({ agent: resolvedAgent, sessionId, title: history.title, titleSource: history.titleSource }),
       );
+      syncActiveWork();
       return history;
     },
     reset({ conversationId = 'default' } = {}) {
@@ -299,7 +352,9 @@ export function createAgentHub({
       slot.firstPrompt = null;
       slot.title = '';
       slot.files.clear();
-      return slot.driver.reset();
+      const res = slot.driver.reset();
+      syncActiveWork();
+      return res;
     },
     dispose() {
       for (const slot of allSlots()) slot.driver.dispose();

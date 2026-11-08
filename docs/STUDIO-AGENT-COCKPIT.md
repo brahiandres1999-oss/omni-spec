@@ -214,8 +214,8 @@ resumen), varias cuentas por agente y una versión comercial.
 | 2a · Estructura | Fuera pestañas y Dock; ruta «Proyecto / Título» arriba; páginas Specs, Memoria y Uso en el panel izquierdo; panel derecho «Resumen» (Revisión, Archivos, Terminal) cerrado por defecto; Ctrl+B y Ctrl+J | **Hecha**: commit `bf154d8`, probada en la app |
 | 2b · Compositor y revisión | Modelo agrupado por agente con razonamiento, permisos, cola y «+» en el compositor; Revisión de esta conversación con +N −M e Impacto; Ajustes modal con Skills en Personalizaciones | **Hecha** (pruebas que requieren turno de LLM quedan en el checklist acumulativo hasta integrar más agentes) |
 | 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | **Hecha**: commit `af860d9` (`AG-24`, `CH-19`, `SH-15`; pruebas con LLM en checklist acumulativo) |
-| 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | **Hecha** (`AG-25`, `CH-20`; pruebas con LLM en checklist acumulativo) |
-| 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | |
+| 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | **Hecha**: commit `2c7bebe` (`AG-25`, `CH-20`; pruebas con LLM en checklist acumulativo) |
+| 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | **Hecha** (`AG-26`; pruebas con LLM en checklist acumulativo) |
 | 6 · ACP y Antigravity | Driver ACP genérico; Antigravity experimental; modelos de Claude leídos de su `initialize` | |
 
 Orden: primero lo visible; el paralelo antes que Codex para que Claude y Codex trabajen juntos el día que llegue

@@ -588,7 +588,7 @@ class Memory {
     return report;
   }
 
-  recordDecision(root, { topic, basis, sources = [] }) {
+  recordDecision(root, { topic, basis, sources = [], studio = false }) {
     if (typeof basis !== 'string' || basis.trim().length < 10)
       throw new Error('Decision basis must have at least 10 characters.');
     if (!Array.isArray(sources) || sources.some(source => typeof source !== 'string'))
@@ -604,11 +604,13 @@ class Memory {
       recorded_at: new Date().toISOString(),
     };
     const content = JSON.stringify(record, null, 2) + '\n';
-    fs.mkdirSync(join(root, DECISIONS_DIR), { recursive: true });
-    writeFileAtomicSync(join(root, path), content);
+    if (!studio) {
+      fs.mkdirSync(join(root, DECISIONS_DIR), { recursive: true });
+      writeFileAtomicSync(join(root, path), content);
+    }
     const treeOid = this.statements.specsState.get(SPECS_STATE_KEY)?.tree_oid ?? '';
-    this.write(() => this.#upsertDecision(path, record, sha256(content), treeOid));
-    return { ...record, file_path: path };
+    this.write(() => this.#upsertDecision(studio ? null : path, record, sha256(content), treeOid));
+    return { ...record, file_path: studio ? null : path };
   }
 
   #upsertDecision(path, record, hash, treeOid) {
@@ -625,7 +627,7 @@ class Memory {
     );
     this.statements.deleteFts.run('decision', record.id);
     this.statements.insertFts.run('decision', record.id, [record.topic, record.basis, ...sources].join('\n'));
-    this.statements.upsertSyncState.run(path, treeOid, hash, Date.now());
+    if (path) this.statements.upsertSyncState.run(path, treeOid, hash, Date.now());
   }
 
   #deleteDecision(id, path) {

@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
-import { openProjectMemory, startCheckpointSupervisor, syncFromGit } from './memory.mjs';
+import { openMemory, openProjectMemory, startCheckpointSupervisor, syncFromGit } from './memory.mjs';
 import { getActiveSpec } from './manifest.mjs';
 import { checkBlastRadius, normalizeTargets } from './cartography/blast-radius.mjs';
+import { resolveWorkspace } from './studio/workspace.mjs';
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -13,6 +14,7 @@ const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
 
 const stringArray = { type: 'array', items: { type: 'string' } };
+const OBSERVATION_CATEGORIES = new Set(['pattern', 'gotcha', 'convention', 'constraint']);
 
 export const TOOLS = [
   {
@@ -50,6 +52,31 @@ export const TOOLS = [
       required: ['topic', 'basis'],
     },
   },
+  {
+    name: 'omni_record_observation',
+    description:
+      'Registra un aprendizaje del proyecto (patrón, trampa, convención o restricción) en la memoria compartida para otros agentes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['pattern', 'gotcha', 'convention', 'constraint'],
+          description: 'Tipo de aprendizaje: pattern, gotcha, convention o constraint',
+        },
+        scope: { type: 'string', description: 'Archivo, directorio o módulo al que aplica' },
+        summary: { type: 'string', description: 'Descripción clara del aprendizaje' },
+        evidence: { type: 'string', description: 'Evidencia opcional (archivo, comando o prueba)' },
+      },
+      required: ['category', 'scope', 'summary'],
+    },
+  },
+  {
+    name: 'omni_active_work',
+    description:
+      'Muestra quién trabaja en qué dentro de este proyecto: conversaciones vivas, su agente y los archivos que tocaron.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 const TOOLS_BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]));
@@ -74,13 +101,18 @@ function readAcceptance(root, spec) {
   return fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8').replace(/^﻿/, '')) : null;
 }
 
-function toolHandlers(root, memory) {
+function hasTable(db, name) {
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+}
+
+function toolHandlers(root, memory, { studio = false } = {}) {
   return {
     async omni_search_context({ query, scope }) {
-      await syncFromGit(memory, root);
+      if (!studio) await syncFromGit(memory, root);
       return { results: memory.searchContext(query, { scope: scope ?? null }) };
     },
     async omni_get_active_spec() {
+      if (studio) return { activeSpec: null, acceptance: null, mode: 'studio' };
       const activeSpec = await getActiveSpec(root);
       return { activeSpec, acceptance: activeSpec ? readAcceptance(root, activeSpec) : null };
     },
@@ -89,7 +121,43 @@ function toolHandlers(root, memory) {
       return checkBlastRadius(root, memory, normalizeTargets(root, root, files));
     },
     async omni_record_decision({ topic, basis, sources }) {
-      return memory.recordDecision(root, { topic, basis, sources });
+      return memory.recordDecision(root, { topic, basis, sources, studio });
+    },
+    async omni_record_observation({ category, scope, summary, evidence }) {
+      if (!OBSERVATION_CATEGORIES.has(category))
+        throw new Error(`Invalid observation category "${category}": use pattern, gotcha, convention or constraint.`);
+      if (!scope?.trim()) throw new Error('Observation scope must not be empty.');
+      if (!summary?.trim()) throw new Error('Observation summary must not be empty.');
+      const [id] = memory.addObservations([
+        { category, scope: scope.trim(), summary: summary.trim(), evidence: evidence?.trim() || null },
+      ]);
+      return { id, category, scope: scope.trim(), summary: summary.trim() };
+    },
+    async omni_active_work() {
+      const live = hasTable(memory.db, 'studio_active_work')
+        ? memory.db
+            .prepare(
+              'SELECT conversation_id, agent, session_id, title, state, files_json, updated_at FROM studio_active_work ORDER BY updated_at DESC',
+            )
+            .all()
+            .map(row => ({
+              conversationId: row.conversation_id,
+              agent: row.agent,
+              sessionId: row.session_id,
+              title: row.title,
+              state: row.state,
+              files: JSON.parse(row.files_json || '[]'),
+              updatedAt: row.updated_at,
+            }))
+        : [];
+      const recent = hasTable(memory.db, 'studio_conversations')
+        ? memory.db
+            .prepare(
+              'SELECT agent, session_id AS sessionId, title, updated_at AS updatedAt FROM studio_conversations WHERE archived_at IS NULL ORDER BY updated_at DESC LIMIT 10',
+            )
+            .all()
+        : [];
+      return { live, recent };
     },
   };
 }
@@ -156,14 +224,32 @@ async function handleLine(line, context) {
 export async function runMcpServer({
   root,
   version,
+  studio = false,
   input = process.stdin,
   output = process.stdout,
   log = console.error,
 }) {
-  const { memory, quarantined } = await openProjectMemory(root);
-  if (quarantined) log(`[omni-spec mcp] corrupt memory quarantined in ${quarantined}; rebuilt from Git.`);
+  let memory;
+  let isStudio = false;
+  if (studio) {
+    const workspace = await resolveWorkspace(root);
+    isStudio = workspace.mode === 'studio';
+    if (isStudio) {
+      memory = openMemory(workspace.memoryPath);
+    } else {
+      const opened = await openProjectMemory(root);
+      memory = opened.memory;
+      if (opened.quarantined)
+        log(`[omni-spec mcp] corrupt memory quarantined in ${opened.quarantined}; rebuilt from Git.`);
+    }
+  } else {
+    const opened = await openProjectMemory(root);
+    memory = opened.memory;
+    if (opened.quarantined)
+      log(`[omni-spec mcp] corrupt memory quarantined in ${opened.quarantined}; rebuilt from Git.`);
+  }
   const supervisor = startCheckpointSupervisor(memory);
-  const context = { handlers: toolHandlers(root, memory), version, log };
+  const context = { handlers: toolHandlers(root, memory, { studio: isStudio }), version, log };
   try {
     for await (const line of createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY })) {
       if (!line.trim()) continue;

@@ -106,6 +106,7 @@ const booleanFlags = new Set([
   'crosses-contract',
   'existing-tests',
   'replace',
+  'studio',
 ]);
 
 function acceptanceSummary(acceptance) {
@@ -349,7 +350,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     // Paths given to blast-radius are relative to where the user ran the command, not the root.
     const invocationDir = resolve(workingDir);
     if (command !== 'init' && root) workingDir = root;
-    if (mutating.has(command) && !root) throw new Error('No OmniSpec project found. Run omni-spec init first.');
+    if (mutating.has(command) && !root && !(command === 'mcp' && flags.studio))
+      throw new Error('No OmniSpec project found. Run omni-spec init first.');
     switch (command) {
       case 'guide': {
         if (!['design', 'setup', 'evidence'].includes(positionals[0]))
@@ -918,7 +920,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         return failOn !== undefined && levels.indexOf(report.overall.level) >= levels.indexOf(failOn) ? 2 : 0;
       }
       case 'mcp': {
-        await runMcpServer({ root: workingDir, version: await getCliVersion() });
+        await runMcpServer({ root: workingDir, version: await getCliVersion(), studio: Boolean(flags.studio) });
         return 0;
       }
       default:
