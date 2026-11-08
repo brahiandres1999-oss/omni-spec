@@ -201,10 +201,10 @@ const compact = (value: number) =>
       ? `${Math.round(value / 1000)}k`
       : formatInt(value);
 
-/** `claude-opus-5-5` → `Opus 5.5`; an id of another shape is shown as the CLI wrote it. */
+/** `claude-opus-5-5` → `Opus 5.5`; an id of another shape uses its known label or what the CLI wrote. */
 export function modelName(id: string): string {
   const match = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id);
-  if (!match) return id;
+  if (!match) return t.models[id] ?? id;
   const [, family = '', major, minor] = match;
   const name = t.models[family] ?? family;
   return minor ? `${name} ${major}.${minor}` : `${name} ${major}`;
@@ -292,10 +292,11 @@ export function ChatHeader() {
   const model = useStore(chat, state => state.model);
   const status = useStore(chat, state => state.status);
   const options = useStore(chat, state => state.options);
+  const applied = useStore(chat, state => state.applied);
   const sessionId = useStore(chat, state => state.sessionId);
   const usage = useStore(chat, state => state.usage);
   const busy = agentState === 'busy' || agentState === 'starting';
-  const activeAgentId = !sessionId && !hasItems && options.agent ? options.agent : status?.active;
+  const activeAgentId = (sessionId || hasItems ? applied?.agent : null) ?? options.agent ?? status?.active ?? 'claude';
   const agent = status?.agents.find(entry => entry.id === activeAgentId) ?? status?.agents[0];
   const available = agent?.available ?? true;
   return (
@@ -347,7 +348,8 @@ export function ChatView() {
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const busy = agentState === 'busy' || agentState === 'starting';
-  const activeAgentId = !sessionId && items.length === 0 && options.agent ? options.agent : status?.active;
+  const activeAgentId =
+    (sessionId || items.length > 0 ? applied?.agent : null) ?? options.agent ?? status?.active ?? 'claude';
   const agent = status?.agents.find(entry => entry.id === activeAgentId) ?? status?.agents[0];
   const available = agent?.available ?? true;
   const pending = pendingChange(model, applied, options);
@@ -393,7 +395,9 @@ export function ChatView() {
               <span className="grid size-10 place-items-center rounded-xl border border-divider bg-surface text-fg-muted">
                 <Icon icon={MessageSquare} size={18} />
               </span>
-              <p className="max-w-md text-[13px] text-balance text-fg-muted">{t.empty}</p>
+              <p className="max-w-md text-[13px] text-balance text-fg-muted">
+                {agent?.label && agent.id !== 'claude' ? t.emptyFor(agent.label) : t.empty}
+              </p>
               {status ? (
                 <p className="text-xs text-fg-muted/80">
                   {status.workspace.mode === 'studio' ? t.studioMode : t.projectMode}

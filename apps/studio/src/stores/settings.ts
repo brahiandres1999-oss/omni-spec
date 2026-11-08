@@ -21,6 +21,8 @@ export interface Settings {
   /** Windows notice when a conversation asks for approval or finishes out of sight (vuelta 3). */
   notifyApproval: boolean;
   notifyDone: boolean;
+  /** Experimental Antigravity (`agy acp`) toggle in Ajustes › Agentes, off by default (Q23). */
+  enableAntigravity: boolean;
 }
 
 const KEY = 'settings.v1';
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   enterWhileBusy: 'queue',
   notifyApproval: true,
   notifyDone: true,
+  enableAntigravity: false,
 };
 
 function isSettings(value: unknown): value is Partial<Settings> {
@@ -45,6 +48,8 @@ export function readSettings(): Settings {
     enterWhileBusy: saved.enterWhileBusy === 'interrupt' ? 'interrupt' : 'queue',
     notifyApproval: typeof saved.notifyApproval === 'boolean' ? saved.notifyApproval : DEFAULT_SETTINGS.notifyApproval,
     notifyDone: typeof saved.notifyDone === 'boolean' ? saved.notifyDone : DEFAULT_SETTINGS.notifyDone,
+    enableAntigravity:
+      typeof saved.enableAntigravity === 'boolean' ? saved.enableAntigravity : DEFAULT_SETTINGS.enableAntigravity,
   };
 }
 
@@ -57,8 +62,8 @@ export function createSettingsStore() {
     ...readSettings(),
     update(patch) {
       set(patch);
-      const { defaultPermission, enterWhileBusy, notifyApproval, notifyDone } = get();
-      writeJson(KEY, { defaultPermission, enterWhileBusy, notifyApproval, notifyDone });
+      const { defaultPermission, enterWhileBusy, notifyApproval, notifyDone, enableAntigravity } = get();
+      writeJson(KEY, { defaultPermission, enterWhileBusy, notifyApproval, notifyDone, enableAntigravity });
     },
   }));
 }

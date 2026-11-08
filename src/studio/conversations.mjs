@@ -94,7 +94,9 @@ export function createConversationIndex(db, { now = () => new Date().toISOString
   // Opening a conversation is not activity: an existing entry keeps its place in the rail.
   const record = db.prepare(
     `INSERT INTO studio_conversations (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, NULL)
-     ON CONFLICT(agent, session_id) DO NOTHING`,
+     ON CONFLICT(agent, session_id) DO UPDATE SET
+       title = CASE WHEN studio_conversations.title_source != 'user' AND excluded.title_source = 'agent' THEN excluded.title ELSE studio_conversations.title END,
+       title_source = CASE WHEN studio_conversations.title_source != 'user' AND excluded.title_source = 'agent' THEN 'agent' ELSE studio_conversations.title_source END`,
   );
   const touch = db.prepare('UPDATE studio_conversations SET updated_at = ? WHERE agent = ? AND session_id = ?');
   return {

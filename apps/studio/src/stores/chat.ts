@@ -124,6 +124,7 @@ export interface AgentStatus {
   agents: Array<{
     id: string;
     label: string;
+    experimental?: boolean;
     available: boolean;
     path: string | null;
     models: string[];
@@ -387,7 +388,29 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       }
       if (event.kind === 'init') {
         const nextSession = str(event.sessionId) || get().sessionId;
-        set({ model: str(event.model) || null, sessionId: nextSession });
+        const currentStatus = get().status;
+        const eventAgent = str(event.agent) || currentStatus?.active || 'claude';
+        const dynamicModels = isCommands(event.models) ? event.models : null;
+        const dynamicEfforts = isCommands(event.efforts) ? event.efforts : null;
+        const nextStatus = currentStatus
+          ? {
+              ...currentStatus,
+              active: eventAgent,
+              agents:
+                dynamicModels || dynamicEfforts
+                  ? currentStatus.agents.map(entry =>
+                      entry.id === eventAgent
+                        ? {
+                            ...entry,
+                            ...(dynamicModels ? { models: dynamicModels } : {}),
+                            ...(dynamicEfforts ? { efforts: dynamicEfforts } : {}),
+                          }
+                        : entry,
+                    )
+                  : currentStatus.agents,
+            }
+          : currentStatus;
+        set({ model: str(event.model) || null, sessionId: nextSession, status: nextStatus });
         if (isCommands(event.commands) && event.commands.length > 0) {
           set({ commands: event.commands });
           writeJson(COMMANDS_KEY, event.commands);
@@ -490,7 +513,9 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           return;
         }
         try {
-          const history = (await client.call('agent.resume', { sessionId })) as ResumedConversation;
+          const history = (await client.call('agent.resume', { sessionId })) as ResumedConversation & {
+            agent?: string;
+          };
           let items: ChatItem[] = [];
           for (const event of history.events ?? []) items = applyAgentEvent(items, event);
           // A tool without a recorded result was cut short; it is not running any more.
@@ -500,13 +525,15 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           if (history.truncated)
             items.unshift({ type: 'notice', id: nextId('notice'), text: messages.chat.olderHidden });
           const nextConvId = live?.conversationId ?? (busyNow() ? sessionId : get().conversationId);
+          const resumedAgent =
+            live?.agent ?? (typeof history.agent === 'string' && history.agent ? history.agent : null);
           set({
             threads,
             conversationId: nextConvId,
             items: live && live.items.length > items.length ? live.items : items,
             sessionId,
             model: live?.model ?? null,
-            applied: live?.applied ?? null,
+            applied: live?.applied ?? (resumedAgent ? { agent: resumedAgent, model: null, effort: null } : null),
             error: null,
             agentState: live?.agentState ?? 'idle',
             usage: live?.usage ?? {
@@ -518,6 +545,23 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             permission: live?.permission ?? readSettings().defaultPermission,
           });
         } catch (reason) {
+          if (live && live.items.length > 0) {
+            set({
+              threads,
+              conversationId: live.conversationId,
+              sessionId: live.sessionId ?? sessionId,
+              items: live.items,
+              agentState: live.agentState,
+              model: live.model,
+              applied: live.applied,
+              usage: live.usage,
+              permission: live.permission,
+              queue: live.queue,
+              draft: live.draft,
+              error: null,
+            });
+            return;
+          }
           fail(reason);
         }
       },
@@ -530,23 +574,44 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           set({ queue: [...get().queue, { id: nextId('queued'), text: message }], draft: '' });
           return;
         }
+        const beforeState = get();
+        const wasLocked = beforeState.sessionId !== null || beforeState.items.length > 0;
+        const lockedAgent = wasLocked ? beforeState.applied?.agent : null;
+        const activeAgent = lockedAgent ?? beforeState.options.agent ?? null;
+        const agentEntry = beforeState.status?.agents.find(a => a.id === (activeAgent ?? 'claude'));
+        const rawModel = beforeState.options.model;
+        const modelValid =
+          !rawModel ||
+          !agentEntry?.models ||
+          agentEntry.models.length === 0 ||
+          agentEntry.models.includes(rawModel) ||
+          ((activeAgent ?? 'claude') === 'claude' && ['fable', 'opus', 'sonnet', 'haiku'].includes(rawModel));
+        const model = modelValid ? rawModel : null;
+        const rawEffort = beforeState.options.effort;
+        const effortValid =
+          !rawEffort ||
+          !agentEntry?.efforts ||
+          agentEntry.efforts.length === 0 ||
+          agentEntry.efforts.includes(rawEffort);
+        const effort = effortValid ? rawEffort : null;
         set({
-          items: [...get().items, { type: 'user', id: nextId('user'), text: message }],
+          items: [...beforeState.items, { type: 'user', id: nextId('user'), text: message }],
           draft: '',
           error: null,
           agentState: 'starting',
         });
         try {
-          const { agent, model, effort } = get().options;
           await client.call('agent.prompt', {
             ...convParam(),
-            ...(agent && agent !== 'claude' ? { agent: agent as 'codex' } : {}),
+            ...(activeAgent && activeAgent !== 'claude'
+              ? { agent: activeAgent as 'codex' | 'antigravity' | 'opencode' | 'cline' }
+              : {}),
             text: message,
             ...(model ? { model } : {}),
             ...(effort ? { effort: effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } : {}),
             permission: get().permission,
           });
-          set({ applied: { agent: agent ?? null, model, effort } });
+          set({ applied: { agent: activeAgent, model, effort } });
         } catch (reason) {
           set({ agentState: 'idle', draft: message });
           fail(reason);
@@ -583,9 +648,9 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         }
       },
       async reset() {
+        const threads = saveCurrentThread(get());
         // When a conversation is working, starting a new one keeps it running in the background (Fase 3, vuelta 3).
         if (busyNow()) {
-          const threads = saveCurrentThread(get());
           set({
             threads,
             conversationId: nextId('conv'),
@@ -605,6 +670,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         try {
           await client.call('agent.reset', convParam());
           set({
+            threads,
             items: [],
             model: null,
             applied: null,

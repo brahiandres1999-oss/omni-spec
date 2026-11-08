@@ -27,8 +27,13 @@ export const CLAUDE_BASE_ARGS = Object.freeze([
   'stdio',
 ]);
 
-/** Model aliases the CLI resolves to the current model of each family (`claude --help`). */
-export const CLAUDE_MODELS = Object.freeze(['fable', 'opus', 'sonnet', 'haiku']);
+/** Model IDs reported by Claude Code 2.1.318 (`initialize`). */
+export const CLAUDE_MODELS = Object.freeze([
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-fable-5-1',
+  'claude-haiku-5-5',
+]);
 /** Values of `--effort` accepted by the CLI (`claude --help`). */
 export const CLAUDE_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -136,6 +141,20 @@ export function translateClaudeMessage(message, state) {
     case 'system':
       if (message.subtype === 'init') {
         state.model = message.model ?? null;
+        const reportedModels = Array.isArray(message.models)
+          ? message.models
+              .map(entry => (typeof entry === 'string' ? entry : (entry?.id ?? entry?.name ?? null)))
+              .filter(Boolean)
+          : [];
+        const reportedEfforts = Array.isArray(message.models)
+          ? [
+              ...new Set(
+                message.models.flatMap(entry =>
+                  Array.isArray(entry?.supportedEffortLevels) ? entry.supportedEffortLevels : [],
+                ),
+              ),
+            ]
+          : [];
         return [
           {
             kind: 'init',
@@ -143,6 +162,8 @@ export function translateClaudeMessage(message, state) {
             sessionId: message.session_id ?? null,
             permissionMode: message.permissionMode ?? null,
             tools: Array.isArray(message.tools) ? message.tools.length : null,
+            ...(reportedModels.length > 0 ? { models: reportedModels } : {}),
+            ...(reportedEfforts.length > 0 ? { efforts: reportedEfforts } : {}),
             // Slash commands and skills the CLI accepts here, without the slash: the composer's «/» list.
             commands: Array.isArray(message.slash_commands)
               ? message.slash_commands.filter(name => typeof name === 'string' && name)

@@ -1,5 +1,17 @@
 import { fileURLToPath } from 'node:url';
 import { StudioError } from '../protocol.mjs';
+import {
+  ACP_PERMISSION_MODES,
+  ANTIGRAVITY_EFFORTS,
+  ANTIGRAVITY_MODELS,
+  CLINE_MODELS,
+  createAcpDriver,
+  locateAntigravity,
+  locateCline,
+  locateOpenCode,
+  OPENCODE_MODELS,
+  readAcpSession,
+} from './acp.mjs';
 import { CLAUDE_EFFORTS, CLAUDE_MODELS, CLAUDE_PERMISSION_MODES, createClaudeDriver, locateClaude } from './claude.mjs';
 import { listClaudeSessions, readClaudeSession } from './claude-sessions.mjs';
 import { CODEX_EFFORTS, CODEX_MODELS, CODEX_PERMISSION_MODES, createCodexDriver, locateCodex } from './codex.mjs';
@@ -38,10 +50,33 @@ export const AGENTS = Object.freeze([
     efforts: CODEX_EFFORTS,
     permissions: Object.freeze(Object.keys(CODEX_PERMISSION_MODES)),
   },
+  {
+    id: 'antigravity',
+    label: 'Antigravity',
+    experimental: true,
+    models: ANTIGRAVITY_MODELS,
+    efforts: ANTIGRAVITY_EFFORTS,
+    permissions: Object.freeze(Object.keys(ACP_PERMISSION_MODES)),
+  },
+  {
+    id: 'opencode',
+    label: 'OpenCode',
+    models: OPENCODE_MODELS,
+    efforts: Object.freeze([]),
+    permissions: Object.freeze(Object.keys(ACP_PERMISSION_MODES)),
+  },
+  {
+    id: 'cline',
+    label: 'Cline',
+    models: CLINE_MODELS,
+    efforts: Object.freeze([]),
+    permissions: Object.freeze(Object.keys(ACP_PERMISSION_MODES)),
+  },
 ]);
 
 export function agentForModel(model) {
   if (!model) return null;
+  if (['fable', 'opus', 'sonnet', 'haiku'].includes(model)) return 'claude';
   for (const agent of AGENTS) {
     if (agent.models.includes(model)) return agent.id;
   }
@@ -91,8 +126,12 @@ export function createAgentHub({
   conversations = null,
   createDriver = createClaudeDriver,
   createCodex = createCodexDriver,
+  createAcp = createAcpDriver,
   locate = locateClaude,
   locateCodexImpl = locateCodex,
+  locateAntigravityImpl = locateAntigravity,
+  locateOpenCodeImpl = locateOpenCode,
+  locateClineImpl = locateCline,
   listSessions = listClaudeSessions,
   readSession = readClaudeSession,
   listCodex = listCodexSessions,
@@ -151,29 +190,70 @@ export function createAgentHub({
     }
   };
 
+  /** @type {Map<string, {models?: string[], efforts?: string[]}>} */
+  const dynamicModels = new Map();
+
   const mcp = omniMcpServer();
-  const makeDriver = slot =>
-    slot.agent === 'codex'
-      ? createCodex({
-          cwd: root,
-          emit: event => onSlotEvent(slot, event),
-          locate: locateCodexImpl,
-          mcpServer: mcp,
-          developerInstructions: OMNI_SESSION_PROMPT,
-        })
-      : createDriver({
-          cwd: root,
-          emit: event => onSlotEvent(slot, event),
-          locate,
-          mcpConfig: { mcpServers: { omni: mcp } },
-          systemPrompt: OMNI_SESSION_PROMPT,
-        });
+  const makeDriver = slot => {
+    if (slot.agent === 'codex') {
+      return createCodex({
+        cwd: root,
+        emit: event => onSlotEvent(slot, event),
+        locate: locateCodexImpl,
+        mcpServer: mcp,
+        developerInstructions: OMNI_SESSION_PROMPT,
+      });
+    }
+    if (slot.agent === 'antigravity' || slot.agent === 'opencode' || slot.agent === 'cline') {
+      const label = AGENTS.find(entry => entry.id === slot.agent)?.label ?? slot.agent;
+      const locateImpl =
+        slot.agent === 'antigravity'
+          ? locateAntigravityImpl
+          : slot.agent === 'opencode'
+            ? locateOpenCodeImpl
+            : locateClineImpl;
+      return createAcp({
+        cwd: root,
+        label,
+        emit: event => onSlotEvent(slot, event),
+        locate: locateImpl,
+        mcpServer: mcp,
+        systemPrompt: OMNI_SESSION_PROMPT,
+      });
+    }
+    return createDriver({
+      cwd: root,
+      emit: event => onSlotEvent(slot, event),
+      locate,
+      mcpConfig: { mcpServers: { omni: mcp } },
+      systemPrompt: OMNI_SESSION_PROMPT,
+    });
+  };
 
   const onSlotEvent = (slot, event) => {
-    if (event.kind === 'init' && event.sessionId) {
-      slot.sessionId = event.sessionId;
-      bySession.set(event.sessionId, slot);
-      if (!slot.title && slot.firstPrompt) slot.title = firstLine(slot.firstPrompt);
+    if (event.kind === 'title') {
+      if (event.title) {
+        slot.title = event.title;
+        if (slot.sessionId) {
+          index('renamed', store =>
+            store.record({ agent: slot.agent, sessionId: slot.sessionId, title: event.title, titleSource: 'agent' }),
+          );
+        }
+      }
+      return;
+    }
+    if (event.kind === 'init') {
+      if (Array.isArray(event.models) && event.models.length > 0) {
+        dynamicModels.set(slot.agent, {
+          models: event.models,
+          efforts: Array.isArray(event.efforts) && event.efforts.length > 0 ? event.efforts : undefined,
+        });
+      }
+      if (event.sessionId) {
+        slot.sessionId = event.sessionId;
+        bySession.set(event.sessionId, slot);
+        if (!slot.title && slot.firstPrompt) slot.title = firstLine(slot.firstPrompt);
+      }
     }
     if (event.kind === 'permission') {
       if (event.requestId) requestSlot.set(event.requestId, slot);
@@ -251,8 +331,20 @@ export function createAgentHub({
 
   return {
     async status({ conversationId = 'default' } = {}) {
-      const [claudeLoc, codexLoc] = await Promise.all([locate(), locateCodexImpl ? locateCodexImpl() : locateCodex()]);
-      const locations = { claude: claudeLoc, codex: codexLoc };
+      const [claudeLoc, codexLoc, agyLoc, openCodeLoc, clineLoc] = await Promise.all([
+        locate(),
+        locateCodexImpl ? locateCodexImpl() : locateCodex(),
+        locateAntigravityImpl ? locateAntigravityImpl() : locateAntigravity(),
+        locateOpenCodeImpl ? locateOpenCodeImpl() : locateOpenCode(),
+        locateClineImpl ? locateClineImpl() : locateCline(),
+      ]);
+      const locations = {
+        claude: claudeLoc,
+        codex: codexLoc,
+        antigravity: agyLoc,
+        opencode: openCodeLoc,
+        cline: clineLoc,
+      };
       const slot = slotFor(conversationId);
       const live = allSlots()
         .map(entry => {
@@ -269,11 +361,16 @@ export function createAgentHub({
       return {
         workspace: { mode: workspace.mode, dir: workspace.dir },
         active: slot.agent,
-        agents: AGENTS.map(agent => ({
-          ...agent,
-          available: Boolean(locations[agent.id]),
-          path: locations[agent.id]?.path ?? null,
-        })),
+        agents: AGENTS.map(agent => {
+          const dyn = dynamicModels.get(agent.id);
+          return {
+            ...agent,
+            ...(dyn?.models ? { models: dyn.models } : {}),
+            ...(dyn?.efforts ? { efforts: dyn.efforts } : {}),
+            available: Boolean(locations[agent.id]),
+            path: locations[agent.id]?.path ?? null,
+          };
+        }),
         ...slot.driver.status(),
         live,
       };
@@ -303,11 +400,23 @@ export function createAgentHub({
     },
     /** Loads one earlier conversation; the next prompt continues it. A terminal session joins the index. */
     async resume({ conversationId, agent, sessionId }) {
-      let resolvedAgent = agent ?? 'claude';
+      const recorded = conversations?.list({ includeArchived: true })?.find(entry => entry.sessionId === sessionId);
+      let resolvedAgent = agent ?? recorded?.agent ?? null;
       let history;
-      if (agent === 'codex') {
+      if (resolvedAgent === 'codex') {
         history = await readCodex({ root, sessionId });
-      } else if (agent === 'claude') {
+      } else if (resolvedAgent === 'antigravity' || resolvedAgent === 'opencode' || resolvedAgent === 'cline') {
+        const locateImpl =
+          resolvedAgent === 'antigravity'
+            ? locateAntigravityImpl
+            : resolvedAgent === 'opencode'
+              ? locateOpenCodeImpl
+              : locateClineImpl;
+        history = await readAcpSession({ root, sessionId, locate: locateImpl });
+        if ((!history.title || history.title === sessionId) && recorded?.title) {
+          history = { ...history, title: recorded.title, titleSource: recorded.titleSource };
+        }
+      } else if (resolvedAgent === 'claude') {
         history = await readSession({ root, sessionId });
       } else {
         try {
@@ -318,7 +427,13 @@ export function createAgentHub({
             history = await readCodex({ root, sessionId });
             resolvedAgent = 'codex';
           } catch {
-            throw error;
+            const acpHistory = await readAcpSession({ root, sessionId, locate: locateAntigravityImpl });
+            if (acpHistory.events.length > 0) {
+              history = acpHistory;
+              resolvedAgent = 'antigravity';
+            } else {
+              throw error;
+            }
           }
         }
       }
@@ -327,6 +442,11 @@ export function createAgentHub({
         defaultSlot.driver.status().state === 'busy' || defaultSlot.driver.status().state === 'starting';
       const targetId = conversationId ?? (bySession.has(sessionId) || defaultBusy ? sessionId : 'default');
       const slot = slotFor(targetId, resolvedAgent);
+      if (slot.agent !== resolvedAgent && slot.driver.status().state !== 'busy') {
+        slot.driver.dispose();
+        slot.agent = resolvedAgent;
+        slot.driver = makeDriver(slot);
+      }
       slot.sessionId = sessionId;
       slot.title = history.title || slot.title;
       bySession.set(sessionId, slot);
@@ -343,7 +463,7 @@ export function createAgentHub({
         store.record({ agent: resolvedAgent, sessionId, title: history.title, titleSource: history.titleSource }),
       );
       syncActiveWork();
-      return history;
+      return { ...history, agent: resolvedAgent };
     },
     reset({ conversationId = 'default' } = {}) {
       const slot = slotFor(conversationId);

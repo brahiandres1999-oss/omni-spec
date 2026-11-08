@@ -194,7 +194,7 @@ export const STUDIO_METHODS = Object.freeze({
     object(
       {
         conversationId: string({ minLength: 1 }),
-        agent: { enum: ['claude', 'codex'] },
+        agent: { enum: ['claude', 'codex', 'antigravity', 'opencode', 'cline'] },
         text: string({ minLength: 1 }),
         model: string({ minLength: 1 }),
         effort: { enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
@@ -216,7 +216,7 @@ export const STUDIO_METHODS = Object.freeze({
     object(
       {
         conversationId: string({ minLength: 1 }),
-        agent: { enum: ['claude', 'codex'] },
+        agent: { enum: ['claude', 'codex', 'antigravity', 'opencode', 'cline'] },
         sessionId: string({ pattern: '^[0-9a-fA-F-]{36}$' }),
       },
       ['sessionId'],
@@ -226,7 +226,7 @@ export const STUDIO_METHODS = Object.freeze({
   ),
   'agent.sessions': method(
     HOST,
-    object({ agent: { enum: ['claude', 'codex'] } }),
+    object({ agent: { enum: ['claude', 'codex', 'antigravity', 'opencode', 'cline'] } }),
     anyObject,
     'Earlier agent conversations of this folder, newest first.',
   ),

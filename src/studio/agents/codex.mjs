@@ -10,8 +10,8 @@ import { clipInput, DEFAULT_PERMISSION, toolTitle } from './claude.mjs';
  * over stdio JSON-RPC 2.0; the CLI uses its own ChatGPT or API login and Studio never reads or forwards tokens.
  */
 
-export const CODEX_MODELS = Object.freeze(['gpt-5.3-codex', 'gpt-5.2-codex', 'o4-mini']);
-export const CODEX_EFFORTS = Object.freeze(['low', 'medium', 'high']);
+export const CODEX_MODELS = Object.freeze(['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6.1-terra', 'gpt-6-sol', 'gpt-6-luna']);
+export const CODEX_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
 
 /**
  * Studio's permission levels (Fase 3, Q25) mapped to Codex `app-server` approvalPolicy + sandbox pairs.
@@ -24,7 +24,7 @@ export const CODEX_PERMISSION_MODES = Object.freeze({
   bypass: Object.freeze({ approvalPolicy: 'never', sandbox: 'danger-full-access' }),
 });
 
-const SHIM_TARGET = /"%~?dp0%?\\?([^"%]+\.(?:exe|[cm]?js))"/i;
+const SHIM_TARGETS = /"%~?dp0%?\\?([^"%\r\n]+)"/gi;
 const AUTH_HINT = /login|not logged in|unauthorized|authentication|api key/i;
 const STDERR_TAIL = 4_096;
 
@@ -37,11 +37,10 @@ async function isFile(path) {
   }
 }
 
-const runnable = file => {
+const runnable = (file, platform = process.platform) => {
   const extension = extname(file).toLowerCase();
-  return ['.js', '.mjs', '.cjs'].includes(extension)
-    ? { file: process.execPath, prefix: [file], path: file }
-    : { file, prefix: [], path: file };
+  const isNodeScript = ['.js', '.mjs', '.cjs'].includes(extension) || (platform === 'win32' && extension !== '.exe');
+  return isNodeScript ? { file: process.execPath, prefix: [file], path: file } : { file, prefix: [], path: file };
 };
 
 /**
@@ -50,19 +49,24 @@ const runnable = file => {
  * @returns {Promise<{file: string, prefix: string[], path: string} | null>}
  */
 export async function locateCodex({ env = process.env, platform = process.platform } = {}) {
-  if (env.OMNI_STUDIO_CODEX_BIN) return runnable(env.OMNI_STUDIO_CODEX_BIN);
+  if (env.OMNI_STUDIO_CODEX_BIN) return runnable(env.OMNI_STUDIO_CODEX_BIN, platform);
   const pathKey = Object.keys(env).find(name => name.toUpperCase() === 'PATH');
   const directories = (pathKey ? env[pathKey].split(delimiter) : []).filter(Boolean);
   for (const directory of directories) {
     if (platform !== 'win32') {
-      if (await isFile(join(directory, 'codex'))) return runnable(join(directory, 'codex'));
+      if (await isFile(join(directory, 'codex'))) return runnable(join(directory, 'codex'), platform);
       continue;
     }
-    if (await isFile(join(directory, 'codex.exe'))) return runnable(join(directory, 'codex.exe'));
+    if (await isFile(join(directory, 'codex.exe'))) return runnable(join(directory, 'codex.exe'), platform);
     const shim = join(directory, 'codex.cmd');
     if (!(await isFile(shim))) continue;
-    const target = SHIM_TARGET.exec(await readFile(shim, 'utf8'))?.[1];
-    if (target && (await isFile(join(dirname(shim), target)))) return runnable(join(dirname(shim), target));
+    const content = await readFile(shim, 'utf8');
+    for (const match of content.matchAll(SHIM_TARGETS)) {
+      const target = match[1];
+      if (!target || target.toLowerCase() === 'node.exe') continue;
+      const candidate = join(dirname(shim), target);
+      if (await isFile(candidate)) return runnable(candidate, platform);
+    }
   }
   return null;
 }

@@ -743,6 +743,88 @@ describe('CH conversations in the rail', () => {
     expect(screen.getByText('18 % usado')).toBeInTheDocument();
     restoreLayout();
   });
+
+  test('CH-21 Antigravity experimental toggle is off by default with warning in Ajustes, enables Gemini models when turned on, and init updates agent models dynamically', async () => {
+    const restoreLayout = installLayoutStub();
+    stubCanvas();
+    stubWorker();
+    const user = userEvent.setup();
+    const fake = railTransport().respond('agent.status', {
+      ...STATUS,
+      agents: [
+        {
+          id: 'claude',
+          label: 'Claude Code',
+          available: true,
+          path: 'claude.exe',
+          models: ['fable', 'opus', 'sonnet', 'haiku'],
+          efforts: ['low', 'medium', 'high'],
+          permissions: ['ask', 'default', 'auto', 'bypass', 'plan'],
+        },
+        {
+          id: 'antigravity',
+          label: 'Antigravity',
+          experimental: true,
+          available: true,
+          path: 'agy.exe',
+          models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+          efforts: ['low', 'medium', 'high'],
+          permissions: ['ask', 'default', 'auto', 'bypass', 'plan'],
+        },
+      ],
+    });
+
+    renderWithStudio(<AppShell />, { transport: fake });
+    await waitFor(() => expect(fake.calls('agent.status').length).toBeGreaterThan(0));
+
+    // 1. By default Antigravity is off, so ModelMenu only lists Claude Code
+    await user.click(screen.getByRole('button', { name: /^Modelo:/ }));
+    const firstMenu = await screen.findByRole('menu');
+    expect(within(firstMenu).getByText('Claude Code')).toBeInTheDocument();
+    expect(within(firstMenu).queryByText('Antigravity')).toBeNull();
+    await user.keyboard('{Escape}');
+
+    // 2. Open Ajustes › Agentes, see the Google terms warning, and enable Antigravity
+    const rail = screen.getByRole('navigation', { name: 'Conversaciones y proyectos' });
+    await user.click(within(rail).getByRole('button', { name: 'Ajustes' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Ajustes' });
+    await user.click(within(dialog).getByRole('tab', { name: 'Agentes' }));
+    expect(await within(dialog).findByText(/Los términos de Google restringen el acceso/)).toBeInTheDocument();
+    const checkbox = within(dialog).getByRole('checkbox', { name: /Habilitar Antigravity/ });
+    expect(checkbox).not.toBeChecked();
+    await user.click(checkbox);
+    expect(checkbox).toBeChecked();
+    await user.keyboard('{Escape}');
+
+    // 3. Now Antigravity appears in ModelMenu; picking Gemini 2.5 Pro sends agent: 'antigravity'
+    await user.click(screen.getByRole('button', { name: /^Modelo:/ }));
+    const secondMenu = await screen.findByRole('menu');
+    expect(within(secondMenu).getByText('Antigravity')).toBeInTheDocument();
+    await user.click(within(secondMenu).getByRole('menuitemradio', { name: 'Gemini 2.5 Pro' }));
+
+    // 4. Emit dynamic models from init and verify they update the store
+    act(() => {
+      fake.emit('agent.event', {
+        agent: 'claude',
+        kind: 'init',
+        model: 'claude-sonnet-4-6',
+        models: ['claude-opus-4-6', 'claude-sonnet-4-6'],
+        efforts: ['low', 'high'],
+      });
+    });
+
+    const input = screen.getByRole('combobox', { name: /Pídele algo/ });
+    await user.type(input, 'usa antigravity{Enter}');
+    await waitFor(() =>
+      expect(fake.lastCall('agent.prompt')).toEqual({
+        agent: 'antigravity',
+        text: 'usa antigravity',
+        model: 'gemini-2.5-pro',
+        permission: 'ask',
+      }),
+    );
+    restoreLayout();
+  });
 });
 
 describe('CH line diff', () => {

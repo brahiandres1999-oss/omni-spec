@@ -9,6 +9,7 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { createClaudeDriver, locateClaude, translateClaudeMessage } from '../src/studio/agents/claude.mjs';
 import { claudeSessionsDir, listClaudeSessions, readClaudeSession } from '../src/studio/agents/claude-sessions.mjs';
+import { createAcpDriver } from '../src/studio/agents/acp.mjs';
 import { createCodexDriver } from '../src/studio/agents/codex.mjs';
 import { codexSessionsDir, listCodexSessions, readCodexSession } from '../src/studio/agents/codex-sessions.mjs';
 import { createAgentHub, OMNI_SESSION_PROMPT, omniMcpServer } from '../src/studio/agents/index.mjs';
@@ -995,5 +996,138 @@ describe('AG shared memory MCP across agents and modes', () => {
       rmSync(repo, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
+  });
+});
+
+describe('AG generic ACP driver and dynamic model discovery', () => {
+  test('AG-27 ACP v1 driver handles session/new, configOptions, set_config_option, permissions, usage_update and Claude dynamic models', async () => {
+    // 1. Claude dynamic models and effort levels from system/init
+    const claudeInit = translateClaudeMessage(
+      {
+        type: 'system',
+        subtype: 'init',
+        model: 'claude-sonnet-4-6',
+        session_id: 's-dyn',
+        models: [
+          { id: 'claude-opus-4-6', supportedEffortLevels: ['low', 'medium', 'high', 'max'] },
+          { id: 'claude-sonnet-4-6', supportedEffortLevels: ['low', 'medium', 'high'] },
+        ],
+      },
+      fresh(),
+    );
+    assert.deepEqual(claudeInit[0].models, ['claude-opus-4-6', 'claude-sonnet-4-6']);
+    assert.deepEqual(claudeInit[0].efforts, ['low', 'medium', 'high', 'max']);
+
+    // 2. Generic ACP v1 driver (Antigravity / OpenCode / Cline)
+    const proc = fakeProcess();
+    const spawned = [];
+    const events = [];
+    const driver = createAcpDriver({
+      cwd: 'C:\\repo',
+      label: 'Antigravity',
+      emit: event => events.push(event),
+      locate: async () => ({ file: 'agy.exe', prefix: ['acp'], path: 'agy.exe' }),
+      mcpServer: omniMcpServer(),
+      systemPrompt: OMNI_SESSION_PROMPT,
+      spawnImpl: (_file, args) => {
+        spawned.push(args);
+        return proc;
+      },
+    });
+
+    const promptDone = driver.prompt('Analiza la arquitectura', {
+      model: 'gemini-2.5-pro',
+      effort: 'high',
+      permission: 'ask',
+    });
+    await tick();
+    assert.deepEqual(spawned[0], ['acp']);
+    assert.equal(proc.written[0].method, 'initialize');
+    proc.send({ id: proc.written[0].id, result: { protocolVersion: 1 } });
+    await tick();
+
+    assert.equal(proc.written[1].method, 'session/new');
+    assert.equal(proc.written[1].params.mcpServers[0].name, 'omni');
+    assert.equal(proc.written[1].params.systemPrompt, OMNI_SESSION_PROMPT);
+    proc.send({
+      id: proc.written[1].id,
+      result: {
+        sessionId: 'acp-sess-1',
+        configOptions: [
+          { category: 'model', values: [{ id: 'gemini-2.5-pro' }, { id: 'gemini-2.5-flash' }] },
+          { category: 'thought_level', values: ['low', 'medium', 'high'] },
+        ],
+      },
+    });
+    await tick();
+
+    // Driver sets model, thought_level and mode via session/set_config_option sequentially
+    while (!proc.written.some(msg => msg.method === 'session/prompt')) {
+      const last = proc.written.at(-1);
+      if (last?.method === 'session/set_config_option') proc.send({ id: last.id, result: {} });
+      await tick();
+    }
+    const promptReq = proc.written.find(msg => msg.method === 'session/prompt');
+    assert.ok(promptReq, 'session/prompt sent');
+
+    // Stream text chunk, tool call, permission request and usage_update
+    proc.send({
+      method: 'session/update',
+      params: {
+        sessionId: 'acp-sess-1',
+        update: { sessionUpdate: 'agent_message_chunk', messageId: 'm-acp', content: { text: 'Revisando…' } },
+      },
+    });
+    proc.send({
+      method: 'session/update',
+      params: {
+        sessionId: 'acp-sess-1',
+        update: {
+          sessionUpdate: 'tool_call',
+          toolCallId: 'tc-1',
+          kind: 'edit',
+          rawInput: { file_path: 'src/index.ts', content: 'export const x = 1;' },
+        },
+      },
+    });
+    proc.send({
+      id: 'perm-acp-1',
+      method: 'session/request_permission',
+      params: {
+        toolCall: { kind: 'edit', rawInput: { file_path: 'src/index.ts' } },
+        reason: 'Modificar src/index.ts',
+      },
+    });
+    proc.send({
+      method: 'session/update',
+      params: {
+        sessionId: 'acp-sess-1',
+        update: { sessionUpdate: 'usage_update', contextTokens: 12500, contextWindow: 1000000, costUsd: 0.01 },
+      },
+    });
+    await tick();
+
+    const perm = events.find(event => event.kind === 'permission');
+    assert.equal(perm.toolName, 'Edit');
+    driver.respond(perm.requestId, 'allow');
+    await tick();
+    assert.deepEqual(proc.written.at(-1), {
+      jsonrpc: '2.0',
+      id: 'perm-acp-1',
+      result: { outcome: { outcome: 'selected', optionId: 'allow_once' } },
+    });
+
+    // Complete the prompt
+    proc.send({ id: promptReq.id, result: { stopReason: 'end_turn', durationMs: 420 } });
+    assert.deepEqual(await promptDone, { accepted: true });
+
+    const initEv = events.find(event => event.kind === 'init');
+    assert.deepEqual(initEv.models, ['gemini-2.5-pro', 'gemini-2.5-flash']);
+    assert.deepEqual(initEv.efforts, ['low', 'medium', 'high']);
+
+    const resultEv = events.find(event => event.kind === 'result');
+    assert.equal(resultEv.contextTokens, 12500);
+    assert.equal(resultEv.contextWindow, 1000000);
+    driver.dispose();
   });
 });

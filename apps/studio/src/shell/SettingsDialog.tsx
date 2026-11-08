@@ -103,8 +103,9 @@ function General() {
 }
 
 function Agents() {
-  const { project } = useStudio();
+  const { project, settings } = useStudio();
   const status = useStore(project.chat, state => state.status);
+  const enableAntigravity = useStore(settings, state => state.enableAntigravity);
   useEffect(() => {
     if (!project.chat.getState().status) void project.chat.getState().loadStatus();
   }, [project.chat]);
@@ -119,6 +120,11 @@ function Agents() {
                 className={cn('size-2 rounded-full', agent.available ? 'bg-attested' : 'bg-breach')}
               />
               <span className="font-medium text-fg">{agent.label}</span>
+              {agent.experimental ? (
+                <span className="rounded-full border border-floating-border px-1.5 text-[11px] text-fg-muted">
+                  {t.agentExperimental}
+                </span>
+              ) : null}
               <span className="text-xs text-fg-muted">{agent.available ? t.agentAvailable : t.agentMissing}</span>
             </span>
             {agent.path ? (
@@ -126,7 +132,22 @@ function Agents() {
                 {t.agentPath}: {agent.path}
               </span>
             ) : null}
-            <span className="text-xs text-pretty text-fg-muted">{t.agentLogin}</span>
+            {agent.id === 'antigravity' ? (
+              <div className="mt-1 grid gap-1.5 rounded-lg border border-divider bg-surface p-2.5">
+                <label className="flex items-center gap-2 text-xs text-fg">
+                  <input
+                    type="checkbox"
+                    checked={enableAntigravity}
+                    onChange={event => settings.getState().update({ enableAntigravity: event.target.checked })}
+                    className="accent-accent"
+                  />
+                  <span>{t.antigravityToggle}</span>
+                </label>
+                <p className="text-xs text-pretty text-fg-muted">{t.antigravityWarning}</p>
+              </div>
+            ) : (
+              <span className="text-xs text-pretty text-fg-muted">{t.agentLogin}</span>
+            )}
           </li>
         ))}
       </ul>

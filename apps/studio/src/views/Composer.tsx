@@ -86,33 +86,49 @@ function rankCommands(commands: readonly string[], query: string): string[] {
 }
 
 function ModelMenu({ agent }: { agent: Agent | undefined }) {
-  const { project } = useStudio();
+  const { project, settings } = useStudio();
   const options = useStore(project.chat, state => state.options);
   const status = useStore(project.chat, state => state.status);
+  const enableAntigravity = useStore(settings, state => state.enableAntigravity);
   const locked = useStore(project.chat, state => state.sessionId !== null || state.items.length > 0);
   const agents = useMemo(() => {
-    const all = status?.agents ?? (agent ? [agent] : []);
+    const all = (status?.agents ?? (agent ? [agent] : [])).filter(
+      entry =>
+        entry.available !== false &&
+        (!entry.experimental || (entry.id === 'antigravity' && enableAntigravity)) &&
+        (!Array.isArray(entry.models) || entry.models.length > 0),
+    );
     if (locked && agent) return [agent];
     return all;
-  }, [status?.agents, agent, locked]);
+  }, [status?.agents, agent, locked, enableAntigravity]);
   const efforts = agent?.efforts ?? [];
-  const modelLabel = options.model ? (t.models[options.model] ?? options.model) : t.defaultOption;
+  const effectiveModel =
+    locked && agent?.models && options.model && !agent.models.includes(options.model) ? null : options.model;
+  const modelLabel = effectiveModel ? (t.models[effectiveModel] ?? effectiveModel) : t.defaultOption;
   const effortLabel = options.effort ? (t.efforts[options.effort] ?? options.effort) : t.defaultOption;
   const set = (patch: { agent?: string | null; model?: string | null; effort?: string | null }) =>
     project.chat.getState().setOptions(patch);
-  const currentValue = options.model ?? DEFAULT;
-  const pickModel = (value: string) => {
-    if (!value) {
+  const activeAgentId = (locked ? agent?.id : options.agent) ?? agent?.id ?? 'claude';
+  const currentValue = effectiveModel ? `${activeAgentId}:${effectiveModel}` : DEFAULT;
+  const pickModel = (raw: string) => {
+    if (!raw) {
       set({ model: null });
       return;
     }
-    const owner = agents.find(entry => (entry.models ?? []).includes(value));
+    const sep = raw.indexOf(':');
+    const chosenAgentId = sep !== -1 ? raw.slice(0, sep) : null;
+    const value = sep !== -1 ? raw.slice(sep + 1) : raw;
+    const owner =
+      (chosenAgentId ? agents.find(entry => entry.id === chosenAgentId) : null) ??
+      agents.find(entry => (entry.models ?? []).includes(value));
     const nextAgent = owner?.id ?? agent?.id ?? null;
     const permission = project.chat.getState().permission;
     if (owner?.permissions && !owner.permissions.includes(permission)) {
       project.chat.getState().setPermission('ask');
     }
-    set({ agent: nextAgent, model: value });
+    const nextEffort =
+      options.effort && owner?.efforts && !owner.efforts.includes(options.effort) ? null : options.effort;
+    set({ agent: nextAgent, model: value, effort: nextEffort });
   };
   return (
     <DropdownMenu.Root>
@@ -125,42 +141,54 @@ function ModelMenu({ agent }: { agent: Agent | undefined }) {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content side="top" align="start" sideOffset={6} className={menuContent}>
-          <DropdownMenu.RadioGroup value={currentValue} onValueChange={pickModel}>
-            {(agents.length > 0
-              ? agents
-              : [
-                  {
-                    id: 'claude',
-                    label: t.agent,
-                    available: true,
-                    path: null,
-                    models: ['fable', 'opus', 'sonnet', 'haiku'],
-                    efforts: [],
-                  },
-                ]
-            ).map((entry, index) => (
-              <DropdownMenu.Group key={entry.id}>
-                {index > 0 ? <DropdownMenu.Separator className="my-1 h-px bg-divider" /> : null}
-                <DropdownMenu.Label className={menuLabel}>{entry.label}</DropdownMenu.Label>
-                {index === 0 ? (
-                  <DropdownMenu.RadioItem value={DEFAULT} className={menuItem}>
-                    <DropdownMenu.ItemIndicator className="absolute start-2 inline-flex">
-                      <Icon icon={Check} className="text-accent" />
-                    </DropdownMenu.ItemIndicator>
-                    {t.defaultOption}
-                  </DropdownMenu.RadioItem>
-                ) : null}
-                {(entry.models ?? Object.keys(t.models)).map(value => (
-                  <DropdownMenu.RadioItem key={`${entry.id}:${value}`} value={value} className={menuItem}>
-                    <DropdownMenu.ItemIndicator className="absolute start-2 inline-flex">
-                      <Icon icon={Check} className="text-accent" />
-                    </DropdownMenu.ItemIndicator>
-                    {t.models[value] ?? value}
-                  </DropdownMenu.RadioItem>
-                ))}
-              </DropdownMenu.Group>
-            ))}
-          </DropdownMenu.RadioGroup>
+          <div className="max-h-64 overflow-y-auto overscroll-contain">
+            <DropdownMenu.RadioGroup value={currentValue} onValueChange={pickModel}>
+              {(agents.length > 0
+                ? agents
+                : [
+                    {
+                      id: 'claude',
+                      label: t.agent,
+                      available: true,
+                      path: null,
+                      models: ['fable', 'opus', 'sonnet', 'haiku'],
+                      efforts: [],
+                    },
+                  ]
+              ).map((entry, index) => (
+                <DropdownMenu.Group key={entry.id}>
+                  {index > 0 ? <DropdownMenu.Separator className="my-1 h-px bg-divider" /> : null}
+                  <DropdownMenu.Label className={menuLabel}>{entry.label}</DropdownMenu.Label>
+                  {index === 0 ? (
+                    <DropdownMenu.RadioItem value={DEFAULT} className={menuItem}>
+                      <DropdownMenu.ItemIndicator className="absolute start-2 inline-flex">
+                        <Icon icon={Check} className="text-accent" />
+                      </DropdownMenu.ItemIndicator>
+                      {t.defaultOption}
+                    </DropdownMenu.RadioItem>
+                  ) : null}
+                  {(entry.models ?? Object.keys(t.models)).map(value => {
+                    const label =
+                      entry.id === 'antigravity' && value.startsWith('claude-')
+                        ? `Claude ${t.models[value] ?? value}`
+                        : (t.models[value] ?? value);
+                    return (
+                      <DropdownMenu.RadioItem
+                        key={`${entry.id}:${value}`}
+                        value={`${entry.id}:${value}`}
+                        className={menuItem}
+                      >
+                        <DropdownMenu.ItemIndicator className="absolute start-2 inline-flex">
+                          <Icon icon={Check} className="text-accent" />
+                        </DropdownMenu.ItemIndicator>
+                        {label}
+                      </DropdownMenu.RadioItem>
+                    );
+                  })}
+                </DropdownMenu.Group>
+              ))}
+            </DropdownMenu.RadioGroup>
+          </div>
           {efforts.length > 0 ? (
             <>
               <DropdownMenu.Separator className="my-1 h-px bg-divider" />
@@ -465,7 +493,13 @@ export function Composer({
           aria-autocomplete="list"
           value={draft}
           rows={Math.min(8, Math.max(2, draft.split('\n').length))}
-          placeholder={busy ? t.placeholderBusy : t.placeholder}
+          placeholder={
+            busy
+              ? t.placeholderBusy
+              : agent?.label && agent.id !== 'claude'
+                ? t.placeholderFor(agent.label)
+                : t.placeholder
+          }
           onChange={event => {
             chat.getState().setDraft(event.target.value);
             setCaret(event.target.selectionStart ?? event.target.value.length);

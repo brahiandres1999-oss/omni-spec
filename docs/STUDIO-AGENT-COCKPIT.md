@@ -57,7 +57,7 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 **Método de cada vuelta.**
 1. El usuario manda una captura de la app real y elige el tema.
 2. Se cambia código y tests juntos. Los ids siguen la serie: el próximo test del motor es **AG-25** y el próximo
-   de la UI es **CH-20** (SH-xx para el resto del shell, el próximo **SH-16**; SH-11 pasó a ser la página Memoria).
+   los números existentes: el próximo test del motor es **AG-28** y el de la UI es **CH-22** (SH-xx para el resto del shell, el próximo **SH-16**; SH-11 pasó a ser la página Memoria).
 3. Pasan las tres comprobaciones de arriba.
 4. El usuario lo prueba en la app (reinicio completo si se tocó el motor) y manda captura.
 5. Se actualiza este documento (tabla de vueltas de la Fase 3, hechos verificados) y se hace **un commit por
@@ -68,22 +68,26 @@ devuelve o calla sin más falla salvo que lleve `// guardian-allow <REGLA>: moti
 
 | Qué | Dónde |
 |---|---|
-| Driver de Claude Code (spawn, stream-json, permisos, costo) | `src/studio/agents/claude.mjs` |
+| Driver de Claude Code (spawn, stream-json, permisos, costo, MCP por sesión) | `src/studio/agents/claude.mjs` |
 | Sesiones de Claude Code de la carpeta (listar, leer historial) | `src/studio/agents/claude-sessions.mjs` |
-| Índice de conversaciones de Studio (tabla `studio_conversations` en la memoria) | `src/studio/conversations.mjs`; tests AG-18 a AG-20 en `test/studio-conversations.test.mjs` |
-| Hub de agentes y métodos `agent.*` | `src/studio/agents/index.mjs`, `src/studio/engine.mjs`, `src/studio/protocol.mjs` |
+| Driver de Codex (`codex app-server`, modelos, permisos, aprobaciones, cuotas, MCP) | `src/studio/agents/codex.mjs` (test AG-25) |
+| Sesiones de Codex de la carpeta (`~/.codex/sessions/…/rollout-*.jsonl`) | `src/studio/agents/codex-sessions.mjs` |
+| Driver ACP genérico (Antigravity `agy acp`, OpenCode, Cline; `session/set_config_option`, permisos, MCP) | `src/studio/agents/acp.mjs` (test AG-27) |
+| Servidor MCP compartido en ambos modos (`omni-spec mcp --studio`) | `src/mcp-server.mjs`, `src/cli.mjs` (test AG-26) |
+| Índice de conversaciones y trabajo activo (`studio_conversations`, `studio_active_work`) | `src/studio/conversations.mjs`; tests AG-18 a AG-20 en `test/studio-conversations.test.mjs` |
+| Hub de agentes y métodos `agent.*` (conversaciones paralelas y avisos de choque) | `src/studio/agents/index.mjs`, `src/studio/engine.mjs`, `src/studio/protocol.mjs` |
 | Tests del driver (AG-xx) y CLI simulada | `test/studio-agents.test.mjs`, `test-support/fake-claude.mjs` |
-| Estado del chat (eventos → transcript, uso, opciones) | `apps/studio/src/stores/chat.ts` |
-| Chat y `ChatHeader` (estado del agente) | `apps/studio/src/views/ChatView.tsx` |
-| Compositor: modelo y razonamiento, permisos, cola, «+», `@` y `/` | `apps/studio/src/views/Composer.tsx` (tests CH-15 a CH-18) |
-| Ajustes (modal) y su estado | `apps/studio/src/shell/SettingsDialog.tsx`, `apps/studio/src/stores/settings.ts` (test SH-14) |
+| Estado del chat (eventos → transcript, uso, opciones, paralelo, notificaciones) | `apps/studio/src/stores/chat.ts` |
+| Chat y `ChatHeader` (estado del agente y avisos de choque) | `apps/studio/src/views/ChatView.tsx` |
+| Compositor: modelo agrupado por agente y razonamiento, permisos, cola, «+», `@` y `/` | `apps/studio/src/views/Composer.tsx` (tests CH-15 a CH-21) |
+| Ajustes (modal, toggle experimental de Antigravity) y su estado | `apps/studio/src/shell/SettingsDialog.tsx`, `apps/studio/src/stores/settings.ts` (tests SH-14, CH-21) |
 | Centro: una página a la vez, ruta «Proyecto / Título» y `ChatHeader` | `apps/studio/src/shell/Stage.tsx` (páginas en `stores/layout.ts`, layout `v3`) |
 | Página Memoria y su resumen en el motor | `apps/studio/src/views/MemoryView.tsx`, `src/studio/memory-summary.mjs` (método `memory.summary`, test AG-21) |
 | Panel derecho «Resumen» (Revisión, Archivos, Terminal) | `apps/studio/src/shell/Inspector.tsx` (tests SH-03, SH-12) |
 | Revisión de esta conversación (Cambios e Impacto) | `apps/studio/src/views/ConversationReview.tsx`, `apps/studio/src/stores/conversation-review.ts` (test SH-13) |
-| Panel izquierdo: «Nueva conversación», buscador, árbol Proyectos → Conversaciones | `apps/studio/src/shell/Rail.tsx`, store `apps/studio/src/stores/conversations.ts`, tests SH-04 y CH-11 a CH-14 |
+| Panel izquierdo: «Nueva conversación», buscador, árbol Proyectos → Conversaciones con puntos de estado | `apps/studio/src/shell/Rail.tsx`, store `apps/studio/src/stores/conversations.ts`, tests SH-04 y CH-11 a CH-19 |
 | «Retomar sesión de la terminal…» | `apps/studio/src/shell/TerminalSessionsDialog.tsx` |
-| Proyectos recientes, quitar uno y selector de carpetas (host) | `apps/studio/src-tauri/src/recent.rs`, `commands.rs` (`recent_remove`, `project_pick`); tests RP-01 a RP-04 |
+| Proyectos recientes, quitar uno, selector de carpetas y mapa de supervisores por proyecto (host) | `apps/studio/src-tauri/src/recent.rs`, `commands.rs`, `engine.rs`; tests RP-01 a RP-04 |
 | Todos los textos de la UI | `apps/studio/src/i18n/messages.es.ts` (sección `chat`) |
 | Tests de la UI del chat (CH-xx) | `apps/studio/src/views/ChatView.test.tsx` |
 
@@ -212,11 +216,11 @@ resumen), varias cuentas por agente y una versión comercial.
 |---|---|---|
 | 1 · Panel izquierdo | Árbol Proyectos → Conversaciones, selector de carpetas, índice en la memoria, títulos, renombrar, archivar, buscador, «Retomar sesión de la terminal…» (Claude), specs fuera del panel. Su commit incluye el trabajo pendiente de la Fase 2.6 vuelta 2 | **Probada en la app el 2026-11-06**: todo funciona salvo Ctrl+N, que abría una ventana nueva de WebView2 (corregido; falta volver a probarlo) |
 | 2a · Estructura | Fuera pestañas y Dock; ruta «Proyecto / Título» arriba; páginas Specs, Memoria y Uso en el panel izquierdo; panel derecho «Resumen» (Revisión, Archivos, Terminal) cerrado por defecto; Ctrl+B y Ctrl+J | **Hecha**: commit `bf154d8`, probada en la app |
-| 2b · Compositor y revisión | Modelo agrupado por agente con razonamiento, permisos, cola y «+» en el compositor; Revisión de esta conversación con +N −M e Impacto; Ajustes modal con Skills en Personalizaciones | **Hecha** (pruebas que requieren turno de LLM quedan en el checklist acumulativo hasta integrar más agentes) |
+| 2b · Compositor y revisión | Modelo agrupado por agente con razonamiento, permisos, cola y «+» en el compositor; Revisión de esta conversación con +N −M e Impacto; Ajustes modal con Skills en Personalizaciones | **Hecha**: commit `3904b1b` (pruebas que requieren turno de LLM quedan en el checklist acumulativo hasta integrar más agentes) |
 | 3 · En paralelo | Varias conversaciones vivas por proyecto y varios proyectos (un motor por proyecto), puntos de estado, avisos de Windows, aviso de choque | **Hecha**: commit `af860d9` (`AG-24`, `CH-19`, `SH-15`; pruebas con LLM en checklist acumulativo) |
 | 4 · Codex | Driver `app-server`: modelos y razonamiento, permisos, historial para retomar, límites en Uso | **Hecha**: commit `2c7bebe` (`AG-25`, `CH-20`; pruebas con LLM en checklist acumulativo) |
-| 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | **Hecha** (`AG-26`; pruebas con LLM en checklist acumulativo) |
-| 6 · ACP y Antigravity | Driver ACP genérico; Antigravity experimental; modelos de Claude leídos de su `initialize` | |
+| 5 · Memoria compartida | MCP de Omni en los dos modos, conectado por sesión en Claude y Codex; aprendizajes y «quién trabaja en qué» | **Hecha**: commit `b993a3b` (`AG-26`; pruebas con LLM en checklist acumulativo) |
+| 6 · ACP y Antigravity | Driver ACP genérico; Antigravity experimental; modelos de Claude leídos de su `initialize` | **Hecha** (`AG-27`, `CH-21`; lista para probar en la app con el checklist acumulativo) |
 
 Orden: primero lo visible; el paralelo antes que Codex para que Claude y Codex trabajen juntos el día que llegue
 Codex; la memoria después, para probarla con dos proveedores.
@@ -279,6 +283,49 @@ muestra lo que trae su historial (los últimos 400 eventos).
 **Límites conocidos de la vuelta 1** (se resuelven más adelante): cambiar de proyecto todavía reinicia el motor y
 corta la conversación en curso (vuelta 3); «Retomar sesión de la terminal…» solo está en el proyecto abierto;
 Ctrl+B y Ctrl+J para los paneles llegan con el layout (vuelta 2).
+
+**Vuelta 3 · por comprobar en la app** (reinicio completo: cambiaron el motor y el host Rust):
+1. Abrir dos conversaciones en el mismo proyecto y poner ambas a trabajar: siguen vivas a la vez. En el panel izquierdo
+   cada conversación muestra su punto de estado: verde (Trabajando), ámbar (Esperando aprobación) o azul (Terminó sin
+   leer; se limpia al abrirla).
+2. Cambiar a otro proyecto mientras una conversación trabaja: el host mantiene un motor por proyecto y la conversación
+   no se corta.
+3. Si una conversación en segundo plano pide aprobación o termina, dispara notificación de escritorio (según lo
+   configurado en Ajustes › Notificaciones).
+4. Si una conversación intenta editar un archivo que otra conversación viva del proyecto ya modificó, aparece el aviso
+   de choque tanto en la conversación como dentro de la tarjeta de aprobación.
+
+**Vuelta 4 · por comprobar en la app** (reinicio completo: cambió el motor):
+1. En una conversación nueva, el menú de Modelo agrupa los modelos por agente: «Claude Code» (`Opus 5.5`, `Sonnet 5.5`,
+   `Fable 5.1`, `Haiku 5.5`, etc.) y «Codex» (`GPT-6.1-Sol`, `GPT-6-Astra`, `GPT-6.1 Terra`, `GPT-6-Sol`, `GPT-6-Luna`,
+   etc.). Elegir un modelo de Codex cambia el agente de la conversación antes del primer mensaje; tras el primer mensaje,
+   el selector solo muestra los modelos del agente de esa conversación.
+2. En una conversación de Codex, enviar un mensaje arranca `codex app-server`, respeta el modelo, nivel de razonamiento y
+   modo de permisos (las solicitudes `item/*/requestApproval` abren la tarjeta Aprobar / Rechazar).
+3. «Retomar sesión de la terminal…» lista tanto sesiones de Claude Code como rollouts de Codex (`~/.codex/sessions/…`)
+   de la carpeta actual, indicando el proveedor.
+4. La página Uso muestra la sección «Límites de la cuenta» cuando Codex informa ventanas de cuota (`5 h`, `Semanal`).
+
+**Vuelta 5 · por comprobar en la app** (reinicio completo: cambiaron el motor y el servidor MCP):
+1. Tanto en modo Proyecto como en modo Studio (`--studio`), cada sesión de Claude, Codex o ACP recibe automáticamente el
+   servidor MCP `omni` por parámetros de sesión sin tocar archivos de configuración globales (`~/.claude`, `~/.codex`,
+   `~/.gemini`) ni ensuciar el repositorio en modo Studio.
+2. Un agente puede invocar `omni_record_observation` (patrones, trampas, convenciones) y `omni_record_decision`; al
+   abrir la página Memoria se actualizan los contadores y listados de Aprendizajes y Decisiones.
+3. Un agente puede invocar `omni_active_work` para consultar qué otras conversaciones del proyecto están vivas, con qué
+   agente y qué archivos han tocado.
+
+**Vuelta 6 · por comprobar en la app** (reinicio completo: cambió el motor):
+1. Abrir Ajustes › Agentes: «Antigravity» aparece con la insignia «Experimental», el aviso sobre los términos de Google
+   y la casilla «Habilitar Antigravity (experimental, bajo tu responsabilidad)» desmarcada por defecto.
+2. Con la casilla desmarcada, Antigravity no aparece en el menú de Modelo del compositor. Al marcarla, el menú de
+   Modelo incorpora el grupo «Antigravity» (`Gemini 4 Argon`, `Gemini 3.8 Flash`, `Claude Opus 5.5`,
+   `Claude Sonnet 5.5`, `GPT-OSS 120B (Medium)`), además de cualquier otro agente ACP instalado y con modelos (`Cline`).
+3. Iniciar una conversación con Antigravity (o cualquier agente ACP) lanza el binario por ACP (`agy acp`), negocia
+   `initialize` y `session/new` con el MCP de Omni por sesión, aplica modelo/razonamiento/modo vía
+   `session/set_config_option` y muestra el streaming y las tarjetas de permiso (`session/request_permission`).
+4. Cuando el agente informa su catálogo de modelos y niveles de razonamiento al inicializar (`system/init` en Claude,
+   `model/list` en Codex, `configOptions` en ACP), Studio actualiza la lista de modelos de ese agente en caliente.
 
 ### Notas de arquitectura (verificadas el 2026-11-06)
 

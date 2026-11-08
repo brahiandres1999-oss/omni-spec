@@ -16,7 +16,7 @@ export interface EngineRequestParams {
   };
   readonly 'agent.prompt': {
     readonly conversationId?: string;
-    readonly agent?: 'claude' | 'codex';
+    readonly agent?: 'claude' | 'codex' | 'antigravity' | 'opencode' | 'cline';
     readonly text: string;
     readonly model?: string;
     readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -27,11 +27,11 @@ export interface EngineRequestParams {
   };
   readonly 'agent.resume': {
     readonly conversationId?: string;
-    readonly agent?: 'claude' | 'codex';
+    readonly agent?: 'claude' | 'codex' | 'antigravity' | 'opencode' | 'cline';
     readonly sessionId: string;
   };
   readonly 'agent.sessions': {
-    readonly agent?: 'claude' | 'codex';
+    readonly agent?: 'claude' | 'codex' | 'antigravity' | 'opencode' | 'cline';
   };
   readonly 'agent.status': {
     readonly conversationId?: string;

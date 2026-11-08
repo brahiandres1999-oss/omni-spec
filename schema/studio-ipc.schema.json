@@ -86,7 +86,10 @@
           "agent": {
             "enum": [
               "claude",
-              "codex"
+              "codex",
+              "antigravity",
+              "opencode",
+              "cline"
             ]
           },
           "text": {
@@ -156,7 +159,10 @@
           "agent": {
             "enum": [
               "claude",
-              "codex"
+              "codex",
+              "antigravity",
+              "opencode",
+              "cline"
             ]
           },
           "sessionId": {
@@ -182,7 +188,10 @@
           "agent": {
             "enum": [
               "claude",
-              "codex"
+              "codex",
+              "antigravity",
+              "opencode",
+              "cline"
             ]
           }
         },
