@@ -366,6 +366,14 @@ export function createCodexDriver({
         '-c',
         `mcp_servers.omni.args=${JSON.stringify(mcpServer.args ?? [])}`,
       );
+      const env = Object.entries(mcpServer.env ?? {});
+      if (env.length > 0) {
+        // A TOML inline table; JSON strings are valid TOML basic strings.
+        const table = env.map(([name, value]) => `${name} = ${JSON.stringify(String(value))}`).join(', ');
+        args.push('-c', `mcp_servers.omni.env={ ${table} }`);
+        // A question waits for the person: Codex's default 60 s tool timeout would cut it short.
+        args.push('-c', 'mcp_servers.omni.tool_timeout_sec=86400');
+      }
     }
     const proc = spawnImpl(location.file, args, {
       cwd,

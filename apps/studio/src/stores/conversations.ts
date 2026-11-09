@@ -49,6 +49,8 @@ export interface ConversationsState {
   setActiveView(root: string, sessionId: string | null): void;
   rename(root: string, conversation: ConversationSummary, title: string): Promise<void>;
   setArchived(root: string, conversation: ConversationSummary, archived: boolean): Promise<void>;
+  /** Deletes it from Studio and from the agent's history on this computer; throws when that fails. */
+  remove(root: string, conversation: ConversationSummary): Promise<void>;
 }
 
 export function createConversationsStore(client: StudioClient) {
@@ -95,7 +97,7 @@ export function createConversationsStore(client: StudioClient) {
           }
           return;
         }
-        if (event.kind === 'permission') {
+        if (event.kind === 'permission' || event.kind === 'question') {
           set({ activity: { ...get().activity, [key]: 'permission' } });
           if (!isViewing && readSettings().notifyApproval) {
             const detail = typeof event.title === 'string' && event.title ? `${titleOf()} — ${event.title}` : titleOf();
@@ -103,7 +105,7 @@ export function createConversationsStore(client: StudioClient) {
           }
           return;
         }
-        if (event.kind === 'permission_resolved') {
+        if (event.kind === 'permission_resolved' || event.kind === 'question_resolved') {
           set({ activity: { ...get().activity, [key]: 'busy' } });
           return;
         }
@@ -170,6 +172,21 @@ export function createConversationsStore(client: StudioClient) {
           sessionId: conversation.sessionId,
           archived,
         });
+        await reload();
+      },
+      async remove(root, conversation) {
+        // Only once the engine confirms: deleting the agent's history can fail (a file held open), and then the
+        // conversation must stay where it was.
+        await client.call('conversations.delete', {
+          root,
+          agent: conversation.agent,
+          sessionId: conversation.sessionId,
+        });
+        const key = rootKey(root);
+        const byRoot = { ...get().byRoot };
+        byRoot[key] = (byRoot[key] ?? []).filter(entry => entry.sessionId !== conversation.sessionId);
+        const { [activityKey(root, conversation.sessionId)]: _gone, ...activity } = get().activity;
+        set({ byRoot, activity });
         await reload();
       },
     };

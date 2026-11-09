@@ -55,23 +55,27 @@ fn rp_01_mru_without_duplicates_capped_written_atomically() {
     }
     recent
         .open(&projects[0])
-        .expect("re-open moves to the front");
+        .expect("re-open keeps its place");
+    assert_eq!(
+        recent.last_opened().map(|entry| norm_path(&entry.path)),
+        Some(canon(&projects[0])),
+        "the last one opened is remembered for the next launch"
+    );
     #[cfg(windows)]
     {
         // Same folder, different case: one entry (canonical, case-insensitive on Windows).
         let shouted = PathBuf::from(projects[1].to_string_lossy().to_uppercase());
         recent.open(&shouted).expect("open with different case");
     }
-    let mut expected = vec![canon(&projects[0]), canon(&projects[2])];
-    if cfg!(windows) {
-        expected.insert(0, canon(&projects[1]));
-    } else {
-        expected.push(canon(&projects[1]));
-    }
+    let expected = vec![
+        canon(&projects[2]),
+        canon(&projects[1]),
+        canon(&projects[0]),
+    ];
     assert_eq!(
         entry_paths(&recent),
         expected,
-        "MRU order without duplicates"
+        "opening a listed project never reorders the rail, and adds no duplicate"
     );
 
     for project in &projects {

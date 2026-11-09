@@ -166,6 +166,7 @@ describe('PR method registry and schema', () => {
   test('PR-15 STUDIO_METHODS is frozen and every entry declares direction and schemas', () => {
     assert.ok(Object.isFrozen(STUDIO_METHODS));
     const expected = [
+      'agent.answer',
       'agent.cancel',
       'agent.event',
       'agent.permission',
@@ -178,6 +179,7 @@ describe('PR method registry and schema', () => {
       'board.get',
       'cartography.graph',
       'conversations.archive',
+      'conversations.delete',
       'conversations.list',
       'conversations.rename',
       'diff.get',

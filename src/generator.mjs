@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { getProfile } from './profiles/index.mjs';
 import { _initManifestUnlocked, loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
-import { packageEntries } from './assets.mjs';
+import { packageEntries, studioEntries } from './assets.mjs';
 import { syncManagedFiles } from './managed.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
@@ -302,7 +302,8 @@ async function scaffoldUnlocked(baseDir, options) {
   }
 
   const version = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf8')).version;
-  let entries = await packageEntries();
+  const studio = normalizeAgents(options.agent).includes('studio');
+  let entries = studio ? studioEntries() : await packageEntries();
   if (existingManifest && !force) {
     const preserved = [];
     for (const entry of entries) {

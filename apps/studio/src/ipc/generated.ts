@@ -5,6 +5,13 @@ export const MAX_FRAME_BYTES = 8388608 as const;
 
 /** Engine requests the frontend may issue through the host (`engine_call`). */
 export interface EngineRequestParams {
+  readonly 'agent.answer': {
+    readonly requestId: string;
+    readonly answers: {
+      readonly question?: string;
+      readonly answer: string;
+    }[];
+  };
   readonly 'agent.cancel': {
     readonly conversationId?: string;
   };
@@ -55,6 +62,11 @@ export interface EngineRequestParams {
     readonly agent: string;
     readonly sessionId: string;
     readonly archived: boolean;
+  };
+  readonly 'conversations.delete': {
+    readonly root?: string;
+    readonly agent: string;
+    readonly sessionId: string;
   };
   readonly 'conversations.list': {
     readonly roots?: string[];
@@ -133,5 +145,5 @@ export interface EngineEventPayloads {
 export type EngineRequest = keyof EngineRequestParams;
 export type EngineEvent = keyof EngineEventPayloads;
 
-export const ENGINE_REQUESTS: readonly EngineRequest[] = ['agent.cancel', 'agent.permission', 'agent.prompt', 'agent.reset', 'agent.resume', 'agent.sessions', 'agent.status', 'blastRadius.heat', 'board.get', 'cartography.graph', 'conversations.archive', 'conversations.list', 'conversations.rename', 'diff.get', 'diff.getFile', 'files.tree', 'finops.snapshot', 'gate.approve', 'memory.summary', 'project.snapshot', 'review.addRemark', 'review.decideHunk', 'review.stageApproved', 'skills.list', 'skills.toggle', 'studio.challenge'];
+export const ENGINE_REQUESTS: readonly EngineRequest[] = ['agent.answer', 'agent.cancel', 'agent.permission', 'agent.prompt', 'agent.reset', 'agent.resume', 'agent.sessions', 'agent.status', 'blastRadius.heat', 'board.get', 'cartography.graph', 'conversations.archive', 'conversations.delete', 'conversations.list', 'conversations.rename', 'diff.get', 'diff.getFile', 'files.tree', 'finops.snapshot', 'gate.approve', 'memory.summary', 'project.snapshot', 'review.addRemark', 'review.decideHunk', 'review.stageApproved', 'skills.list', 'skills.toggle', 'studio.challenge'];
 export const ENGINE_EVENTS: readonly EngineEvent[] = ['agent.event', 'finops.tick', 'project.changed'];

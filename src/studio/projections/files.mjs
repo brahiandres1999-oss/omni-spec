@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { listProjectFiles } from '../../cartography/files.mjs';
+import { isGitWorkTree } from '../../memory.mjs';
 import { StudioError } from '../protocol.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -19,6 +20,8 @@ function statusFromXY(xy) {
 
 /** @returns {Promise<Map<string, string>>} POSIX path → added | modified | renamed | untracked | conflicted. */
 export async function gitStatusMap(root) {
+  // A folder that is not a repository has a tree but no Git status.
+  if (!(await isGitWorkTree(root))) return new Map();
   const { stdout } = await execFileAsync('git', ['status', '--porcelain=v2', '-z', '--untracked-files=all'], {
     cwd: root,
     encoding: 'utf8',

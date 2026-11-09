@@ -19,6 +19,27 @@ export const ACP_PERMISSION_MODES = Object.freeze({
   plan: 'plan',
 });
 
+/**
+ * The `optionId` to answer a `session/request_permission` with. ACP agents name their options freely
+ * (Antigravity does not use `allow_once`); what is fixed is each option's `kind`: allow_once, allow_always,
+ * reject_once or reject_always. An id the agent did not offer counts as a refusal, so it is always chosen
+ * from the offered options; the bare kind is only a last resort for an agent that offered none.
+ */
+export function permissionOption(options, decision) {
+  const offered = Array.isArray(options) ? options.filter(option => typeof option?.optionId === 'string') : [];
+  const kinds = decision === 'allow' ? ['allow_once', 'allow_always'] : ['reject_once', 'reject_always'];
+  for (const kind of kinds) {
+    const match = offered.find(option => option.kind === kind);
+    if (match) return match.optionId;
+  }
+  const byName = offered.find(option =>
+    decision === 'allow'
+      ? /allow|approve|accept|yes/i.test(option.optionId)
+      : /reject|deny|decline|no/i.test(option.optionId),
+  );
+  return byName?.optionId ?? kinds[0];
+}
+
 export const ANTIGRAVITY_MODELS = Object.freeze([
   'gemini-4-argon',
   'gemini-3.8-flash',
@@ -242,16 +263,40 @@ export function translateAcpNotification(message, state) {
 }
 
 /**
+ * Antigravity's transcript stores each tool argument as a JSON-encoded string (`"\"ls -la\""`, `"5000"`):
+ * decode the ones that parse, keep the rest as they are.
+ */
+function decodeArgs(args) {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return {};
+  const decoded = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value !== 'string') {
+      decoded[key] = value;
+      continue;
+    }
+    try {
+      decoded[key] = JSON.parse(value);
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      decoded[key] = value;
+    }
+  }
+  return decoded;
+}
+
+/**
  * Reads an Antigravity conversation directly from its brain transcript on disk in < 1ms,
  * avoiding the heavy overhead of spawning a full CLI subprocess.
  */
 export async function readAntigravityBrainSession(sessionId, env = process.env) {
   if (!sessionId || typeof sessionId !== 'string') return null;
   const home = env.USERPROFILE || env.HOME || homedir();
-  const candidates = [
-    join(home, '.gemini', 'antigravity-cli', 'brain', sessionId, '.system_generated', 'logs', 'transcript.jsonl'),
-    join(home, '.gemini', 'antigravity', 'brain', sessionId, '.system_generated', 'logs', 'transcript.jsonl'),
-  ];
+  // transcript_full.jsonl keeps whole messages; transcript.jsonl clips long ones in the middle.
+  const candidates = ['antigravity-cli', 'antigravity'].flatMap(app =>
+    ['transcript_full.jsonl', 'transcript.jsonl'].map(file =>
+      join(home, '.gemini', app, 'brain', sessionId, '.system_generated', 'logs', file),
+    ),
+  );
   let transcriptFile = null;
   for (const c of candidates) {
     if (await isFile(c)) {
@@ -290,7 +335,7 @@ export async function readAntigravityBrainSession(sessionId, env = process.env) 
               const rawName = tc.tool_name ?? tc.name ?? 'tool';
               const isEdit = ['edit_file', 'write_file', 'patch_file'].includes(rawName);
               const name = isEdit ? 'Edit' : rawName === 'run_command' ? 'Bash' : rawName;
-              const input = tc.call_parameters ?? tc.input ?? {};
+              const input = decodeArgs(tc.args ?? tc.call_parameters ?? tc.input ?? {});
               events.push({
                 kind: 'tool',
                 id: String(tc.id ?? `tool-${step.step_index}`),
@@ -542,6 +587,18 @@ export function createAcpDriver({
           : { command: String(toolCall.title ?? toolCall.command ?? '') };
       const requestId = String(message.id);
       pending.set(requestId, { rawId: message.id, options: params.options ?? [] });
+      // «Sin restricciones» means edit and run without asking; ACP modes only auto-accept edits, so commands
+      // would still ask. Studio answers for the person and only shows the tool running.
+      if (running?.permission === 'bypass') {
+        const entry = pending.get(requestId);
+        pending.delete(requestId);
+        write({
+          jsonrpc: '2.0',
+          id: entry.rawId,
+          result: { outcome: { outcome: 'selected', optionId: permissionOption(entry.options, 'allow') } },
+        });
+        return;
+      }
       emit({
         kind: 'permission',
         requestId,
@@ -554,6 +611,8 @@ export function createAcpDriver({
     }
 
     for (const event of translateAcpNotification(message, translation)) {
+      // The agent echoes the person's own message (user_message_chunk); Studio already shows it.
+      if (event.kind === 'user') continue;
       emit(event);
     }
   };
@@ -633,7 +692,14 @@ export function createAcpDriver({
     });
     const sessionMethod = session.sessionId ? 'session/resume' : 'session/new';
     const mcpServers = mcpServer?.command
-      ? [{ name: 'omni', command: mcpServer.command, args: mcpServer.args ?? [], env: [] }]
+      ? [
+          {
+            name: 'omni',
+            command: mcpServer.command,
+            args: mcpServer.args ?? [],
+            env: Object.entries(mcpServer.env ?? {}).map(([name, value]) => ({ name, value: String(value) })),
+          },
+        ]
       : [];
     const sessionResult = await rpc(sessionMethod, {
       cwd,
@@ -740,6 +806,7 @@ export function createAcpDriver({
       }
       running = wanted;
       setState('busy');
+      const startedAt = Date.now();
       const promptPromise = rpc('session/prompt', {
         sessionId: session.sessionId,
         prompt: [{ type: 'text', text }],
@@ -755,7 +822,11 @@ export function createAcpDriver({
               text: typeof promptResult.text === 'string' ? promptResult.text : '',
               costUsd: translation.costUsd,
               sessionCostUsd: translation.costUsd,
-              durationMs: typeof promptResult.durationMs === 'number' ? promptResult.durationMs : null,
+              // ACP does not report the turn's duration (Antigravity sends 0): Studio measures it.
+              durationMs:
+                typeof promptResult.durationMs === 'number' && promptResult.durationMs > 0
+                  ? promptResult.durationMs
+                  : Date.now() - startedAt,
               numTurns: 1,
               contextTokens: translation.contextTokens,
               contextWindow: translation.contextWindow,
@@ -788,7 +859,7 @@ export function createAcpDriver({
         throw new StudioError('PERMISSION_UNKNOWN', 'Ese pedido de permiso ya no está pendiente.');
       const entry = pending.get(requestId);
       pending.delete(requestId);
-      const optionId = decision === 'allow' ? 'allow_once' : 'reject_once';
+      const optionId = permissionOption(entry.options, decision);
       write({
         jsonrpc: '2.0',
         id: entry.rawId,

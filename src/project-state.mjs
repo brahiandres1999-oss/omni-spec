@@ -526,7 +526,9 @@ function cliVersionWarning(cliVersion, manifest) {
   const order = isVersion(cliVersion) && isVersion(projectVersion) ? compareVersions(cliVersion, projectVersion) : null;
   const warning = { code: 'CLI_VERSION_MISMATCH', cliVersion, projectVersion };
   let message = `CLI ${cliVersion} differs from project version ${projectVersion}.`;
-  if (manifest.agent === 'plugin') {
+  if (manifest.agent === 'studio') {
+    message += ' Omni Studio carries the CLI for this project; update Omni Studio to match it.';
+  } else if (manifest.agent === 'plugin') {
     if (order === -1) {
       warning.action = `npx omni-spec@${projectVersion} plugin update`;
       message += ` Update the global plugin to the project's version: ${warning.action}.`;

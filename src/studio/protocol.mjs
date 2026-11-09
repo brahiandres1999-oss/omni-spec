@@ -205,6 +205,21 @@ export const STUDIO_METHODS = Object.freeze({
     anyObject,
     'Send one user message to the agent; the answer arrives as agent.event notifications.',
   ),
+  'agent.answer': method(
+    HOST,
+    object(
+      {
+        requestId: string({ minLength: 1 }),
+        answers: {
+          type: 'array',
+          items: { type: 'object', properties: { question: string(), answer: string() }, required: ['answer'] },
+        },
+      },
+      ['requestId', 'answers'],
+    ),
+    anyObject,
+    "The person's answer to a question an agent asked with omni_ask_user.",
+  ),
   'agent.reset': method(
     HOST,
     object({ conversationId: string({ minLength: 1 }) }),
@@ -268,6 +283,19 @@ export const STUDIO_METHODS = Object.freeze({
     ),
     anyObject,
     'Archive or restore a Studio conversation of any listed project (its agent history is never touched).',
+  ),
+  'conversations.delete': method(
+    HOST,
+    object(
+      {
+        root: string({ minLength: 1 }),
+        agent: string({ minLength: 1 }),
+        sessionId: string({ minLength: 1 }),
+      },
+      ['agent', 'sessionId'],
+    ),
+    anyObject,
+    "Delete a conversation from Studio and the agent's history on this computer (Recycle Bin on Windows).",
   ),
   'conversations.list': method(
     HOST,

@@ -83,11 +83,13 @@ function humanMessage(code: string): string {
 /** Methods with side effects: never deduplicated, never cached. */
 const MUTATIONS = new Set<string>([
   'agent.prompt',
+  'agent.answer',
   'agent.cancel',
   'agent.permission',
   'agent.reset',
   'agent.resume',
   'conversations.archive',
+  'conversations.delete',
   'conversations.rename',
   'gate.approve',
   'review.decideHunk',

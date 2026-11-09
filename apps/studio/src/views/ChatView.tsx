@@ -28,6 +28,7 @@ import { formatInt, messages } from '@/i18n/messages.es';
 import type { AgentOptions, AgentUsage, ChatItem, ChatStore, ToolInput } from '@/stores/chat';
 import { sameRoot } from '@/stores/conversations';
 import { Composer } from './Composer';
+import { AnsweredQuestion, QuestionPanel } from './QuestionPanel';
 
 const t = messages.chat;
 
@@ -54,12 +55,23 @@ function ToolPreview({ input }: { input: ToolInput }) {
   return <pre className={cn(preBlock, 'text-fg-muted')}>{JSON.stringify(input, null, 2)}</pre>;
 }
 
+/** Shorten bloated paths in command titles (e.g. `node "...bin/omni-spec.mjs" status` → `omni-spec status`). */
+export function formatToolTitle(title: string): string {
+  const omniMatch =
+    /node\s+(?:"[^"]*[/\\]omni-spec\.mjs"|'[^']*[/\\]omni-spec\.mjs'|[^\s]*[/\\]omni-spec\.mjs)\s*(.*)/i.exec(title);
+  if (omniMatch) {
+    return `omni-spec ${omniMatch[1]}`.trim();
+  }
+  return title;
+}
+
 function ToolCard({ item }: { item: Extract<ChatItem, { type: 'tool' }> }) {
   const [open, setOpen] = useState(false);
   const tone = item.status === 'error' ? 'text-breach' : item.status === 'running' ? 'text-accent' : 'text-fg-muted';
   const label = item.status === 'error' ? t.toolError : item.status === 'running' ? t.toolRunning : t.toolDone;
+  const displayTitle = item.title ? formatToolTitle(item.title) : '';
   return (
-    <div className="rounded-xl border border-divider bg-surface">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-divider bg-surface">
       <button
         type="button"
         className={cn(
@@ -70,14 +82,16 @@ function ToolCard({ item }: { item: Extract<ChatItem, { type: 'tool' }> }) {
         aria-expanded={open}
         onClick={() => setOpen(value => !value)}
       >
-        <Icon icon={open ? ChevronDown : ChevronRight} className="text-fg-muted" />
-        <span className="font-medium text-fg">{item.name}</span>
+        <Icon icon={open ? ChevronDown : ChevronRight} className="shrink-0 text-fg-muted" />
+        <span className="shrink-0 font-medium text-fg">{item.name}</span>
         {item.title && item.title !== item.name ? (
-          <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')}>{item.title}</span>
+          <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')} title={item.title}>
+            {displayTitle}
+          </span>
         ) : (
           <span className="flex-1" />
         )}
-        <span className={cn('flex items-center gap-1.5 text-xs', tone)}>
+        <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', tone)}>
           <span
             aria-hidden="true"
             className={cn('size-1.5 rounded-full bg-current', item.status === 'running' && 'motion-safe:animate-pulse')}
@@ -86,7 +100,7 @@ function ToolCard({ item }: { item: Extract<ChatItem, { type: 'tool' }> }) {
         </span>
       </button>
       {open ? (
-        <div className="grid gap-2 border-t border-divider px-3 py-2.5">
+        <div className="grid min-w-0 gap-2 border-t border-divider px-3 py-2.5">
           <ToolPreview input={item.input} />
           {item.output ? (
             <>
@@ -185,6 +199,9 @@ function Entry({
       return <ToolCard item={item} />;
     case 'permission':
       return <PermissionCard item={item} chat={chat} agentName={agentName} />;
+    case 'question':
+      // A pending question is answered in the panel above the composer.
+      return item.status === 'pending' ? null : <AnsweredQuestion item={item} />;
     case 'result':
       return (
         <p className={cn('text-xs tabular-nums', item.isError ? 'text-breach' : 'text-fg-muted')}>
@@ -216,6 +233,76 @@ function Entry({
     case 'notice':
       return <p className="text-xs text-fg-muted">{item.text}</p>;
   }
+}
+
+type ToolItem = Extract<ChatItem, { type: 'tool' }>;
+/** Runs of this many tools or more read as one block («12 pasos») that opens on demand. */
+const GROUP_FROM = 3;
+
+/** The transcript with long runs of consecutive tool calls folded into groups. */
+export function groupTools(
+  items: readonly ChatItem[],
+): Array<ChatItem | { type: 'tools'; id: string; tools: ToolItem[] }> {
+  const out: Array<ChatItem | { type: 'tools'; id: string; tools: ToolItem[] }> = [];
+  let run: ToolItem[] = [];
+  const flush = () => {
+    if (run.length >= GROUP_FROM) out.push({ type: 'tools', id: `tools:${run[0]?.id}`, tools: run });
+    else out.push(...run);
+    run = [];
+  };
+  for (const item of items) {
+    if (item.type === 'tool') run.push(item);
+    else {
+      flush();
+      out.push(item);
+    }
+  }
+  flush();
+  return out;
+}
+
+function ToolGroup({ tools }: { tools: ToolItem[] }) {
+  const [open, setOpen] = useState(false);
+  const running = tools.findLast(tool => tool.status === 'running');
+  const failed = tools.filter(tool => tool.status === 'error').length;
+  const latest = running ?? (tools.at(-1) as ToolItem);
+  const displayTitle = latest.title ? formatToolTitle(latest.title) : '';
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(value => !value)}
+        className={cn(
+          'flex min-h-9 w-full min-w-0 items-center gap-2 rounded-xl border border-divider bg-surface px-3 py-2 text-start text-[13px]',
+          'transition-[background-color] duration-150 ease-out hover:bg-floating',
+          focusRing,
+        )}
+      >
+        <Icon icon={open ? ChevronDown : ChevronRight} className="shrink-0 text-fg-muted" />
+        <span className="shrink-0 font-medium text-fg">{t.toolSteps(tools.length)}</span>
+        <span className={cn(mono, 'min-w-0 flex-1 truncate text-xs text-fg-muted')} title={latest.title}>
+          {latest.name}
+          {latest.title && latest.title !== latest.name ? ` ${displayTitle}` : ''}
+        </span>
+        {failed > 0 ? <span className="shrink-0 text-xs text-breach">{t.toolStepsFailed(failed)}</span> : null}
+        <span className={cn('flex shrink-0 items-center gap-1.5 text-xs', running ? 'text-accent' : 'text-fg-muted')}>
+          <span
+            aria-hidden="true"
+            className={cn('size-1.5 rounded-full bg-current', running && 'motion-safe:animate-pulse')}
+          />
+          {running ? t.toolRunning : t.toolDone}
+        </span>
+      </button>
+      {open ? (
+        <div className="grid min-w-0 gap-1.5 border-s border-divider ps-3">
+          {tools.map(tool => (
+            <ToolCard key={tool.id} item={tool} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 const compact = (value: number) =>
@@ -369,6 +456,10 @@ export function ChatView() {
   const options = useStore(chat, state => state.options);
   const applied = useStore(chat, state => state.applied);
   const sessionId = useStore(chat, state => state.sessionId);
+  const loading = useStore(chat, state => state.loading);
+  const question = items.find(
+    (item): item is Extract<ChatItem, { type: 'question' }> => item.type === 'question' && item.status === 'pending',
+  );
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const busy = agentState === 'busy' || agentState === 'starting';
@@ -392,7 +483,7 @@ export function ChatView() {
     const pending = ui.getState().pendingConversation;
     if (!pending || projectId === null || !sameRoot(pending.root, projectId)) return;
     ui.getState().setPendingConversation(null);
-    void chat.getState().resume(pending.sessionId);
+    void chat.getState().resume(pending.sessionId, pending.agent);
   }, [chat, ui, projectId]);
 
   // Follow the conversation while the user is at the bottom; leave them alone when they scrolled up.
@@ -404,17 +495,21 @@ export function ChatView() {
   const openTerminal = () => dispatch({ type: 'inspector.open', tab: 'terminal' });
 
   return (
-    <section aria-label={t.region} className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto]">
+    <section aria-label={t.region} className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto_auto]">
       <div
         ref={scroller}
         onScroll={event => {
           const element = event.currentTarget;
           pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
         }}
-        className="min-h-0 overflow-y-auto overscroll-contain"
+        className="min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain"
       >
-        <div className="mx-auto grid w-full max-w-3xl gap-3.5 px-4 py-6">
-          {items.length === 0 ? (
+        <div className="mx-auto grid w-full max-w-3xl min-w-0 gap-3.5 px-4 py-6">
+          {items.length === 0 && loading ? (
+            <p role="status" className="py-20 text-center text-[13px] text-fg-muted motion-safe:animate-pulse">
+              {t.loadingConversation}
+            </p>
+          ) : items.length === 0 ? (
             <div className="grid justify-items-center gap-3 py-20 text-center">
               <span className="grid size-10 place-items-center rounded-xl border border-divider bg-surface text-fg-muted">
                 <Icon icon={MessageSquare} size={18} />
@@ -429,15 +524,19 @@ export function ChatView() {
               ) : null}
             </div>
           ) : (
-            items.map(item => (
-              <Entry
-                key={item.id}
-                item={item}
-                chat={chat}
-                agentName={agent?.label ?? 'El agente'}
-                onOpenTerminal={openTerminal}
-              />
-            ))
+            groupTools(items).map(item =>
+              item.type === 'tools' ? (
+                <ToolGroup key={item.id} tools={item.tools} />
+              ) : (
+                <Entry
+                  key={item.id}
+                  item={item}
+                  chat={chat}
+                  agentName={agent?.label ?? 'El agente'}
+                  onOpenTerminal={openTerminal}
+                />
+              ),
+            )
           )}
           {error ? (
             <div role="alert" className="rounded-xl border border-breach/50 bg-breach/5 p-3 text-[13px] text-fg">
@@ -447,6 +546,9 @@ export function ChatView() {
         </div>
       </div>
 
+      {question ? (
+        <QuestionPanel key={question.id} item={question} chat={chat} agentName={agent?.label ?? 'El agente'} />
+      ) : null}
       <Composer
         agent={agent}
         available={available}

@@ -138,29 +138,33 @@ export async function listCodexSessions({ root, env = process.env, limit = 40 })
   return sessions;
 }
 
-/**
- * Reads one Codex rollout session of `root` and translates it to `agent.event`s.
- */
-export async function readCodexSession({ root, sessionId, env = process.env }) {
-  if (!SESSION_ID.test(sessionId ?? ''))
-    throw new StudioError('SESSION_UNKNOWN', 'Esa conversación de Codex no existe en esta carpeta.');
-  const paths = await walkJsonl(codexSessionsDir(env));
-  let matchedRecords = null;
-  for (const path of paths) {
+/** The rollout file of one Codex session of `root`, with its records; `null` when there is none. */
+async function findRollout({ root, sessionId, env }) {
+  if (!SESSION_ID.test(sessionId ?? '')) return null;
+  for (const path of await walkJsonl(codexSessionsDir(env))) {
     if (!path.toLowerCase().includes(sessionId.toLowerCase())) {
       const head = parseLines(await readHead(path, 8192).catch(() => ''));
       const meta = metaOf(head, path);
       if (!meta || meta.id.toLowerCase() !== sessionId.toLowerCase()) continue;
       if (!sameRoot(meta.cwd, root)) continue;
     }
-    const text = await readFile(path, 'utf8').catch(() => '');
-    const records = parseLines(text);
+    const records = parseLines(await readFile(path, 'utf8').catch(() => ''));
     const meta = metaOf(records, path);
-    if (meta && meta.id.toLowerCase() === sessionId.toLowerCase() && sameRoot(meta.cwd, root)) {
-      matchedRecords = records;
-      break;
-    }
+    if (meta && meta.id.toLowerCase() === sessionId.toLowerCase() && sameRoot(meta.cwd, root)) return { path, records };
   }
+  return null;
+}
+
+/** Path of the rollout file of one Codex session of `root`, or `null`. */
+export async function codexSessionPath({ root, sessionId, env = process.env }) {
+  return (await findRollout({ root, sessionId, env }))?.path ?? null;
+}
+
+/**
+ * Reads one Codex rollout session of `root` and translates it to `agent.event`s.
+ */
+export async function readCodexSession({ root, sessionId, env = process.env }) {
+  const matchedRecords = (await findRollout({ root, sessionId, env }))?.records ?? null;
   if (!matchedRecords) throw new StudioError('SESSION_UNKNOWN', 'Esa conversación de Codex no existe en esta carpeta.');
 
   const events = [];

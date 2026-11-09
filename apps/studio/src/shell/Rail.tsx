@@ -7,7 +7,7 @@
  *    double click renames it; the ⋮ menu renames or archives. Archived ones show on demand.
  *  - Specs no longer live here: they are in the palette (Ctrl+K) and, from vuelta 2, on their own page.
  */
-import { DropdownMenu } from 'radix-ui';
+import { Dialog, DropdownMenu } from 'radix-ui';
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { useEnsureLoaded, useStudio } from '@/app/studio-context';
@@ -32,9 +32,11 @@ import {
   Plus,
   Search,
   Settings,
+  Trash2,
   X,
 } from '@/components/ui/icon';
 import { cn, focusRing, press } from '@/components/ui/interaction';
+import { StudioError } from '@/ipc/client';
 import type { RecentProject } from '@/ipc/types';
 import { formatAgo, messages } from '@/i18n/messages.es';
 import {
@@ -123,13 +125,13 @@ function useRailActions() {
   const isOpen = (root: string) => projectId !== null && sameRoot(root, projectId);
   return {
     isOpen,
-    open(root: string, sessionId: string) {
+    open(root: string, sessionId: string, agent?: string) {
       layout.getState().setStageTab('chat');
       if (isOpen(root)) {
-        void project.chat.getState().resume(sessionId);
+        void project.chat.getState().resume(sessionId, agent);
         return;
       }
-      ui.getState().setPendingConversation({ root, sessionId });
+      ui.getState().setPendingConversation({ root, sessionId, agent });
       dispatch({ type: 'project.open', path: root });
     },
     start(root: string) {
@@ -197,9 +199,10 @@ function ConversationRow({
   /** Shown in search results, where conversations of every project mix. */
   project?: string;
 }) {
-  const { conversations } = useStudio();
+  const { conversations, project: openProject } = useStudio();
   const actions = useRailActions();
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const activity = useStore(conversations, state => state.activity[activityKey(root, conversation.sessionId)]);
 
   if (editing)
@@ -221,7 +224,7 @@ function ConversationRow({
         type="button"
         aria-current={active ? 'true' : undefined}
         title={conversation.title}
-        onClick={() => actions.open(root, conversation.sessionId)}
+        onClick={() => actions.open(root, conversation.sessionId, conversation.agent)}
         onDoubleClick={() => setEditing(true)}
         className={cn(rowButton(active), 'ps-2.5 pe-8', conversation.archived && 'opacity-60')}
       >
@@ -253,11 +256,106 @@ function ConversationRow({
                 <Icon icon={conversation.archived ? ArchiveRestore : Archive} className="text-fg-muted" />
                 {conversation.archived ? t.unarchive : t.archive}
               </DropdownMenu.Item>
+              <DropdownMenu.Item className={cn(menuItem, 'text-breach')} onSelect={() => setConfirming(true)}>
+                <Icon icon={Trash2} />
+                {t.deleteConversation}
+              </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
       </div>
+      <DeleteConversationDialog
+        open={confirming}
+        conversation={conversation}
+        busy={activity === 'busy' || activity === 'permission'}
+        onOpenChange={setConfirming}
+        onConfirm={async () => {
+          await conversations.getState().remove(root, conversation);
+          if (actions.isOpen(root)) openProject.chat.getState().forget(conversation.sessionId);
+          setConfirming(false);
+        }}
+      />
     </li>
+  );
+}
+
+const AGENT_NAMES: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  antigravity: 'Antigravity',
+  opencode: 'OpenCode',
+  cline: 'Cline',
+};
+/** Agents whose history is one database shared by every conversation: Studio cannot delete just one. */
+const SHARED_HISTORY = new Set(['opencode', 'cline']);
+
+function DeleteConversationDialog({
+  open,
+  conversation,
+  busy,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  conversation: ConversationSummary;
+  busy: boolean;
+  onOpenChange(open: boolean): void;
+  onConfirm(): Promise<void>;
+}) {
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const agent = AGENT_NAMES[conversation.agent] ?? conversation.agent;
+  const confirm = async () => {
+    setWorking(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch (reason) {
+      setError(StudioError.from(reason).message);
+    } finally {
+      setWorking(false);
+    }
+  };
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={next => {
+        if (!working) {
+          setError(null);
+          onOpenChange(next);
+        }
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-canvas/60" />
+        <Dialog.Content className="fixed start-1/2 top-[22vh] z-50 grid w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 gap-3 rounded-2xl border border-floating-border bg-floating p-4 text-fg">
+          <Dialog.Title className="text-sm font-medium">{t.deleteTitle}</Dialog.Title>
+          <Dialog.Description className="text-xs text-pretty text-fg">
+            {t.deleteBody(conversation.title, agent)}
+          </Dialog.Description>
+          <ul className="grid list-disc gap-1 ps-4 text-xs text-pretty text-fg-muted">
+            <li>{SHARED_HISTORY.has(conversation.agent) ? t.deleteShared(agent) : t.deleteRecoverable}</li>
+            <li>{t.deleteKeepsChanges}</li>
+          </ul>
+          {busy ? <p className="text-xs text-breach">{t.deleteBusy}</p> : null}
+          {error ? (
+            <p role="alert" className="text-xs text-breach">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Dialog.Close asChild>
+              <Button variant="ghost" disabled={working}>
+                {t.cancel}
+              </Button>
+            </Dialog.Close>
+            <Button variant="danger" disabled={busy || working} onClick={() => void confirm()}>
+              {working ? t.deleting : t.deleteConfirm}
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

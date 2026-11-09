@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
+import { studioHome, workspaceId } from './studio/workspace.mjs';
 
 export const MEMORY_SCHEMA_VERSION = 4;
 
@@ -262,8 +263,23 @@ export function parseDecisionFileName(name) {
   return { topic: match[1], id: match[2] };
 }
 
-export function memoryPath(root) {
+/**
+ * The project's memory. A project installed by Omni Studio (manifest `agent: "studio"`) keeps it in Studio's
+ * per-user data, the same place it lived before installing, so every agent Studio drives shares it and nothing
+ * but specs is written to the repository.
+ */
+export function memoryPath(root, env = process.env) {
+  if (installedByStudio(root)) return join(studioHome(env), 'workspaces', workspaceId(root), 'memory.db');
   return join(root, 'specs', '.omni', 'memory.db');
+}
+
+function installedByStudio(root) {
+  try {
+    return JSON.parse(fs.readFileSync(join(root, 'specs', 'manifest.json'), 'utf8'))?.agent === 'studio';
+  } catch (error) {
+    if (error.code === 'ENOENT' || error instanceof SyntaxError) return false;
+    throw error;
+  }
 }
 
 export function openMemory(path) {
@@ -380,7 +396,19 @@ export async function readSpecsGitState(root) {
   return { treeOid, status, prefix };
 }
 
+/** True when `root` is inside a Git working tree; a folder that was never a repository answers false. */
+export async function isGitWorkTree(root) {
+  try {
+    return (await git(root, ['rev-parse', '--is-inside-work-tree'])).trim() === 'true';
+  } catch (error) {
+    if (/not a git repository/i.test(error.message)) return false;
+    throw error;
+  }
+}
+
 export async function syncFromGit(memory, root) {
+  // A folder opened in Omni Studio does not have to be a repository: with no history there is nothing to sync.
+  if (!(await isGitWorkTree(root))) return null;
   return memory.syncSpecs(root, await readSpecsGitState(root));
 }
 

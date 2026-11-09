@@ -5,7 +5,7 @@
 import { createStore } from 'zustand/vanilla';
 import { type StudioClient, StudioError } from '@/ipc/client';
 import { messages } from '@/i18n/messages.es';
-import { sameRoot } from './conversations';
+import { rootKey, sameRoot } from './conversations';
 import { isPermissionLevel, type PermissionLevel, readSettings } from './settings';
 import { readJson, writeJson } from './storage';
 
@@ -36,9 +36,42 @@ export type ChatItem =
       conflictFile?: string | null;
       status: 'pending' | 'allow' | 'deny';
     }
+  | {
+      type: 'question';
+      id: string;
+      questions: AgentQuestion[];
+      status: 'pending' | 'answered' | 'cancelled';
+      answers: QuestionAnswer[] | null;
+    }
   | { type: 'result'; id: string; isError: boolean; durationMs: number | null; costUsd: number | null }
   | { type: 'error'; id: string; code: string; message: string }
   | { type: 'notice'; id: string; text: string };
+
+/** One question an agent asks through omni_ask_user (src/mcp-server.mjs), shown as a panel in the chat. */
+export interface AgentQuestion {
+  question: string;
+  header: string;
+  multiSelect: boolean;
+  options: Array<{ label: string; description: string }>;
+}
+
+/** What the person answered: the chosen labels (joined with «, » when several) or their own text. */
+export interface QuestionAnswer {
+  question: string;
+  answer: string;
+}
+
+const isQuestions = (value: unknown): value is AgentQuestion[] =>
+  Array.isArray(value) &&
+  value.every(
+    entry =>
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as AgentQuestion).question === 'string' &&
+      Array.isArray((entry as AgentQuestion).options),
+  );
+const isAnswers = (value: unknown): value is QuestionAnswer[] =>
+  Array.isArray(value) && value.every(entry => !!entry && typeof (entry as QuestionAnswer).answer === 'string');
 
 /** Payload of `agent.event` (see src/studio/agents/claude.mjs). */
 export interface AgentEvent {
@@ -139,6 +172,8 @@ export interface AgentStatus {
   options?: AgentOptions & { permission?: string };
   /** Rate-limit windows reported by the agent (e.g. Codex 5h / weekly). */
   rateLimits?: RateLimitWindow[];
+  /** OmniSpec workflows Studio runs with any agent (`/omni-specify …`). */
+  workflows?: Array<{ name: string; description: string }>;
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -148,6 +183,41 @@ const input = (value: unknown): ToolInput =>
 
 let sequence = 0;
 const nextId = (prefix: string) => `${prefix}-${++sequence}`;
+
+/**
+ * Engine slot of a conversation that has no CLI session yet. Unique per window load, so a new conversation
+ * never lands in the slot of another one (the engine keeps slots alive across a reload of the window).
+ */
+const newConversationId = () =>
+  `new-${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
+
+const RESUMABLE_AGENTS = ['claude', 'codex', 'antigravity', 'opencode', 'cline'] as const;
+type ResumableAgent = (typeof RESUMABLE_AGENTS)[number];
+const isResumableAgent = (value: unknown): value is ResumableAgent =>
+  typeof value === 'string' && (RESUMABLE_AGENTS as readonly string[]).includes(value);
+
+/** Model, effort and permission level each conversation runs with, so reopening it keeps them. */
+const PREFS_KEY = 'chat.conversationPrefs';
+interface ConversationPrefs {
+  agent: string | null;
+  model: string | null;
+  effort: string | null;
+  permission: PermissionLevel;
+}
+const isPrefsMap = (value: unknown): value is Record<string, ConversationPrefs> =>
+  !!value &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  Object.values(value).every(entry => !!entry && typeof entry === 'object' && isPermissionLevel(entry.permission));
+const MAX_PREFS = 200;
+
+/** The conversation last on screen in each project, so a reload (F5) or a restart reopens it. */
+const LAST_KEY = 'chat.last';
+const isLastMap = (value: unknown): value is Record<string, string> =>
+  !!value &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  Object.values(value).every(entry => typeof entry === 'string');
 
 /** Folds one engine event into the transcript. Pure, so the reducer is tested without a store. */
 export function applyAgentEvent(items: readonly ChatItem[], event: AgentEvent): ChatItem[] {
@@ -199,6 +269,22 @@ export function applyAgentEvent(items: readonly ChatItem[], event: AgentEvent): 
       return items.map(item =>
         item.type === 'permission' && item.id === str(event.requestId)
           ? { ...item, status: event.decision === 'allow' ? 'allow' : 'deny' }
+          : item,
+      );
+    case 'question':
+      if (!isQuestions(event.questions) || items.some(item => item.id === str(event.requestId))) return [...items];
+      return [
+        ...items,
+        { type: 'question', id: str(event.requestId), questions: event.questions, status: 'pending', answers: null },
+      ];
+    case 'question_resolved':
+      return items.map(item =>
+        item.type === 'question' && item.id === str(event.requestId)
+          ? {
+              ...item,
+              status: event.cancelled ? 'cancelled' : 'answered',
+              answers: isAnswers(event.answers) ? event.answers : item.answers,
+            }
           : item,
       );
     case 'result':
@@ -266,11 +352,15 @@ export interface ChatState {
   queue: QueuedMessage[];
   /** Slash commands and skills the agent accepts, without the slash (the composer's «/» list). */
   commands: string[];
+  /** The conversation on screen is being read from disk (the view already switched to it). */
+  loading: boolean;
   setOptions(patch: Partial<AgentOptions>): void;
   setPermission(permission: PermissionLevel): void;
   loadStatus(): Promise<void>;
-  /** Shows an earlier conversation; the next message continues it. */
-  resume(sessionId: string): Promise<void>;
+  /** Shows an earlier conversation at once; the next message continues it. `agent` skips guessing the CLI. */
+  resume(sessionId: string, agent?: string): Promise<void>;
+  /** The conversation was deleted: if it is on screen, a new one takes its place. */
+  forget(sessionId: string): void;
   setDraft(draft: string): void;
   /** Sends the message, or queues it while the agent works. */
   send(text?: string): Promise<void>;
@@ -282,6 +372,9 @@ export interface ChatState {
   editQueued(id: string): void;
   cancel(): Promise<void>;
   decide(requestId: string, decision: 'allow' | 'deny'): Promise<void>;
+  /** Sends the person's answers to a question the agent asked. */
+  answer(requestId: string, answers: QuestionAnswer[]): Promise<void>;
+  /** A new, empty conversation (the one on screen keeps running in the background). */
   reset(): Promise<void>;
 }
 
@@ -411,8 +504,12 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             }
           : currentStatus;
         set({ model: str(event.model) || null, sessionId: nextSession, status: nextStatus });
+        if (nextSession) {
+          rememberLast(nextSession);
+          rememberPrefs();
+        }
         if (isCommands(event.commands) && event.commands.length > 0) {
-          set({ commands: event.commands });
+          set({ commands: withWorkflows(event.commands) });
           writeJson(COMMANDS_KEY, event.commands);
         }
       }
@@ -428,6 +525,13 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           },
         });
       }
+      if (event.kind === 'question') {
+        const curSession = get().sessionId;
+        if (curSession) {
+          rememberLast(curSession);
+          rememberPrefs();
+        }
+      }
       set({ items: applyAgentEvent(get().items, event) });
     };
 
@@ -439,13 +543,52 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       void get().send(next.text);
     };
     const busyNow = () => get().agentState === 'busy' || get().agentState === 'starting';
-    const convParam = () => {
-      const id = get().conversationId;
-      return id !== 'default' ? { conversationId: id } : {};
+    const convParam = () => ({ conversationId: get().conversationId });
+    // Studio's own `/omni-…` workflows come first in the «/» list, whatever agent is behind the chat.
+    let workflows: string[] = [];
+    const withWorkflows = (commands: readonly string[]) => [...new Set([...workflows, ...commands])];
+
+    // Every switch takes a ticket; an answer for an older ticket only fills the cache (a fast click elsewhere wins).
+    let switchTicket = 0;
+    const rememberLast = (sessionId: string | null) => {
+      if (projectId === 'default') return;
+      const map = readJson<Record<string, string>>(LAST_KEY, {}, isLastMap);
+      const key = rootKey(projectId);
+      if (sessionId) map[key] = sessionId;
+      else delete map[key];
+      writeJson(LAST_KEY, map);
     };
+    const readPrefs = (sessionId: string): ConversationPrefs | null =>
+      readJson<Record<string, ConversationPrefs>>(PREFS_KEY, {}, isPrefsMap)[sessionId] ?? null;
+    const rememberPrefs = () => {
+      const { sessionId, applied, permission } = get();
+      if (!sessionId || !applied) return;
+      const map = readJson<Record<string, ConversationPrefs>>(PREFS_KEY, {}, isPrefsMap);
+      delete map[sessionId];
+      map[sessionId] = { agent: applied.agent ?? null, model: applied.model, effort: applied.effort, permission };
+      const keys = Object.keys(map);
+      for (const old of keys.slice(0, Math.max(0, keys.length - MAX_PREFS))) delete map[old];
+      writeJson(PREFS_KEY, map);
+    };
+    const readLast = () =>
+      projectId === 'default'
+        ? null
+        : (readJson<Record<string, string>>(LAST_KEY, {}, isLastMap)[rootKey(projectId)] ?? null);
+    const blank = () => ({
+      items: [] as ChatItem[],
+      agentState: 'idle' as AgentState,
+      model: null,
+      applied: null,
+      error: null,
+      usage: EMPTY_USAGE,
+      queue: [] as QueuedMessage[],
+      draft: '',
+      loading: false,
+      permission: readSettings().defaultPermission,
+    });
 
     return {
-      conversationId: 'default',
+      conversationId: newConversationId(),
       threads: {},
       items: [],
       agentState: 'idle',
@@ -461,8 +604,11 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
       permission: readSettings().defaultPermission,
       queue: [],
       commands: readJson<string[]>(COMMANDS_KEY, [], isCommands),
+      loading: false,
       setPermission(permission) {
-        if (isPermissionLevel(permission)) set({ permission });
+        if (!isPermissionLevel(permission)) return;
+        set({ permission });
+        rememberPrefs();
       },
       setOptions(patch) {
         const options = { ...get().options, ...patch };
@@ -473,27 +619,41 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
         attach();
         try {
           const status = (await client.call('agent.status', convParam())) as AgentStatus;
-          const targetSession = status.sessionId ?? get().sessionId;
+          if (Array.isArray(status.workflows)) {
+            workflows = status.workflows.map(entry => entry.name).filter(name => typeof name === 'string');
+            set({ commands: withWorkflows(get().commands) });
+          }
+          const mine = !status.sessionId || !get().sessionId || status.sessionId === get().sessionId;
           set({
             status,
-            agentState: status.state,
-            model: status.model ?? get().model,
-            applied: status.model && isOptions(status.options) ? status.options : get().applied,
-            sessionId: targetSession,
+            ...(mine
+              ? {
+                  agentState: status.state,
+                  model: status.model ?? get().model,
+                  applied: status.model && isOptions(status.options) ? status.options : get().applied,
+                }
+              : {}),
             rateLimits: isRateLimits(status.rateLimits) ? status.rateLimits : get().rateLimits,
           });
-          if (targetSession && get().items.length === 0) {
-            void get().resume(targetSession);
-          }
+          // After a reload (F5) the window starts empty: reopen the conversation that was on screen, unless the
+          // person already opened or started another one meanwhile.
+          const { sessionId, items, loading } = get();
+          const last = readLast();
+          const toResume = last || (status.sessionId ? status.sessionId : null);
+          if (toResume && !sessionId && items.length === 0 && !loading) void get().resume(toResume);
         } catch (reason) {
           fail(reason);
         }
       },
-      async resume(sessionId) {
+      async resume(sessionId, agent) {
         attach();
-        if (sessionId === get().sessionId && get().items.length > 0) return;
-        const threads = saveCurrentThread(get());
+        const now = get();
+        if (sessionId === now.sessionId && (now.items.length > 0 || now.loading)) return;
+        const ticket = ++switchTicket;
+        const threads = saveCurrentThread(now);
         const live = threads[sessionId];
+        const agentParam = isResumableAgent(agent) ? { agent } : {};
+        rememberLast(sessionId);
         if (live) {
           set({
             threads,
@@ -508,44 +668,95 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             queue: live.queue,
             draft: live.draft,
             error: null,
+            loading: false,
           });
-          void client.call('agent.resume', { sessionId }).catch(() => undefined);
+          // Cheap: the engine keeps that slot; asking again re-binds it after an engine restart.
+          void client
+            .call('agent.resume', { conversationId: live.conversationId, sessionId, ...agentParam })
+            .catch(() => undefined);
           return;
         }
+        // Switch the view now; the history fills in when the disk read answers.
+        const prefs = readPrefs(sessionId);
+        set({
+          threads,
+          ...blank(),
+          conversationId: sessionId,
+          sessionId,
+          loading: true,
+          applied: prefs
+            ? { agent: prefs.agent ?? agent ?? null, model: prefs.model, effort: prefs.effort }
+            : isResumableAgent(agent)
+              ? { agent, model: null, effort: null }
+              : null,
+          ...(prefs ? { permission: prefs.permission } : {}),
+        });
         try {
-          const history = (await client.call('agent.resume', { sessionId })) as ResumedConversation & {
-            agent?: string;
-          };
+          const history = (await client.call('agent.resume', {
+            conversationId: sessionId,
+            sessionId,
+            ...agentParam,
+          })) as ResumedConversation & { agent?: string; conversationId?: string; state?: AgentState };
           let items: ChatItem[] = [];
           for (const event of history.events ?? []) items = applyAgentEvent(items, event);
-          // A tool without a recorded result was cut short; it is not running any more.
-          items = items.map(item =>
-            item.type === 'tool' && item.status === 'running' ? { ...item, status: 'done' } : item,
-          );
+          const running = history.state === 'busy' || history.state === 'starting';
+          // A tool without a recorded result was cut short, unless the turn is still running.
+          if (!running)
+            items = items.map(item =>
+              item.type === 'tool' && item.status === 'running' ? { ...item, status: 'done' } : item,
+            );
           if (history.truncated)
             items.unshift({ type: 'notice', id: nextId('notice'), text: messages.chat.olderHidden });
-          const nextConvId = busyNow() ? sessionId : get().conversationId;
           const resumedAgent = typeof history.agent === 'string' && history.agent ? history.agent : null;
-          set({
-            threads,
-            conversationId: nextConvId,
-            items,
+          const thread: ThreadSnapshot = {
+            conversationId: history.conversationId || sessionId,
+            agent: resumedAgent ?? 'claude',
             sessionId,
+            items,
+            agentState: history.state ?? 'idle',
             model: null,
-            applied: resumedAgent ? { agent: resumedAgent, model: null, effort: null } : null,
-            error: null,
-            agentState: 'idle',
-            usage: {
-              ...EMPTY_USAGE,
-              contextTokens: history.contextTokens,
-              costUsd: history.costUsd ?? 0,
-            },
+            applied: prefs
+              ? { agent: resumedAgent ?? prefs.agent, model: prefs.model, effort: prefs.effort }
+              : resumedAgent
+                ? { agent: resumedAgent, model: null, effort: null }
+                : null,
+            usage: { ...EMPTY_USAGE, contextTokens: history.contextTokens, costUsd: history.costUsd ?? 0 },
+            permission: prefs?.permission ?? readSettings().defaultPermission,
             queue: [],
-            permission: readSettings().defaultPermission,
+            draft: '',
+          };
+          if (ticket !== switchTicket) {
+            // The person already moved on: keep it so coming back is instant.
+            set({ threads: { ...get().threads, [sessionId]: thread, [thread.conversationId]: thread } });
+            return;
+          }
+          // Output that streamed in while the history was read stays after it.
+          const streamed = get().items.filter(item => item.type !== 'user');
+          set({
+            conversationId: thread.conversationId,
+            items: [...items, ...streamed],
+            agentState: get().agentState === 'idle' ? thread.agentState : get().agentState,
+            applied: thread.applied,
+            usage: thread.usage,
+            permission: thread.permission,
+            loading: false,
           });
         } catch (reason) {
+          if (ticket !== switchTicket) return;
+          set({ loading: false });
+          // A conversation that no longer exists must not reopen on every reload.
+          if (readLast() === sessionId) rememberLast(null);
           fail(reason);
         }
+      },
+      forget(sessionId) {
+        const dropped = get().threads[sessionId];
+        const threads = Object.fromEntries(
+          Object.entries(get().threads).filter(([key, thread]) => key !== sessionId && thread !== dropped),
+        );
+        set({ threads });
+        if (readLast() === sessionId) rememberLast(null);
+        if (get().sessionId === sessionId) void get().reset();
       },
       setDraft: draft => set({ draft }),
       async send(text = get().draft) {
@@ -594,6 +805,7 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
             permission: get().permission,
           });
           set({ applied: { agent: activeAgent, model, effort } });
+          rememberPrefs();
         } catch (reason) {
           set({ items: beforeState.items, agentState: 'idle', draft: message });
           fail(reason);
@@ -629,42 +841,21 @@ export function createChatStore(client: StudioClient, { projectId }: { projectId
           fail(reason);
         }
       },
-      async reset() {
-        const threads = saveCurrentThread(get());
-        // When a conversation is working, starting a new one keeps it running in the background (Fase 3, vuelta 3).
-        if (busyNow()) {
-          set({
-            threads,
-            conversationId: nextId('conv'),
-            items: [],
-            agentState: 'idle',
-            model: null,
-            applied: null,
-            error: null,
-            usage: EMPTY_USAGE,
-            sessionId: null,
-            queue: [],
-            draft: '',
-            permission: readSettings().defaultPermission,
-          });
-          return;
-        }
+      async answer(requestId, answers) {
+        // Shown as answered at once; the engine's question_resolved confirms it.
+        set({ items: applyAgentEvent(get().items, { kind: 'question_resolved', requestId, answers }) });
         try {
-          await client.call('agent.reset', convParam());
-          set({
-            threads,
-            items: [],
-            model: null,
-            applied: null,
-            error: null,
-            usage: EMPTY_USAGE,
-            sessionId: null,
-            queue: [],
-            permission: readSettings().defaultPermission,
-          });
+          await client.call('agent.answer', { requestId, answers });
         } catch (reason) {
           fail(reason);
         }
+      },
+      async reset() {
+        ++switchTicket;
+        const threads = saveCurrentThread(get());
+        rememberLast(null);
+        // A fresh slot: the conversation on screen keeps its own (and keeps running if it is working).
+        set({ threads, ...blank(), conversationId: newConversationId(), sessionId: null });
       },
     };
   });

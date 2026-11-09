@@ -12,6 +12,7 @@ import { GateError, approveGate, gateStatus } from '../gates.mjs';
 import { getActiveSpec, loadManifest } from '../manifest.mjs';
 import {
   openMemory,
+  isGitWorkTree,
   openProjectMemory,
   readSpecsGitState,
   startCheckpointSupervisor,
@@ -37,6 +38,8 @@ import {
 import { addRemark, approveGate2, decideHunk, getDiff, getDiffFile, stageApproved } from './review.mjs';
 import { memorySummary } from './memory-summary.mjs';
 import { createConversationIndex, listConversationsAt, updateConversationAt } from './conversations.mjs';
+import { discardFiles, sessionFiles } from './agents/session-files.mjs';
+import { openAskChannel } from './ask-channel.mjs';
 import { resolveWorkspace, sameRoot } from './workspace.mjs';
 
 /**
@@ -105,20 +108,42 @@ const NOT_INSTALLED =
  * Studio mode (no specs/manifest.json): views that need specs answer OMNISPEC_NOT_INSTALLED instead of writing
  * to the repository, and any other failure becomes a domain error so a plain folder never crashes the engine.
  */
+/** A view that may fail on a folder Studio opened (no Git, no index): its failure is a domain error, not a crash. */
+const soft =
+  handler =>
+  async (...args) => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      if (error instanceof StudioError) throw error;
+      throw new StudioError('STUDIO_VIEW_UNAVAILABLE', error.message, { retryable: true });
+    }
+  };
+
+/** Views that only make sense in a Git repository (the review of changes). */
+const GIT_VIEWS = ['diff.get', 'diff.getFile', 'review.decideHunk', 'review.stageApproved', 'review.addRemark'];
+const NOT_A_REPOSITORY =
+  'Esta carpeta no es un repositorio Git, así que no hay cambios que revisar. Inicializa Git (git init) para verlos aquí.';
+
+/**
+ * OmniSpec installed (by Studio) in a folder that is not a Git repository: everything works except what reads
+ * Git, which answers a domain error instead of taking the engine down.
+ */
+function outsideGitHandlers(handlers) {
+  const guarded = { ...handlers };
+  for (const name of GIT_VIEWS)
+    guarded[name] = () => {
+      throw new StudioError('NOT_A_REPOSITORY', NOT_A_REPOSITORY);
+    };
+  for (const name of ['files.tree', 'cartography.graph', 'blastRadius.heat', 'skills.list', 'gate.approve'])
+    guarded[name] = soft(handlers[name]);
+  return guarded;
+}
+
 function studioModeHandlers(handlers) {
   const notInstalled = () => {
     throw new StudioError('OMNISPEC_NOT_INSTALLED', NOT_INSTALLED);
   };
-  const soft =
-    handler =>
-    async (...args) => {
-      try {
-        return await handler(...args);
-      } catch (error) {
-        if (error instanceof StudioError) throw error;
-        throw new StudioError('STUDIO_VIEW_UNAVAILABLE', error.message, { retryable: true });
-      }
-    };
   const guarded = { ...handlers };
   for (const name of [
     'board.get',
@@ -134,7 +159,11 @@ function studioModeHandlers(handlers) {
   return guarded;
 }
 
-function createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents, conversations }) {
+function createHandlers(
+  root,
+  memory,
+  { version, actor, credentials, notify, workspace, agents, conversations, inGit = true },
+) {
   const studio = workspace.mode === 'studio';
   const activeSpecId = async spec => {
     if (spec) return spec;
@@ -169,9 +198,11 @@ function createHandlers(root, memory, { version, actor, credentials, notify, wor
         };
       }
       const manifest = await loadManifest(root);
+      // OmniSpec installed by Studio in a folder that is not a Git repository: no branch, no specs tree.
+      const inGit = await isGitWorkTree(root);
       const [branch, gitState, activeSpec] = await Promise.all([
-        currentBranch(root),
-        readSpecsGitState(root),
+        inGit ? currentBranch(root) : '',
+        inGit ? readSpecsGitState(root) : { treeOid: '' },
         getActiveSpec(root),
       ]);
       const routes = {};
@@ -254,6 +285,7 @@ function createHandlers(root, memory, { version, actor, credentials, notify, wor
     'agent.reset': params => agents.reset(params),
     'agent.sessions': params => agents.sessions(params),
     'agent.resume': params => agents.resume(params),
+    'agent.answer': params => agents.answer(params),
     'memory.summary': () => memorySummary(memory.db, workspace),
     // The rail lists every project: the open one from this engine's memory, the others read-only from theirs.
     'conversations.list': async ({ roots = [root], includeArchived = false }) => ({
@@ -276,8 +308,25 @@ function createHandlers(root, memory, { version, actor, credentials, notify, wor
       else await updateConversationAt(other, { agent, sessionId, archived });
       return { archived };
     },
+    // Deletes it everywhere: Studio's index and the history the agent CLI keeps on this computer (to the
+    // Recycle Bin on Windows). OpenCode and Cline share one database for every conversation, which stays.
+    'conversations.delete': async ({ root: other = root, agent, sessionId }) => {
+      const own = sameRoot(other, root);
+      if (own && agents.isBusy(sessionId))
+        throw new StudioError('AGENT_BUSY', 'Esa conversación está trabajando; detenla antes de eliminarla.');
+      // The CLI process goes first, so it does not hold the files open.
+      if (own) agents.forget({ sessionId });
+      const history = await sessionFiles({ agent, root: other, sessionId });
+      await discardFiles(history.paths);
+      if (own) {
+        conversations.remove(agent, sessionId);
+        await notify('agent.event', { agent, root, at: Date.now(), kind: 'conversations', change: 'removed' });
+      } else await updateConversationAt(other, { agent, sessionId, remove: true });
+      return { deleted: true, agentHistory: history.shared ? 'shared' : history.paths.length ? 'removed' : 'none' };
+    },
   };
-  return studio ? studioModeHandlers(handlers) : handlers;
+  if (studio) return studioModeHandlers(handlers);
+  return inGit ? handlers : outsideGitHandlers(handlers);
 }
 
 /** Credential label computed once in the background: probing CLIs and DPAPI takes seconds. */
@@ -342,6 +391,7 @@ export function runStudioEngine({
     let dispatcher = null;
     let memory = null;
     let supervisor = null;
+    let askChannel = null;
     let finished = false;
 
     const send = message =>
@@ -357,6 +407,7 @@ export function runStudioEngine({
       finished = true;
       if (supervisor) clearInterval(supervisor);
       agents?.dispose();
+      askChannel?.close();
       stdin?.off('end', onStdinEnd);
       memoryReady.then(
         result => {
@@ -393,9 +444,33 @@ export function runStudioEngine({
       pruneTokenEvents(memory);
       const actor = userInfo().username;
       const conversations = createConversationIndex(memory.db);
-      agents = (deps.createAgentHub ?? createAgentHub)({ root, workspace, notify, log, conversations });
+      // Questions agents ask through omni_ask_user arrive here and are shown in the chat. Without the channel
+      // (a pipe that cannot be created) agents still work, they just ask in plain text.
+      askChannel = await openAskChannel({ onAsk: (request, answer) => agents?.ask(request, answer), log }).catch(
+        error => {
+          log(`[studio-engine] question channel unavailable: ${error.message}`);
+          return null;
+        },
+      );
+      agents = (deps.createAgentHub ?? createAgentHub)({
+        root,
+        workspace,
+        notify,
+        log,
+        conversations,
+        askChannel: askChannel?.path ?? null,
+      });
       const handlers = {
-        ...createHandlers(root, memory, { version, actor, credentials, notify, workspace, agents, conversations }),
+        ...createHandlers(root, memory, {
+          version,
+          actor,
+          credentials,
+          notify,
+          workspace,
+          agents,
+          conversations,
+          inGit: await isGitWorkTree(root),
+        }),
         ...handlerOverrides,
       };
       dispatcher = createRpcDispatcher({ direction: 'host->engine', handlers, onFatal: fatal });

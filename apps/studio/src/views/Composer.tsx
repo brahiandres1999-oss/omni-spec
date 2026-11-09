@@ -16,6 +16,7 @@ import {
   ChevronDown,
   File,
   Icon,
+  Mic,
   Pencil,
   Plus,
   SendHorizontal,
@@ -313,6 +314,7 @@ export function Composer({
   const [caret, setCaret] = useState(0);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 
   const token = activeToken(draft, caret);
   const tokenKey = token ? `${token.start}:${token.kind}${token.query}` : null;
@@ -422,9 +424,9 @@ export function Composer({
         submit(false);
       }}
     >
-      {/* Concentric corners: rounded-2xl (16px) frame = rounded-lg (8px) controls + p-2 (8px). */}
+      {/* Concentric corners: rounded-[22px] frame matching Antigravity dock. */}
       <div
-        className="relative grid gap-1 rounded-2xl border border-floating-border bg-floating p-2 transition-[border-color] duration-150 ease-out focus-within:border-fg-muted/40"
+        className="relative grid gap-1 rounded-[22px] border border-floating-border bg-floating p-3 transition-[border-color] duration-150 ease-out focus-within:border-fg-muted/40"
         onPointerDown={event => {
           if (event.target === event.currentTarget) input.current?.focus();
         }}
@@ -508,7 +510,7 @@ export function Composer({
           onKeyDown={onKeyDown}
           className="max-h-56 min-h-12 resize-none bg-transparent px-2 py-1.5 text-[14px] leading-relaxed text-fg outline-none placeholder:text-fg-muted"
         />
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 pt-1">
           <DropdownMenu.Root>
             <DropdownMenu.Trigger aria-label={t.add} title={t.add} className={cn(pill, 'px-1.5')}>
               <Icon icon={Plus} />
@@ -533,11 +535,29 @@ export function Composer({
           {/* Always mounted so the change is announced when it appears. */}
           <span
             aria-live="polite"
-            className="min-w-0 flex-1 truncate px-2 text-xs text-fg-muted"
-            title={pending?.title}
+            className={cn(
+              'min-w-0 flex-1 truncate px-2 text-xs transition-colors',
+              voiceNotice ? 'text-accent-bright font-medium' : 'text-fg-muted',
+            )}
+            title={voiceNotice ?? pending?.title}
           >
-            {pending?.text}
+            {voiceNotice ?? pending?.text}
           </span>
+          <button
+            type="button"
+            aria-label="Dictar por voz"
+            title="Dictado por voz (próximamente)"
+            onClick={() => {
+              setVoiceNotice('Dictado por voz no disponible aún (próximamente)');
+              setTimeout(() => setVoiceNotice(null), 3500);
+            }}
+            className={cn(
+              'grid size-7 place-items-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface transition-colors',
+              focusRing,
+            )}
+          >
+            <Icon icon={Mic} size={16} />
+          </button>
           {busy ? (
             <Button
               variant="secondary"
@@ -545,6 +565,7 @@ export function Composer({
               aria-label={t.stop}
               title={`${t.stop} (Esc)`}
               onClick={() => void chat.getState().cancel()}
+              className="rounded-xl border border-breach/30 text-breach"
             >
               <Icon icon={Square} />
             </Button>
@@ -557,6 +578,7 @@ export function Composer({
               aria-label={busy ? t.queueSend : t.send}
               title={busy ? t.queueSend : t.send}
               disabled={!draft.trim() || !available}
+              className="rounded-full"
             >
               <Icon icon={SendHorizontal} />
             </Button>

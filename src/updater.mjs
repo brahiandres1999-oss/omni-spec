@@ -89,7 +89,8 @@ export async function checkProjectVersion(baseDir, options = {}) {
     };
   const integrity = await checkManagedFiles(baseDir);
   const isOutdated = manifest.version !== cliVersion;
-  const isPlugin = manifest.agent === 'plugin';
+  // Plugin and Omni Studio projects have no local runtime to keep in sync.
+  const isPlugin = manifest.agent === 'plugin' || manifest.agent === 'studio';
   const healthy = !isOutdated && (isPlugin || (integrity.tracked > 0 && !integrity.changed.length));
   const registered = Object.keys((await loadRegistry(baseDir)).files).filter(name => name.startsWith(RUNTIME));
   const absent = new Set(integrity.missing);

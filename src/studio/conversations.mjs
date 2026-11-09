@@ -64,6 +64,8 @@ function statements(db) {
       `UPDATE studio_conversations SET title = ?, title_source = 'user' WHERE agent = ? AND session_id = ?`,
     ),
     archive: db.prepare('UPDATE studio_conversations SET archived_at = ? WHERE agent = ? AND session_id = ?'),
+    remove: db.prepare('DELETE FROM studio_conversations WHERE agent = ? AND session_id = ?'),
+    removeWork: db.prepare('DELETE FROM studio_active_work WHERE session_id = ?'),
     clearWork: db.prepare('DELETE FROM studio_active_work'),
     upsertWork: db.prepare(
       `INSERT INTO studio_active_work (conversation_id, agent, session_id, title, state, files_json, updated_at)
@@ -116,6 +118,11 @@ export function createConversationIndex(db, { now = () => new Date().toISOString
     },
     archive(agent, sessionId, archived) {
       if (sql.archive.run(archived ? now() : null, agent, sessionId).changes === 0) throw unknown();
+    },
+    /** Drops the conversation from Studio's index; the agent's own transcript on disk is never touched. */
+    remove(agent, sessionId) {
+      if (sql.remove.run(agent, sessionId).changes === 0) throw unknown();
+      sql.removeWork.run(sessionId);
     },
     /** Publishes the project's live conversations and touched files so any agent's MCP can query them (Q26). */
     setActiveWork(entries = []) {
@@ -173,7 +180,7 @@ export async function listConversationsAt(root, { env = process.env, includeArch
   }
 }
 
-/** Renames or archives a conversation of another project (the rail allows it on every project). */
+/** Renames, archives or removes a conversation of another project (the rail allows it on every project). */
 export async function updateConversationAt(
   root,
   change,
@@ -184,8 +191,9 @@ export async function updateConversationAt(
   try {
     if (!hasTable(db)) throw unknown();
     const sql = statements(db);
-    const result =
-      'title' in change
+    const result = change.remove
+      ? sql.remove.run(change.agent, change.sessionId)
+      : 'title' in change
         ? sql.rename.run(titleFrom(change.title), change.agent, change.sessionId)
         : sql.archive.run(change.archived ? now() : null, change.agent, change.sessionId);
     if (result.changes === 0) throw unknown();

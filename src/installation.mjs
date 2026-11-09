@@ -68,10 +68,16 @@ export async function inspectInstallation(root, options, version) {
   const integrity = await checkManagedFiles(root);
   if (!integrity.tracked || integrity.changed.length)
     throw new Error(`Installation incomplete. Run doctor, then update --dry-run. ${integrity.changed.join(', ')}`);
-  for (const name of ['CONSTITUTION.md', 'specs/project-context.md', 'specs/.omni/runtime/bin/omni-spec.mjs'])
-    await access(await safePath(root, name));
-  const runtime = JSON.parse(await readFile(await safePath(root, 'specs/.omni/runtime/package.json'), 'utf8'));
-  if (runtime.version !== version) throw new Error('Local runtime version mismatch. Review update --dry-run.');
+  // Omni Studio keeps the runtime itself; the project has no local copy to check.
+  const studio = String(options.agent ?? '')
+    .split(',')
+    .includes('studio');
+  for (const name of ['CONSTITUTION.md', 'specs/project-context.md']) await access(await safePath(root, name));
+  if (!studio) {
+    await access(await safePath(root, 'specs/.omni/runtime/bin/omni-spec.mjs'));
+    const runtime = JSON.parse(await readFile(await safePath(root, 'specs/.omni/runtime/package.json'), 'utf8'));
+    if (runtime.version !== version) throw new Error('Local runtime version mismatch. Review update --dry-run.');
+  }
   return {
     state: 'FILES_READY',
     version,
@@ -87,6 +93,7 @@ export async function inspectInstallation(root, options, version) {
 }
 
 const TOOL_NAMES = {
+  studio: 'Omni Studio',
   antigravity: 'Antigravity',
   plugin: 'Antigravity',
   claude: 'Claude Code',
@@ -152,6 +159,9 @@ export function installationMessage(installation, hasActiveWork = false, present
     );
   lines.push(hasActiveWork ? t.resume : t.build);
   const blocks = [{ title: t.next, lines }];
-  if (steps.length) blocks.push({ title: t.missing(invocation(steps[0])), lines: [t.prompt(installation.fallback)] });
+  // Omni Studio offers its workflows itself; there is no file in the project to fall back to.
+  const studioOnly = steps.length > 0 && steps.every(step => step.agent === 'studio');
+  if (steps.length && !studioOnly)
+    blocks.push({ title: t.missing(invocation(steps[0])), lines: [t.prompt(installation.fallback)] });
   return resultSteps(t.ready(installation.version, installation.directory), blocks, presentation);
 }

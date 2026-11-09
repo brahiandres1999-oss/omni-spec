@@ -309,3 +309,36 @@ describe('EN requests', () => {
     assert.equal(written, 10_000);
   });
 });
+
+describe('EN projects installed by Studio outside Git', () => {
+  test('EN-30 a folder with a Studio install and no Git repository opens, lists files and never takes the engine down', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { execFileSync } = await import('node:child_process');
+    const root = mkdtempSync(join(tmpdir(), 'omni-nogit-'));
+    const home = mkdtempSync(join(tmpdir(), 'omni-nogit-home-'));
+    const saved = process.env.OMNI_STUDIO_HOME;
+    process.env.OMNI_STUDIO_HOME = home;
+    try {
+      execFileSync(process.execPath, [CLI, 'init', '--yes', '--agent', 'studio'], { cwd: root, stdio: 'ignore' });
+      const started = await startStudioHost({ root });
+      hosts.push(started);
+      await started.ready;
+      const snapshot = await started.call('project.snapshot', {});
+      assert.equal(snapshot.mode, 'project');
+      assert.equal(snapshot.branch, '');
+      const tree = await started.call('files.tree', {});
+      assert.ok(JSON.stringify(tree).includes('CONSTITUTION.md'), 'the tree is read from disk');
+      await assert.rejects(started.call('diff.get', {}), /no es un repositorio Git/);
+      // Still answering after the refused view.
+      assert.ok(await started.call('conversations.list', { roots: [root] }));
+      assert.ok(await started.call('board.get', {}));
+    } finally {
+      if (saved === undefined) delete process.env.OMNI_STUDIO_HOME;
+      else process.env.OMNI_STUDIO_HOME = saved;
+      for (const started of hosts.splice(0)) await started.close();
+      rmSync(root, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});

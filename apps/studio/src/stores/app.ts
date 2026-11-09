@@ -93,7 +93,7 @@ export interface UiState {
   setSettingsOpen(open: boolean): void;
   focusDiffFile(path: string): void;
   /** Conversation to open once the engine of another project is up (a click in the rail switched project). */
-  pendingConversation: { root: string; sessionId: string } | null;
+  pendingConversation: { root: string; sessionId: string; agent?: string } | null;
   setPendingConversation(pending: UiState['pendingConversation']): void;
 }
 

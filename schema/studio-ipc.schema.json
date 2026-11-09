@@ -128,6 +128,44 @@
         "type": "object"
       }
     },
+    "agent.answer": {
+      "direction": "host->engine",
+      "description": "The person's answer to a question an agent asked with omni_ask_user.",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string"
+                },
+                "answer": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "answer"
+              ]
+            }
+          }
+        },
+        "required": [
+          "requestId",
+          "answers"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
     "agent.reset": {
       "direction": "host->engine",
       "description": "End the conversation and start a new one on the next prompt.",
@@ -336,6 +374,35 @@
           "agent",
           "sessionId",
           "archived"
+        ],
+        "additionalProperties": false
+      },
+      "resultSchema": {
+        "type": "object"
+      }
+    },
+    "conversations.delete": {
+      "direction": "host->engine",
+      "description": "Delete a conversation from Studio and the agent's history on this computer (Recycle Bin on Windows).",
+      "paramsSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "agent": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "agent",
+          "sessionId"
         ],
         "additionalProperties": false
       },

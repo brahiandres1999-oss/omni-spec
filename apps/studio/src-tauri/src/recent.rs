@@ -1,6 +1,9 @@
 //! Recent projects in `%APPDATA%\OmniStudio\recent.json` (plan §10.9, reconciliation §1.17.10):
-//! MRU order, canonical paths compared case-insensitively on Windows, at most 30 entries, atomic
-//! writes. Loading never rewrites the file, so a corrupt list survives until the user opens a project.
+//! the rail's list of projects. A new project goes to the top and a known one keeps its place, so the
+//! rail never reorders under the pointer when a project is opened; the last one opened is remembered
+//! apart, for the next launch. Canonical paths compared case-insensitively on Windows, at most 30
+//! entries, atomic writes. Loading never rewrites the file, so a corrupt list survives until the user
+//! opens a project.
 
 use std::path::{Path, PathBuf};
 
@@ -29,6 +32,9 @@ pub struct RecentEntry {
 struct RecentFile {
     version: u32,
     entries: Vec<StoredEntry>,
+    /// The project opened last (files written before it existed have none).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,6 +47,7 @@ struct StoredEntry {
 pub struct RecentProjects {
     file: PathBuf,
     entries: Vec<RecentEntry>,
+    last: Option<PathBuf>,
     load_error: Option<StudioError>,
 }
 
@@ -86,11 +93,13 @@ impl RecentProjects {
         let mut recent = RecentProjects {
             file: file.to_path_buf(),
             entries: Vec::new(),
+            last: None,
             load_error: None,
         };
         match std::fs::read(file) {
             Ok(bytes) => match serde_json::from_slice::<RecentFile>(&bytes) {
                 Ok(stored) => {
+                    recent.last = stored.last;
                     recent.entries = stored
                         .entries
                         .into_iter()
@@ -106,9 +115,17 @@ impl RecentProjects {
         recent
     }
 
-    /// Entries, most recent first.
+    /// Entries in the rail's order (newest additions first).
     pub fn entries(&self) -> &[RecentEntry] {
         &self.entries
+    }
+
+    /// The project opened last, if it is still listed.
+    pub fn last_opened(&self) -> Option<&RecentEntry> {
+        let wanted = key(self.last.as_deref()?);
+        self.entries
+            .iter()
+            .find(|entry| key(&entry.path) == wanted)
     }
 
     /// Why the file could not be read, if it could not.
@@ -116,7 +133,8 @@ impl RecentProjects {
         self.load_error.as_ref()
     }
 
-    /// Moves `project` to the front (adding it if new) and saves the list atomically.
+    /// Adds `project` at the front when it is new (a listed one keeps its place), remembers it as the
+    /// last opened and saves the list atomically.
     ///
     /// # Errors
     /// [`StudioError::ProjectInvalid`] when `project` is not a folder; I/O errors when saving.
@@ -130,10 +148,17 @@ impl RecentProjects {
                 .map_err(|_| StudioError::ProjectInvalid)?,
         );
         let wanted = key(&canonical);
-        self.entries
-            .retain(|existing| key(&existing.path) != wanted);
-        self.entries.insert(0, entry(canonical));
-        self.entries.truncate(MAX_RECENT);
+        if let Some(existing) = self
+            .entries
+            .iter_mut()
+            .find(|existing| key(&existing.path) == wanted)
+        {
+            existing.missing = false;
+        } else {
+            self.entries.insert(0, entry(canonical.clone()));
+            self.entries.truncate(MAX_RECENT);
+        }
+        self.last = Some(canonical);
         self.save()?;
         self.load_error = None;
         Ok(())
@@ -156,6 +181,9 @@ impl RecentProjects {
         if self.entries.len() == before {
             return Ok(());
         }
+        if self.last.as_deref().is_some_and(|last| key(last) == wanted) {
+            self.last = None;
+        }
         self.save()
     }
 
@@ -169,6 +197,7 @@ impl RecentProjects {
                     path: entry.path.clone(),
                 })
                 .collect(),
+            last: self.last.clone(),
         };
         let text = serde_json::to_vec_pretty(&stored).map_err(|e| StudioError::Io {
             op: "serialize recent.json",

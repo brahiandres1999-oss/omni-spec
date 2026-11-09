@@ -113,26 +113,26 @@ impl StudioState {
     }
 }
 
-/// The omni-spec CLI the engine runs: the bundled resource (D-4), `OMNI_STUDIO_ENGINE_ENTRY`, or in
-/// debug builds the repository checkout this crate lives in.
+/// The omni-spec CLI the engine runs: `OMNI_STUDIO_ENGINE_ENTRY`, then in debug builds the repository
+/// checkout this crate lives in, then the bundled resource (D-4). Debug builds prefer the checkout: the
+/// bundled copy under `target/debug` is only refreshed when Rust recompiles, so engine edits would not
+/// reach the running app (an engine restart is enough with the checkout).
 fn engine_entry_for(app: &AppHandle) -> Result<PathBuf> {
     if let Ok(entry) = std::env::var("OMNI_STUDIO_ENGINE_ENTRY") {
         return Ok(PathBuf::from(entry));
     }
-    let bundled = app
-        .path()
-        .resource_dir()
-        .map_err(|_| StudioError::EngineMissing {
-            path: PathBuf::from("resources/omni-spec"),
-        })
-        .and_then(|resources| engine_entry(&resources));
-    if cfg!(debug_assertions) && bundled.is_err() {
+    if cfg!(debug_assertions) {
         let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../bin/omni-spec.mjs");
         if checkout.is_file() {
             return Ok(checkout);
         }
     }
-    bundled
+    app.path()
+        .resource_dir()
+        .map_err(|_| StudioError::EngineMissing {
+            path: PathBuf::from("resources/omni-spec"),
+        })
+        .and_then(|resources| engine_entry(&resources))
 }
 
 /// Starts (or reuses) the engine for `root`, switches the active project to it without stopping
@@ -253,9 +253,9 @@ pub fn open_initial(app: &AppHandle, args: &[String], cwd: &Path) {
         let state = app.state::<StudioState>();
         let entries = lock(&state.recent);
         entries
-            .entries()
-            .iter()
-            .find(|entry| !entry.missing)
+            .last_opened()
+            .filter(|entry| !entry.missing)
+            .or_else(|| entries.entries().iter().find(|entry| !entry.missing))
             .map(|entry| entry.path.clone())
     };
     if let Some(root) = recent {

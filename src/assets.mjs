@@ -34,6 +34,11 @@ async function files(directory, destination) {
   return result;
 }
 
+/** What a project installed by Omni Studio keeps: only its ignore rules (runtime and templates live in Studio). */
+export function studioEntries() {
+  return [{ path: 'specs/.gitignore', content: SPECS_GITIGNORE, section: 'hash' }];
+}
+
 export async function packageEntries() {
   const entries = await files(join(packageRoot, 'src', 'templates'), 'specs/_templates');
   for (const directory of ['src', 'bin', 'schema', 'agents']) {

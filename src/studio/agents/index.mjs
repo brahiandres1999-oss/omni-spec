@@ -1,4 +1,9 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { OMNI_SKILLS } from '../../workflows.mjs';
+import { ASK_ENV, CONVERSATION_ENV } from '../ask-channel.mjs';
 import { StudioError } from '../protocol.mjs';
 import {
   ACP_PERMISSION_MODES,
@@ -21,7 +26,50 @@ const OMNI_BIN = fileURLToPath(new URL('../../../bin/omni-spec.mjs', import.meta
 
 /** Short per-session instruction telling every agent when to consult and record shared project memory (Q26). */
 export const OMNI_SESSION_PROMPT =
-  'Memoria compartida de Omni: antes de modificar código, consulta `omni_search_context` y `omni_active_work` (y `omni_check_blast_radius` si cambias contratos o módulos compartidos). Cuando descubras un patrón, trampa, convención o restricción del proyecto, regístralo con `omni_record_observation`; cuando tomes una decisión de arquitectura, regístrala con `omni_record_decision`.';
+  'Memoria compartida de Omni: antes de modificar código, consulta `omni_search_context` y `omni_active_work` (y `omni_check_blast_radius` si cambias contratos o módulos compartidos). Cuando descubras un patrón, trampa, convención o restricción del proyecto, regístralo con `omni_record_observation`; cuando tomes una decisión de arquitectura, regístrala con `omni_record_decision`. Para preguntarle algo a la persona (elegir entre opciones o confirmar), usa siempre la herramienta `omni_ask_user`: Omni Studio la muestra como un panel nativo. No escribas las preguntas como listas en el chat.';
+
+/** The OmniSpec workflows Studio offers to every agent as `/omni-…` commands. */
+export const OMNI_WORKFLOWS = Object.freeze(
+  OMNI_SKILLS.map(skill => Object.freeze({ name: skill.name, description: skill.description })),
+);
+
+/**
+ * `/omni-specify texto` → the workflow's full instructions plus what the agent needs to run it from Studio.
+ * Studio carries the CLI, templates and workflows, so they work the same with Claude Code, Codex, Antigravity,
+ * OpenCode or Cline, and the project only gets its manifest, context and specs. `null` for any other text.
+ */
+export function expandWorkflow(text, { root, cli = OMNI_BIN } = {}) {
+  const match = /^\s*\/(omni-[a-z-]+)(?:\s+([\s\S]*))?$/.exec(String(text ?? ''));
+  const skill = match && OMNI_SKILLS.find(entry => entry.name === match[1]);
+  if (!skill) return null;
+  const installed = Boolean(root) && existsSync(join(root, 'specs', 'manifest.json'));
+  const command = `node "${cli}"`;
+  const studio = [
+    `## Omni Studio: /${skill.name}`,
+    `Omni Studio runs this workflow. Its OmniSpec CLI is: ${command} <command>. Use exactly that command wherever the workflow mentions specs/.omni/runtime/bin/omni-spec.mjs, a global plugin CLI or npx; never copy the runtime, templates or skills into the project.`,
+    installed
+      ? 'OmniSpec is already set up in this project (specs/manifest.json).'
+      : `OmniSpec is not set up in this project yet. When the workflow needs it, run ${command} init --yes --agent studio: it writes only specs/manifest.json, specs/project-context.md, specs/README.md, specs/.gitignore and CONSTITUTION.md.`,
+    'Shared memory is available through the omni MCP tools in every agent Studio drives; use them as the workflow says.',
+    "Whenever the workflow tells you to ask the person (the host's native structured question tool), call the omni MCP tool omni_ask_user: Omni Studio shows it as a native question panel. Never write the questions as numbered lists in the chat.",
+  ].join('\n');
+  const request = match[2]?.trim();
+  return `${studio}\n\n${skill.instructions}\nUser request: ${request || '(none: follow the workflow as written)'}\n`;
+}
+
+/**
+ * The inverse of `expandWorkflow`, for histories read back from an agent's disk: the person sees `/omni-init`
+ * or `/omni-specify texto`, as they typed it, not the whole workflow. Any other text is returned unchanged.
+ */
+export function collapseWorkflow(text) {
+  const value = String(text ?? '').trimStart();
+  if (!value.startsWith('## Omni Studio')) return value;
+  // The name is on the first line, which survives agents that clip long messages in their logs.
+  const name = /^## Omni Studio: \/(omni-[a-z-]+)/.exec(value)?.[1] ?? /\n# \/(omni-[a-z-]+)\n/.exec(value)?.[1];
+  if (!name) return value;
+  const request = /\nUser request: ([\s\S]*?)\s*$/.exec(value)?.[1]?.trim() ?? '';
+  return request && !request.startsWith('(none:') ? `/${name} ${request}` : `/${name}`;
+}
 
 export function omniMcpServer() {
   return {
@@ -124,6 +172,8 @@ export function createAgentHub({
   notify,
   log = () => undefined,
   conversations = null,
+  /** Pipe of the engine's question channel (ask-channel.mjs); without it agents get no omni_ask_user. */
+  askChannel = null,
   createDriver = createClaudeDriver,
   createCodex = createCodexDriver,
   createAcp = createAcpDriver,
@@ -156,6 +206,10 @@ export function createAgentHub({
   const slots = new Map();
   const bySession = new Map();
   const requestSlot = new Map();
+  /** Permission requests and questions waiting for an answer, so a reloaded window can still answer them. */
+  const pendingAsks = new Map();
+  /** Questions from omni_ask_user waiting for the person: how to send the answer back. */
+  const waitingQuestions = new Map();
   const warnedConflicts = new Set();
 
   const allSlots = () => [...new Set(slots.values())];
@@ -193,8 +247,12 @@ export function createAgentHub({
   /** @type {Map<string, {models?: string[], efforts?: string[]}>} */
   const dynamicModels = new Map();
 
-  const mcp = omniMcpServer();
+  const baseMcp = omniMcpServer();
+  // Each conversation's MCP server knows Studio's question channel and which conversation it belongs to.
+  const mcpFor = slot =>
+    askChannel ? { ...baseMcp, env: { [ASK_ENV]: askChannel, [CONVERSATION_ENV]: slot.id } } : baseMcp;
   const makeDriver = slot => {
+    const mcp = mcpFor(slot);
     if (slot.agent === 'codex') {
       return createCodex({
         cwd: root,
@@ -263,7 +321,14 @@ export function createAgentHub({
         if (other) event = { ...event, conflictWith: labelOf(other), conflictFile: file };
       }
     }
-    if (event.kind === 'permission_resolved' && event.requestId) requestSlot.delete(event.requestId);
+    if (event.kind === 'permission_resolved' && event.requestId) {
+      requestSlot.delete(event.requestId);
+      pendingAsks.delete(event.requestId);
+    }
+    if (event.kind === 'permission' && event.requestId) pendingAsks.set(event.requestId, { slot, event });
+    // A turn that ended or a process that stopped has nothing left to approve.
+    if (event.kind === 'result' || (event.kind === 'status' && event.state !== 'busy' && event.state !== 'starting'))
+      for (const [id, ask] of pendingAsks) if (ask.slot === slot) pendingAsks.delete(id);
 
     sendFor(slot, event);
 
@@ -300,6 +365,11 @@ export function createAgentHub({
     if (event.kind === 'status' || event.kind === 'init' || event.kind === 'tool' || event.kind === 'result') {
       syncActiveWork();
     }
+  };
+
+  const isIdle = slot => {
+    const state = slot.driver.status().state;
+    return state !== 'busy' && state !== 'starting';
   };
 
   const slotFor = (conversationId = 'default', agent = 'claude') => {
@@ -345,7 +415,8 @@ export function createAgentHub({
         opencode: openCodeLoc,
         cline: clineLoc,
       };
-      const slot = slotFor(conversationId);
+      // Asking about a conversation never creates it: a new conversation gets its slot on its first prompt.
+      const slot = slots.get(conversationId) ?? bySession.get(conversationId) ?? null;
       const live = allSlots()
         .map(entry => {
           const st = entry.driver.status();
@@ -360,7 +431,7 @@ export function createAgentHub({
         .filter(entry => entry.state !== 'idle' || entry.sessionId !== null);
       return {
         workspace: { mode: workspace.mode, dir: workspace.dir },
-        active: slot.agent,
+        active: slot?.agent ?? 'claude',
         agents: AGENTS.map(agent => {
           const dyn = dynamicModels.get(agent.id);
           return {
@@ -371,7 +442,8 @@ export function createAgentHub({
             path: locations[agent.id]?.path ?? null,
           };
         }),
-        ...slot.driver.status(),
+        ...(slot ? slot.driver.status() : { state: 'idle', model: null, sessionId: null }),
+        workflows: OMNI_WORKFLOWS,
         live,
       };
     },
@@ -383,7 +455,8 @@ export function createAgentHub({
         slot.firstPrompt = text;
         if (!slot.title) slot.title = firstLine(text);
       }
-      return slot.driver.prompt(text, { model, effort, permission });
+      // The person sees what they typed; the agent gets the whole OmniSpec workflow.
+      return slot.driver.prompt(expandWorkflow(text, { root }) ?? text, { model, effort, permission });
     },
     cancel: ({ conversationId = 'default' } = {}) => slotFor(conversationId).driver.cancel(),
     permission({ conversationId, requestId, decision, message }) {
@@ -437,12 +510,17 @@ export function createAgentHub({
           }
         }
       }
-      const defaultSlot = slotFor('default');
-      const defaultBusy =
-        defaultSlot.driver.status().state === 'busy' || defaultSlot.driver.status().state === 'starting';
-      const targetId = conversationId ?? (bySession.has(sessionId) || defaultBusy ? sessionId : 'default');
-      const slot = slotFor(targetId, resolvedAgent);
-      if (slot.agent !== resolvedAgent && slot.driver.status().state !== 'busy') {
+      // The slot that already holds this session keeps it (no restart, a running turn goes on). Otherwise the
+      // conversation gets its own slot: resuming never takes over the slot of another conversation, so the next
+      // prompt cannot land in the wrong session.
+      let slot = bySession.get(sessionId);
+      if (!slot) {
+        const wanted = conversationId ?? sessionId;
+        const taken = slots.get(wanted);
+        const free = !taken || ((!taken.sessionId || taken.sessionId === sessionId) && isIdle(taken));
+        slot = slotFor(free ? wanted : sessionId, resolvedAgent);
+      }
+      if (slot.agent !== resolvedAgent && isIdle(slot)) {
         slot.driver.dispose();
         slot.agent = resolvedAgent;
         slot.driver = makeDriver(slot);
@@ -456,14 +534,87 @@ export function createAgentHub({
           if (file) slot.files.add(file);
         }
       }
-      if (slot.driver.status().state === 'idle' || slot.driver.status().sessionId !== sessionId) {
+      if (isIdle(slot) && slot.driver.status().sessionId !== sessionId) {
         slot.driver.resume(sessionId, { costUsd: history.costUsd });
       }
       index('recorded', store =>
-        store.record({ agent: resolvedAgent, sessionId, title: history.title, titleSource: history.titleSource }),
+        store.record({
+          agent: resolvedAgent,
+          sessionId,
+          title: collapseWorkflow(history.title),
+          titleSource: history.titleSource,
+        }),
       );
       syncActiveWork();
-      return { ...history, agent: resolvedAgent };
+      const events = (history.events ?? []).map(event =>
+        event.kind === 'user' ? { ...event, text: collapseWorkflow(event.text) } : event,
+      );
+      // What is still waiting for the person's answer is not in the agent's history on disk.
+      for (const [reqId, ask] of pendingAsks.entries()) {
+        const matches =
+          ask.slot === slot ||
+          ask.slot?.id === slot?.id ||
+          (sessionId && ask.slot?.sessionId === sessionId) ||
+          (conversationId && (ask.slot?.id === conversationId || ask.slot?.sessionId === conversationId));
+        if (matches) {
+          ask.slot = slot;
+          const waiting = waitingQuestions.get(reqId);
+          if (waiting) waiting.slot = slot;
+          events.push(ask.event);
+        }
+      }
+      return { ...history, events, agent: resolvedAgent, conversationId: slot.id, state: slot.driver.status().state };
+    },
+    /**
+     * An agent asks the person through omni_ask_user (ask-channel.mjs): the chat shows a question panel and
+     * `answer` sends the choice back. A closed connection (cancelled turn) withdraws the question.
+     */
+    ask({ conversationId, questions }, { reply, onClose }) {
+      const slot = slots.get(conversationId) ?? bySession.get(conversationId);
+      if (!slot) return reply({ error: 'Omni Studio no tiene abierta esa conversación.' });
+      const requestId = `ask-${randomUUID()}`;
+      const event = { kind: 'question', requestId, questions };
+      waitingQuestions.set(requestId, { slot, reply });
+      pendingAsks.set(requestId, { slot, event });
+      sendFor(slot, event);
+      onClose(() => {
+        if (!waitingQuestions.has(requestId)) return;
+        waitingQuestions.delete(requestId);
+        pendingAsks.delete(requestId);
+        sendFor(slot, { kind: 'question_resolved', requestId, cancelled: true });
+      });
+      return undefined;
+    },
+    /** The person's answer to a question: one entry per question, the chosen labels or their own text. */
+    answer({ requestId, answers }) {
+      const entry = waitingQuestions.get(requestId);
+      if (!entry) throw new StudioError('QUESTION_UNKNOWN', 'Esa pregunta ya no está pendiente.');
+      waitingQuestions.delete(requestId);
+      pendingAsks.delete(requestId);
+      entry.reply({ answers });
+      sendFor(entry.slot, { kind: 'question_resolved', requestId, answers });
+      return { answered: true };
+    },
+    /** True while the conversation of `sessionId` is running a turn. */
+    isBusy(sessionId) {
+      const slot = bySession.get(sessionId);
+      return Boolean(slot) && !isIdle(slot);
+    },
+    /** A conversation deleted from Studio: its CLI process stops and its slot goes away. */
+    forget({ sessionId }) {
+      const slot = bySession.get(sessionId);
+      if (!slot) return { forgotten: false };
+      bySession.delete(sessionId);
+      for (const [id, entry] of slots) if (entry === slot && id !== 'default') slots.delete(id);
+      if (slots.get('default') === slot) {
+        slot.sessionId = null;
+        slot.firstPrompt = null;
+        slot.title = '';
+        slot.files.clear();
+        slot.driver.reset();
+      } else slot.driver.dispose();
+      syncActiveWork();
+      return { forgotten: true };
     },
     reset({ conversationId = 'default' } = {}) {
       const slot = slotFor(conversationId);

@@ -5,6 +5,7 @@ import { openMemory, openProjectMemory, startCheckpointSupervisor, syncFromGit }
 import { getActiveSpec } from './manifest.mjs';
 import { checkBlastRadius, normalizeTargets } from './cartography/blast-radius.mjs';
 import { resolveWorkspace } from './studio/workspace.mjs';
+import { ASK_ENV, CONVERSATION_ENV, askThroughChannel } from './studio/ask-channel.mjs';
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -79,7 +80,69 @@ export const TOOLS = [
   },
 ];
 
-const TOOLS_BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]));
+/**
+ * Only inside Omni Studio (it sets OMNI_STUDIO_ASK): the person answers in a question panel of the chat, the same
+ * for every agent, instead of reading questions written as text.
+ */
+export const ASK_TOOL = {
+  name: 'omni_ask_user',
+  description:
+    'Pregunta a la persona en el panel nativo de Omni Studio y espera su respuesta. Úsalo siempre que necesites que elija o confirme algo (1 a 4 preguntas, 2 a 4 opciones cada una; pon primero la recomendada y termina su etiqueta en "(Recomendado)"). La persona también puede escribir otra respuesta. No escribas las preguntas como texto en el chat.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      questions: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 4,
+        items: {
+          type: 'object',
+          properties: {
+            question: { type: 'string', description: 'La pregunta completa, terminada en signo de interrogación' },
+            header: { type: 'string', description: 'Etiqueta corta (máx. 12 caracteres)' },
+            options: {
+              type: 'array',
+              minItems: 2,
+              maxItems: 4,
+              items: {
+                type: 'object',
+                properties: { label: { type: 'string' }, description: { type: 'string' } },
+                required: ['label'],
+              },
+            },
+            multiSelect: { type: 'boolean', description: 'Permite elegir varias opciones' },
+          },
+          required: ['question', 'options'],
+        },
+      },
+    },
+    required: ['questions'],
+  },
+};
+
+const TOOLS_BY_NAME = new Map([...TOOLS, ASK_TOOL].map(tool => [tool.name, tool]));
+const toolsFor = env => (env[ASK_ENV] ? [...TOOLS, ASK_TOOL] : TOOLS);
+
+/** The questions as Studio shows them; anything malformed is refused with a message the agent can act on. */
+export function cleanQuestions(raw) {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 4) throw new Error('questions must hold 1 to 4 questions.');
+  return raw.map((entry, index) => {
+    const question = typeof entry?.question === 'string' ? entry.question.trim() : '';
+    if (!question) throw new Error(`questions[${index}].question must not be empty.`);
+    const options = Array.isArray(entry.options) ? entry.options : [];
+    if (options.length < 2 || options.length > 4) throw new Error(`questions[${index}] needs 2 to 4 options.`);
+    return {
+      question,
+      header: typeof entry.header === 'string' ? entry.header.trim().slice(0, 24) : '',
+      multiSelect: entry.multiSelect === true,
+      options: options.map((option, at) => {
+        const label = typeof option?.label === 'string' ? option.label.trim() : '';
+        if (!label) throw new Error(`questions[${index}].options[${at}].label must not be empty.`);
+        return { label, description: typeof option.description === 'string' ? option.description.trim() : '' };
+      }),
+    };
+  });
+}
 
 function argumentProblems({ inputSchema }, args) {
   if (!args || typeof args !== 'object' || Array.isArray(args)) return ['arguments must be an object'];
@@ -87,10 +150,13 @@ function argumentProblems({ inputSchema }, args) {
   for (const [key, schema] of Object.entries(inputSchema.properties)) {
     const value = args[key];
     if (value === undefined) continue;
+    // Arrays of objects (omni_ask_user) are checked by their handler.
     const valid =
       schema.type === 'string'
         ? typeof value === 'string'
-        : Array.isArray(value) && value.every(item => typeof item === 'string');
+        : schema.items?.type === 'object'
+          ? Array.isArray(value)
+          : Array.isArray(value) && value.every(item => typeof item === 'string');
     if (!valid) problems.push(`${key} must be ${schema.type === 'string' ? 'a string' : 'an array of strings'}`);
   }
   return problems;
@@ -105,8 +171,17 @@ function hasTable(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
 }
 
-function toolHandlers(root, memory, { studio = false } = {}) {
+function toolHandlers(root, memory, { studio = false, env = process.env } = {}) {
   return {
+    async omni_ask_user({ questions }) {
+      if (!env[ASK_ENV]) throw new Error('omni_ask_user only works inside Omni Studio.');
+      const reply = await askThroughChannel(env[ASK_ENV], {
+        conversationId: env[CONVERSATION_ENV] ?? null,
+        questions: cleanQuestions(questions),
+      });
+      if (reply.error) throw new Error(reply.error);
+      return reply;
+    },
     async omni_search_context({ query, scope }) {
       if (!studio) await syncFromGit(memory, root);
       return { results: memory.searchContext(query, { scope: scope ?? null }) };
@@ -170,7 +245,7 @@ const toolResult = (value, isError = false) => ({
   isError,
 });
 
-async function dispatch(message, { handlers, version, log }) {
+async function dispatch(message, { handlers, version, log, env = process.env }) {
   const { id, method, params } = message;
   switch (method) {
     case 'initialize': {
@@ -184,7 +259,7 @@ async function dispatch(message, { handlers, version, log }) {
     case 'ping':
       return response(id, {});
     case 'tools/list':
-      return response(id, { tools: TOOLS });
+      return response(id, { tools: toolsFor(env) });
     case 'tools/call': {
       const tool = TOOLS_BY_NAME.get(params?.name);
       if (!tool) return failure(id, INVALID_PARAMS, `Unknown tool: ${params?.name}`);

@@ -17,6 +17,9 @@ export { OMNI_SKILLS } from './workflows.mjs';
 // `.agents/skills/` is the interop path read by Antigravity, Copilot, Codex, Cursor, Kilo
 // and OpenCode. The `antigravity` adapter therefore yields the most portable tree.
 export const AGENTS = {
+  // Omni Studio carries the runtime, templates and workflows for every agent it drives (Claude Code,
+  // Codex, Antigravity, OpenCode, Cline…): the project keeps only its manifest, context and specs.
+  studio: { skills: null, commands: null, commandFormat: 'markdown', invocation: '/omni-init (Omni Studio)' },
   plugin: { skills: null, commands: null, commandFormat: 'markdown', invocation: '/omni-init (Antigravity Plugin)' },
   antigravity: {
     skills: '.agents/skills',
@@ -59,7 +62,9 @@ export function normalizeAgents(raw = 'antigravity') {
     throw new Error(`Invalid agent "${invalid.join(',')}". Valid agents: ${Object.keys(AGENTS).join(', ')}, all.`);
   return [
     ...new Set(
-      normalized.includes('all') ? Object.keys(AGENTS).filter(s => s !== 'generic' && s !== 'plugin') : normalized,
+      normalized.includes('all')
+        ? Object.keys(AGENTS).filter(s => !['generic', 'plugin', 'studio'].includes(s))
+        : normalized,
     ),
   ];
 }
@@ -80,6 +85,7 @@ export function integrationEntries(manifest, options = {}) {
   for (const target of targets) {
     const adapter = AGENTS[target];
     if (!adapter.skills && !adapter.commands) {
+      if (target === 'studio') continue;
       if (target === 'plugin')
         entries.push({
           path: 'specs/commands/omni-init.md',
@@ -122,7 +128,7 @@ export function integrationEntries(manifest, options = {}) {
     // AGENTS.md is the only file every supported host reads.
     entries.push({ path: 'AGENTS.md', content: rule, section: true });
   }
-  if (!targets.includes('generic') && !targets.includes('plugin'))
+  if (!targets.some(target => ['generic', 'plugin', 'studio'].includes(target)))
     entries.push({
       path: 'specs/commands/omni-init.md',
       content:

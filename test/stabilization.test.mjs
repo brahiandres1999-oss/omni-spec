@@ -145,7 +145,8 @@ for (const mode of ['hold', 'choosing']) {
     const manifest = await loadManifest(dir);
     assert.equal(manifest.specs.length, 24);
     assert.equal(new Set(manifest.specs.map(spec => spec.id)).size, 24);
-    assert.deepEqual(await readdir(join(dir, 'specs', 'manifest.lock')), []);
+    // No claim and no empty lock folder is left in the project.
+    await assert.rejects(readdir(join(dir, 'specs', 'manifest.lock')), { code: 'ENOENT' });
   });
 }
 

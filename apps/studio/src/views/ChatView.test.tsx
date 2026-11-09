@@ -89,7 +89,11 @@ describe('CH chat view', () => {
 
     const input = screen.getByRole('combobox', { name: /Pídele algo/ });
     await user.type(input, 'agrega un README{Enter}');
-    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'agrega un README', permission: 'ask' }));
+    await waitFor(() =>
+      expect(fake.lastCall('agent.prompt')).toMatchObject({ text: 'agrega un README', permission: 'ask' }),
+    );
+    const slot = (fake.lastCall('agent.prompt') as { conversationId: string }).conversationId;
+    expect(slot).toMatch(/^new-/);
     expect(screen.getByText('agrega un README')).toBeInTheDocument();
     expect(input).toHaveValue('');
 
@@ -110,7 +114,65 @@ describe('CH chat view', () => {
     expect(screen.getByRole('button', { name: 'Detener' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Aprobar' }));
-    expect(fake.lastCall('agent.permission')).toEqual({ requestId: 'r1', decision: 'allow' });
+    expect(fake.lastCall('agent.permission')).toEqual({ conversationId: slot, requestId: 'r1', decision: 'allow' });
+  });
+
+  test('CH-25 a question from the agent is a native panel; one click answers it and the transcript keeps the answer', async () => {
+    const user = userEvent.setup();
+    const fake = chatTransport().respond('agent.answer', { answered: true });
+    renderWithStudio(<ChatView />, { transport: fake });
+    await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
+    act(() => {
+      fake.emit('agent.event', {
+        kind: 'question',
+        requestId: 'ask-1',
+        questions: [
+          {
+            question: '¿Qué tipo de proyecto quieres crear?',
+            header: 'Tipo',
+            multiSelect: false,
+            options: [
+              { label: 'Aplicación web (Recomendado)', description: 'Next.js + TypeScript' },
+              { label: 'Herramienta de línea de comandos', description: '' },
+            ],
+          },
+        ],
+      });
+    });
+    const panel = screen.getByRole('region', { name: /te pregunta/ });
+    expect(within(panel).getByText('Recomendado')).toBeInTheDocument();
+    expect(within(panel).getByText('Next.js + TypeScript')).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole('button', { name: /Herramienta de línea de comandos/ }));
+    await waitFor(() =>
+      expect(fake.lastCall('agent.answer')).toEqual({
+        requestId: 'ask-1',
+        answers: [{ question: '¿Qué tipo de proyecto quieres crear?', answer: 'Herramienta de línea de comandos' }],
+      }),
+    );
+    expect(screen.queryByRole('region', { name: /te pregunta/ })).toBeNull();
+    expect(screen.getByText('Herramienta de línea de comandos')).toBeInTheDocument();
+  });
+
+  test('CH-26 a run of tool calls reads as one «N pasos» block that opens on demand', async () => {
+    const user = userEvent.setup();
+    const fake = chatTransport();
+    renderWithStudio(<ChatView />, { transport: fake });
+    await waitFor(() => expect(fake.calls('agent.status')).toHaveLength(1));
+    act(() => {
+      for (const [id, command] of [
+        ['a', 'ls'],
+        ['b', 'cat package.json'],
+        ['c', 'node --version'],
+        ['d', 'git status'],
+      ])
+        fake.emit('agent.event', { kind: 'tool', id, name: 'Bash', title: command, input: { command } });
+    });
+    const group = screen.getByRole('button', { name: /4 pasos/ });
+    expect(group).toHaveTextContent('git status');
+    expect(screen.queryByText('cat package.json')).toBeNull();
+    await user.click(group);
+    expect(screen.getByText('cat package.json')).toBeInTheDocument();
   });
 
   test('CH-05 a missing login explains how to sign in with the CLI', async () => {
@@ -167,7 +229,12 @@ describe('CH chat view', () => {
     expect(screen.getByRole('button', { name: 'Modelo: Opus' })).toBeInTheDocument();
     await user.type(screen.getByRole('combobox', { name: /Pídele algo/ }), 'hola{Enter}');
     await waitFor(() =>
-      expect(fake.lastCall('agent.prompt')).toEqual({ text: 'hola', model: 'opus', effort: 'high', permission: 'ask' }),
+      expect(fake.lastCall('agent.prompt')).toMatchObject({
+        text: 'hola',
+        model: 'opus',
+        effort: 'high',
+        permission: 'ask',
+      }),
     );
     act(() => {
       fake.emit('agent.event', {
@@ -221,7 +288,7 @@ describe('CH chat view', () => {
 
     await user.type(screen.getByRole('combobox', { name: /Pídele algo/ }), 'sigue{Enter}');
     await waitFor(() =>
-      expect(fake.lastCall('agent.prompt')).toEqual({ text: 'sigue', model: 'haiku', permission: 'ask' }),
+      expect(fake.lastCall('agent.prompt')).toMatchObject({ text: 'sigue', model: 'haiku', permission: 'ask' }),
     );
     await waitFor(() => expect(screen.queryByText(/desde tu próximo mensaje/)).toBeNull());
   });
@@ -328,7 +395,7 @@ describe('CH composer', () => {
     expect(bypass).toHaveClass('text-breach');
 
     await user.type(input, 'hazlo{Enter}');
-    await waitFor(() => expect(fake.lastCall('agent.prompt')).toEqual({ text: 'hazlo', permission: 'bypass' }));
+    await waitFor(() => expect(fake.lastCall('agent.prompt')).toMatchObject({ text: 'hazlo', permission: 'bypass' }));
   });
 
   test('CH-17 the model menu groups models under their agent, with a reasoning submenu', async () => {
@@ -354,7 +421,7 @@ describe('CH composer', () => {
 
     await user.type(input, 'piensa{Enter}');
     await waitFor(() =>
-      expect(fake.lastCall('agent.prompt')).toEqual({
+      expect(fake.lastCall('agent.prompt')).toMatchObject({
         text: 'piensa',
         model: 'opus',
         effort: 'high',
@@ -461,6 +528,13 @@ describe('CH conversations in the rail', () => {
         projects: (args.roots as string[]).map(root => ({ root, conversations: lists[root] ?? [] })),
       }))
       .respond('conversations.rename', { renamed: true })
+      .respond('conversations.delete', (args: Record<string, unknown>) => {
+        const root = String(args.root);
+        lists[root] = (lists[root] ?? []).filter(
+          entry => (entry as { sessionId: string }).sessionId !== args.sessionId,
+        );
+        return { deleted: true };
+      })
       .respond('conversations.archive', (args: Record<string, unknown>) => ({ archived: args.archived }))
       .respond('agent.resume', (args: Record<string, unknown>) => history(String(args.sessionId)))
       .respond('agent.sessions', {
@@ -493,7 +567,9 @@ describe('CH conversations in the rail', () => {
     expect(within(rail).queryByText('Viejo')).toBeNull();
 
     await user.click(entry);
-    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'S1' }));
+    await waitFor(() =>
+      expect(fake.lastCall('agent.resume')).toEqual({ conversationId: 'S1', sessionId: 'S1', agent: 'claude' }),
+    );
     expect(await screen.findByText('/omni-plan login')).toBeInTheDocument();
     expect(screen.getByText('Reviso el plan.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Bash/ })).toHaveTextContent('Listo');
@@ -501,9 +577,20 @@ describe('CH conversations in the rail', () => {
     expect(screen.getByRole('group', { name: 'Estado del agente' })).toHaveTextContent('US$ 0.4200');
 
     await user.click(within(rail).getByRole('button', { name: 'Nueva conversación' }));
-    await waitFor(() => expect(fake.calls('agent.reset')).toHaveLength(1));
     await waitFor(() => expect(screen.queryByText('Reviso el plan.')).toBeNull());
     expect(entry).not.toHaveAttribute('aria-current');
+    expect(fake.calls('agent.reset')).toHaveLength(0);
+    const input = await screen.findByRole('combobox', { name: /Pídele algo/ });
+    await user.type(input, 'otra cosa{Enter}');
+    await waitFor(() => expect(fake.lastCall('agent.prompt')).toMatchObject({ text: 'otra cosa' }));
+    expect((fake.lastCall('agent.prompt') as { conversationId: string }).conversationId).toMatch(/^new-/);
+
+    // Back to S1: instant, from what is already on screen (no second read from disk).
+    const reads = fake.calls('agent.resume').length;
+    await user.click(entry);
+    expect(await screen.findByText('Reviso el plan.')).toBeInTheDocument();
+    await waitFor(() => expect(fake.calls('agent.resume').length).toBe(reads + 1));
+    expect(fake.lastCall('agent.resume')).toEqual({ conversationId: 'S1', sessionId: 'S1', agent: 'claude' });
     restoreLayout();
   });
 
@@ -549,7 +636,9 @@ describe('CH conversations in the rail', () => {
     await user.click(hit);
     await waitFor(() => expect(fake.lastCall('project.open')).toEqual({ path: OTHER }));
     // Once the other project's engine is up, its chat opens the conversation.
-    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'P1' }));
+    await waitFor(() =>
+      expect(fake.lastCall('agent.resume')).toEqual({ conversationId: 'P1', sessionId: 'P1', agent: 'claude' }),
+    );
     restoreLayout();
   });
 
@@ -562,8 +651,66 @@ describe('CH conversations in the rail', () => {
     expect(within(dialog).queryByRole('button', { name: /^Plan del login/ })).toBeNull();
 
     await user.click(pick);
-    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'T9' }));
+    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ conversationId: 'T9', sessionId: 'T9' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    restoreLayout();
+  });
+
+  test('CH-22 «Eliminar…» asks first, then removes the conversation from the rail and from the screen', async () => {
+    const { fake, user, rail, entry, restoreLayout } = await mountRail();
+    await user.click(entry);
+    expect(await screen.findByText('Reviso el plan.')).toBeInTheDocument();
+
+    await user.click(within(rail).getByRole('button', { name: 'Opciones de «Plan del login»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Eliminar…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Eliminar conversación' });
+    expect(fake.calls('conversations.delete')).toHaveLength(0);
+    expect(dialog).toHaveTextContent('Claude Code');
+    expect(dialog).toHaveTextContent('Papelera de reciclaje');
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar para siempre' }));
+
+    await waitFor(() =>
+      expect(fake.lastCall('conversations.delete')).toEqual({ root: OPEN, agent: 'claude', sessionId: 'S1' }),
+    );
+    await waitFor(() => expect(within(rail).queryByRole('button', { name: /^Plan del login/ })).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Reviso el plan.')).toBeNull());
+    restoreLayout();
+  });
+
+  test('CH-23 a reload (F5) reopens the conversation that was on screen', async () => {
+    globalThis.localStorage?.setItem('omni-studio:chat.last', JSON.stringify({ [OPEN.toLowerCase()]: 'S1' }));
+    const { fake, restoreLayout } = await mountRail();
+    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ conversationId: 'S1', sessionId: 'S1' }));
+    expect(await screen.findByText('Reviso el plan.')).toBeInTheDocument();
+    restoreLayout();
+  });
+
+  test('CH-24 a fast second click wins: a slow answer for the first conversation never replaces it', async () => {
+    const { fake, user, rail, entry, restoreLayout } = await mountRail();
+    const slow = fake.defer('agent.resume');
+    await user.click(entry);
+    // The view switches at once, before the history arrives.
+    expect(entry).toHaveAttribute('aria-current', 'true');
+    expect(await screen.findByText('Abriendo la conversación…')).toBeInTheDocument();
+
+    await user.click(within(rail).getByRole('button', { name: 'Opciones de omni-spec' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Retomar sesión de la terminal…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Retomar sesión de la terminal' });
+    await user.click(await within(dialog).findByRole('button', { name: /Sesión de la terminal/ }));
+    await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ conversationId: 'T9', sessionId: 'T9' }));
+    expect(await screen.findByText('Reviso el plan.')).toBeInTheDocument();
+
+    // S1 answers late: T9 stays on screen, and S1 is kept for an instant switch back.
+    act(() =>
+      slow.resolve({ ...history('S1'), events: [{ kind: 'text', key: 'x', delta: 'Respuesta tardía de S1' }] }),
+    );
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(screen.queryByText('Respuesta tardía de S1')).toBeNull();
+    expect(entry).not.toHaveAttribute('aria-current');
+    const reads = fake.calls('agent.resume').length;
+    await user.click(entry);
+    expect(await screen.findByText('Respuesta tardía de S1')).toBeInTheDocument();
+    await waitFor(() => expect(fake.calls('agent.resume').length).toBe(reads + 1));
     restoreLayout();
   });
 
@@ -581,7 +728,9 @@ describe('CH conversations in the rail', () => {
     try {
       // Open S1 and send a prompt so it becomes busy.
       await user.click(entry);
-      await waitFor(() => expect(fake.lastCall('agent.resume')).toEqual({ sessionId: 'S1' }));
+      await waitFor(() =>
+        expect(fake.lastCall('agent.resume')).toEqual({ conversationId: 'S1', sessionId: 'S1', agent: 'claude' }),
+      );
       const input = await screen.findByRole('combobox', { name: /Pídele algo/ });
       await user.type(input, 'trabaja en S1{Enter}');
       act(() => {
@@ -715,7 +864,7 @@ describe('CH conversations in the rail', () => {
     const input = screen.getByRole('combobox', { name: /Pídele algo/ });
     await user.type(input, 'revisa el módulo{Enter}');
     await waitFor(() =>
-      expect(fake.lastCall('agent.prompt')).toEqual({
+      expect(fake.lastCall('agent.prompt')).toMatchObject({
         agent: 'codex',
         text: 'revisa el módulo',
         model: 'gpt-5.3-codex',
@@ -816,7 +965,7 @@ describe('CH conversations in the rail', () => {
     const input = screen.getByRole('combobox', { name: /Pídele algo/ });
     await user.type(input, 'usa antigravity{Enter}');
     await waitFor(() =>
-      expect(fake.lastCall('agent.prompt')).toEqual({
+      expect(fake.lastCall('agent.prompt')).toMatchObject({
         agent: 'antigravity',
         text: 'usa antigravity',
         model: 'gemini-2.5-pro',

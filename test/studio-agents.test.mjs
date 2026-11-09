@@ -1075,6 +1075,13 @@ describe('AG generic ACP driver and dynamic model discovery', () => {
       method: 'session/update',
       params: {
         sessionId: 'acp-sess-1',
+        update: { sessionUpdate: 'user_message_chunk', content: { text: 'Analiza la arquitectura' } },
+      },
+    });
+    proc.send({
+      method: 'session/update',
+      params: {
+        sessionId: 'acp-sess-1',
         update: { sessionUpdate: 'agent_message_chunk', messageId: 'm-acp', content: { text: 'Revisando…' } },
       },
     });
@@ -1096,6 +1103,10 @@ describe('AG generic ACP driver and dynamic model discovery', () => {
       params: {
         toolCall: { kind: 'edit', rawInput: { file_path: 'src/index.ts' } },
         reason: 'Modificar src/index.ts',
+        options: [
+          { optionId: 'proceed', kind: 'allow_once', name: 'Permitir' },
+          { optionId: 'stop', kind: 'reject_once', name: 'Rechazar' },
+        ],
       },
     });
     proc.send({
@@ -1114,8 +1125,13 @@ describe('AG generic ACP driver and dynamic model discovery', () => {
     assert.deepEqual(proc.written.at(-1), {
       jsonrpc: '2.0',
       id: 'perm-acp-1',
-      result: { outcome: { outcome: 'selected', optionId: 'allow_once' } },
+      result: { outcome: { outcome: 'selected', optionId: 'proceed' } },
     });
+    assert.equal(
+      events.filter(event => event.kind === 'user').length,
+      0,
+      'the echo of the person’s own message is not shown again',
+    );
 
     // Complete the prompt
     proc.send({ id: promptReq.id, result: { stopReason: 'end_turn', durationMs: 420 } });
@@ -1129,6 +1145,70 @@ describe('AG generic ACP driver and dynamic model discovery', () => {
     assert.equal(resultEv.contextTokens, 12500);
     assert.equal(resultEv.contextWindow, 1000000);
     driver.dispose();
+  });
+
+  test('AG-30 «Sin restricciones» answers ACP permission requests itself; the transcript decodes tool arguments', async () => {
+    const proc = fakeProcess();
+    const events = [];
+    const driver = createAcpDriver({
+      cwd: 'C:/repo',
+      label: 'Antigravity',
+      emit: event => events.push(event),
+      locate: async () => ({ file: 'agy.exe', prefix: ['acp'], path: 'agy.exe' }),
+      spawnImpl: () => proc,
+    });
+    void driver.prompt('lista los archivos', { permission: 'bypass' });
+    await tick();
+    proc.send({ id: proc.written[0].id, result: { protocolVersion: 1 } });
+    await tick();
+    proc.send({ id: proc.written[1].id, result: { sessionId: 'acp-bypass' } });
+    await tick();
+    while (!proc.written.some(msg => msg.method === 'session/prompt')) {
+      const last = proc.written.at(-1);
+      if (last?.method === 'session/set_config_option') proc.send({ id: last.id, result: {} });
+      await tick();
+    }
+    proc.send({
+      id: 'perm-run',
+      method: 'session/request_permission',
+      params: {
+        toolCall: { kind: 'execute', name: 'run_command', rawInput: { CommandLine: 'Get-ChildItem -Force' } },
+        options: [
+          { optionId: 'ok', kind: 'allow_once' },
+          { optionId: 'no', kind: 'reject_once' },
+        ],
+      },
+    });
+    await tick();
+    assert.equal(events.filter(event => event.kind === 'permission').length, 0, 'nothing waits for the person');
+    assert.deepEqual(proc.written.at(-1), {
+      jsonrpc: '2.0',
+      id: 'perm-run',
+      result: { outcome: { outcome: 'selected', optionId: 'ok' } },
+    });
+    driver.dispose();
+
+    const fakeHome = mkdtempSync(join(tmpdir(), 'omni-brain-args-'));
+    try {
+      const logDir = join(fakeHome, '.gemini', 'antigravity-cli', 'brain', 'sess-args', '.system_generated', 'logs');
+      mkdirSync(logDir, { recursive: true });
+      writeFileSync(
+        join(logDir, 'transcript_full.jsonl'),
+        `${JSON.stringify({
+          step_index: 1,
+          type: 'PLANNER_RESPONSE',
+          tool_calls: [
+            { name: 'run_command', args: { CommandLine: '"Get-ChildItem -Force"', WaitMsBeforeAsync: '5000' } },
+          ],
+        })}\n`,
+      );
+      const history = await readAntigravityBrainSession('sess-args', { USERPROFILE: fakeHome });
+      const tool = history.events.find(event => event.kind === 'tool');
+      assert.equal(tool.name, 'Bash');
+      assert.deepEqual(tool.input, { CommandLine: 'Get-ChildItem -Force', WaitMsBeforeAsync: 5000 });
+    } finally {
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 
   test('AG-28 Antigravity brain transcript reader loads history in < 5ms without spawning a process', async () => {

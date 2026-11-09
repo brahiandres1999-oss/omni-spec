@@ -39,3 +39,6 @@ coverage/
 # Local agent & tooling state
 .claude/
 skills-lock.json
+
+# Local OmniSpec memory created by running the engine against this repository
+/specs/
