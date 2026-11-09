@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0-preview.1] — 2026-11-08
+
+Local preview. Not published to npm or GitHub Releases. Known limitations are listed in `docs/releases/0.9.0-preview.1.md`.
+
+### Added (Omni Studio, Windows desktop app)
+- **Omni Studio (`apps/studio`):** a Tauri v2 + React 19 desktop app for Windows 11. It hosts the coding agents the person already uses, each signed in through its own official CLI, with OmniSpec built in. It is distributed as a per-user NSIS installer, not through npm, and needs Node.js ≥ 22.19 on `PATH` (or `OMNI_STUDIO_NODE`).
+- **Studio engine (`src/studio/`, hidden `studio-engine` command):** JSON-RPC over a Windows named pipe, schema in `schema/studio-ipc.schema.json`. Rust host with ConPTY terminals, Job Objects and WebView2.
+- **Chat cockpit:** projects and conversations rail, parallel conversations with status dots and notifications, Markdown answers, model and effort menu, context meter, per-turn cost, line diffs, a composer with permissions and a message queue, file collision warnings, a conversation review panel and a settings dialog.
+- **Agent drivers:** Claude Code (stream-json, `--resume`, permission prompt tool), Codex (app-server, `model/list`, rate-limit windows) and a generic ACP driver for OpenCode and Cline. Antigravity (`agy acp`) is experimental and off by default. Models are discovered from each agent; sessions started in a terminal can be resumed in Studio for Claude and Codex.
+- **Native questions:** agents ask the person through the `omni_ask_user` MCP tool and the answer comes from a question panel in the chat (`ask-channel.mjs`, `agent.answer`).
+- **Delete conversation:** `conversations.delete` removes a conversation and moves the agent's own session files to the Recycle Bin. OpenCode and Cline history is left untouched because it is a shared database.
+- **`init --agent studio`:** writes only the manifest, `CONSTITUTION.md`, `specs/project-context.md` and `specs/.gitignore`; memory lives in Studio's per-user folder.
+- `/omni-*` workflows can be typed in Studio: the agent receives the full workflow and the person sees what they typed.
+
+### Added (Next-Gen Phase 1: memory and MCP)
+- **Memory v4 (`src/memory.mjs`):** native SQLite store in `specs/.omni/memory.db` with observations, decisions and Git sync. Git views answer `NOT_A_REPOSITORY` outside a work tree instead of failing.
+- **MCP server (`omni-spec mcp [--studio]`):** exposes OmniSpec memory, status and blast radius to any MCP client; Studio attaches it to every agent session without writing files.
+
 ### Added (Next-Gen Phase 3: brownfield cartography)
 - **Pushdown DFA lexer (`src/cartography/lexer.mjs`):** one pass per file replaces comments, strings, template text and regex literals with spaces, keeping delimiters, line breaks and length. Imports are matched on code only and their specifiers are read from the original source. A template-depth stack handles `${ "foo`bar" }`; the token before `/` decides between regex and division. It extracts TypeScript/JavaScript (static, dynamic, `require`, type-only, re-exports), Python, Go, Rust and Java dependencies, without dependencies of its own.
 - **Resolver (`src/cartography/resolver.mjs`):** tsconfig/jsconfig `paths` with recursive and array `extends`, longest-prefix matching, `${configDir}` and the nearest config per importer; the TypeScript ESM `.js` → `.ts` convention; `package.json` `imports`; pnpm, npm and yarn workspaces with `exports` (unbuilt `dist/` falls back to `src/`), so `workspace:*` packages resolve without `npm install` or symlinks. Python, Go, Rust and Java resolvers map modules to files.

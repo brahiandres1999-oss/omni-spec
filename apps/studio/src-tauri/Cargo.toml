@@ -1,6 +1,6 @@
 [package]
 name = "omni-studio"
-version = "0.8.1"
+version = "0.9.0-preview.1"
 description = "Omni Studio: Windows 11 desktop host for the OmniSpec engine"
 authors = ["OmniSpec Authors"]
 license = "MIT"

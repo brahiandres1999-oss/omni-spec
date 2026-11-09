@@ -21,7 +21,7 @@ Studio necesita el motor, y el instalador lo copia dentro. Las cuatro versiones 
 
 | Suite | Resultado |
 |---|---|
-| Motor (`npm test`) | **1022 pasan, 1 falla, 3 omitidas.** Falla EN-10: `project.snapshot` tarda 310 ms y el límite es 300. Es un umbral de rendimiento en esta máquina, no un error funcional. |
+| Motor (`npm test`) | **1022 pasan, 1 falla, 3 omitidas.** Falla EN-10: `project.snapshot` tarda 310 ms y el límite es 150. Es un umbral de rendimiento en esta máquina, no un error funcional. |
 | Lint (`npm run lint`) | **2 errores**, solo de formato: `ChatView.tsx` y `QuestionPanel.tsx`. Se arreglan con `npm run lint:fix`. |
 | Paquete (`npm run test:package`) | Pasa. Nota: `liveAgentChatTested: false`. |
 | Studio, Vitest | 124 de 124 pasan. |
@@ -115,7 +115,7 @@ Studio necesita el motor, y el instalador lo copia dentro. Las cuatro versiones 
 
 ### A. Bloquea la preview local (hay que hacerlo sí o sí)
 1. Terminar el trabajo sin commitear: pasar "Skip" y "Submit" a i18n y correr `lint:fix`. Después, commit.
-2. Decidir qué hacer con el test EN-10 (310 ms frente a 300): ajustar el umbral o mejorar el rendimiento.
+2. Decidir qué hacer con el test EN-10 (310 ms frente a 150): ajustar el umbral o mejorar el rendimiento.
 3. Correr `cargo test` con Studio cerrado.
 4. Añadir `/specs/` al `.gitignore` de la raíz (ahí está tu `memory.db` local).
 5. Subir la versión a `0.9.0-preview.1` en `package.json`, `package-lock.json`, `plugin.json`, `apps/studio/package.json`, `Cargo.toml` y `tauri.conf.json`. También `publishConfig.tag` a `preview`.
