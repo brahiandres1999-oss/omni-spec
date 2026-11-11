@@ -1,6 +1,6 @@
-# Contrato de onboarding — OmniSpec 0.8.1 Oficial Estable
+# Contrato de onboarding — OmniSpec 0.9.0 Oficial Estable
 
-Contrato distribuido en `0.8.1` estable. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [notas de la versión 0.8.1](releases/0.8.1.md).
+Contrato distribuido en `0.9.0` estable. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [notas de la versión 0.9.0](releases/0.9.0.md).
 
 ## Preparación y decisiones pendientes
 
@@ -10,26 +10,50 @@ Antes de preparar una aplicación, el agente registra prerrequisitos disponibles
 
 La preparación autorizada puede incluir Git local después de comprobar los límites del repositorio y sus reglas de exclusión. El reconocimiento inicial no ejecuta `git init`. Crear un repositorio local, hacer un commit y publicar son acciones distintas; una restricción de trabajo local sigue vigente.
 
-Para interfaces nuevas o rediseños importantes, se define una dirección con referencias pertinentes, una superficie representativa y pruebas sobre el resultado renderizado y su recorrido. Los estados se eligen según el producto; no hay cuatro estados universales ni una estética obligatoria. Sin herramientas adecuadas se registra `NOT_VERIFIED` y el procedimiento manual pendiente.
+Para interfaces nuevas o rediseños importantes, se define una dirección con referencias pertinentes, una superficie representativa y pruebas sobre el resultado renderizado y su recorrido. En estricto cumplimiento del estándar **Zero Slop Guard**, toda vista interactiva debe contemplar explícitamente los **4 estados obligatorios**:
+1. *Loading*: Skeletons contextuales o indicadores de carga con Cumulative Layout Shift (CLS) = 0.
+2. *Empty*: Explicación contextual clara con acción inmediata o botón de llamada a la acción (CTA).
+3. *Error*: Mensaje comprensible (sin códigos de error opacos) y mecanismo de reintento o recuperación.
+4. *Protected / Ideal*: Contenido completo autorizado o estado restringido cuando no se poseen permisos.
+
+Quedan estrictamente prohibidos los clichés visuales de IA (degradados azul/púrpura genéricos sin fundamento de marca, badges con resplandor difuso artificial y anidamiento excesivo de tarjetas con sombras o *card-itis*). Se exige tipografía deliberada y contraste WCAG 2.1 AA medible. Sin herramientas adecuadas se registra `NOT_VERIFIED` y el procedimiento manual pendiente.
 
 Estos son contratos de comportamiento distribuidos al agente. Las pruebas de generación comprueban su presencia y la preservación del proyecto; no certifican su ejecución por todos los hosts ni la calidad del producto generado.
 
 El usuario usa la invocación mostrada por el instalador (`/omni-init`, `$omni-init` en Codex o lectura explícita de la skill/prompt), sin instrucciones de auditoría adicionales. El agente confirma la instalación que lee y su versión. El agente adapta su recorrido a la evidencia del proyecto y documenta su contexto. Las mismas instrucciones se distribuyen mediante todos los adaptadores; cambia su formato e invocación según el host.
 
-## Alcance predeterminado
+## Alcance predeterminado y memoria persistente
 
 Leer manifiesto, constitución, contexto, configuración, instrucciones locales y código relevante. Usar `status --json` e `inspect --json` del motor local. Consultar el estado de trabajo de Git de solo lectura si existe; Git no es requisito para reconocer el proyecto.
 
-Actualizar `specs/project-context.md` y los registros de reconocimiento de `specs/project-state.json` mediante `session-record`, `decision-record` y `context-record`, con su historial local administrado. Preservar decisiones confirmadas y reconciliar afirmaciones antiguas con fuentes actuales antes de registrar la huella. No crear una especificación ni modificar la aplicación, políticas o gates para terminar el reconocimiento. No instalar dependencias, ejecutar scripts del proyecto, migraciones ni servicios. La validación ejecutada es otro paso que depende de la autorización y preparación correspondientes; no exige confirmación para cada lectura. Consultar los formatos en [DELIVERY](DELIVERY.md).
+En proyectos brownfield con código existente, el agente debe ejecutar `omni-spec cartography --json` para indexar de forma incremental el grafo de dependencias de módulos, exports, imports y rutas en la base de datos externa `memory.db`. Esto permite conocer la topología de la aplicación y calcular el radio de impacto (`blast-radius`) antes de proponer cambios arquitectónicos.
 
-`init --yes` no convierte los scripts detectados en gates: quedan como candidatos `NOT_RUN` en la matriz de comandos del contexto. El agente los revisa y, con autorización, los configura con `checks --from` o `configure --gates`. El contexto registrado cubre `project-context.md`, los archivos que enlaza, manifiestos de build/dependencias/runtime, CI e instrucciones de agentes; los cambios de código fuente no lo dejan obsoleto. `guide evidence` muestra la forma exacta de cada registro JSON.
+OmniSpec 0.9.0 erradica el almacenamiento de estado en archivos dentro del repositorio: no existen `specs/project-state.json`, carpetas `specs/decisions/` ni historiales locales en `specs/.omni/context-history/` o `specs/.omni/decision-history/`. Toda la información de sesiones, decisiones aprobadas, historiales y memoria heurística se gestiona de forma externa en `%LOCALAPPDATA%\OmniSpec\workspaces\<id>\memory.db` (o `$XDG_STATE_HOME/omnispec/workspaces/<id>/memory.db` en Linux/macOS).
+
+El registro de sesiones y decisiones se realiza sin archivos temporales:
+- `session-record` acepta directivas por flags directos (ej. `omni-spec session-record --host Antigravity --questions available --web available --terminal available --render available --delegation available`) o `--json-input`.
+- `decision-record` registra acuerdos arquitectónicos directamente mediante flags (ej. `omni-spec decision-record --id stack --topic stack --status approved --basis "Confirmado por el usuario"`) o `--json-input`.
+- No se generan ni requieren archivos JSON temporales en `specs/.omni/inputs/`, manteniendo el repositorio Git impecable.
+
+Asimismo, el agente utiliza los comandos de memoria persistente para registrar observaciones duraderas del repositorio:
+```sh
+omni-spec memory add --category <pattern|gotcha|convention|constraint> --scope <path> --summary "<texto>"
+omni-spec memory search "<consulta>"
+omni-spec memory list
+```
+Estas observaciones son inyectadas automáticamente en el bloque `progress.memory` de `omni-spec status --json` para prevenir la amnesia entre sesiones.
+
+### Bloqueo estricto de cierre (Strict Onboarding Gate)
+`context-record` registra el baseline de entradas de contexto en `memory.db`. En OmniSpec 0.9.0, las compuertas de gobernanza `verify` y `complete` **bloquean terminantemente el cierre** de cualquier especificación si el estado de onboarding en `context-record` permanece como `NOT_RECORDED`. No es posible certificar ni cerrar trabajo técnico si el reconocimiento del proyecto y su contexto inicial no han sido completados y formalizados.
+
+`init --yes` no convierte los scripts detectados en gates: quedan como candidatos `NOT_RUN` en la matriz de comandos del contexto. El agente los revisa y, con autorización, los configura con `checks --from` o `configure --gates`. El contexto registrado cubre `project-context.md`, los archivos que enlaza, manifiestos de build/dependencias/runtime, CI e instrucciones de agentes; los cambios de código fuente no lo dejan obsoleto. `omni-spec guide evidence` muestra la forma exacta de cada registro JSON.
 
 ## Rutas
 
 | Proyecto | Comportamiento |
 | --- | --- |
 | Nuevo o vacío | Distinguir archivos de OmniSpec de una aplicación existente; aclarar propósito, usuarios, restricciones y primer resultado. Stack y pruebas quedan sin decidir si no hay evidencia. |
-| Existente | Mapear finalidad, módulos, entradas, convenciones y comandos reales. Separar documentación de comportamiento inspeccionado y de resultados ejecutados. |
+| Existente (Brownfield) | Ejecutar `omni-spec cartography --json` para mapear dependencias. Mapear finalidad, módulos, entradas, convenciones y comandos reales. Separar documentación de comportamiento inspeccionado y de resultados ejecutados. |
 | Incompleto o roto | Registrar el error de configuración observado y posibles siguientes pasos. No declarar un fallo reproducido sin ejecución ni reparar la aplicación durante init. |
 | Mixto o monorepo | Registrar runners, directorios y prerrequisitos por módulo. No imponer un único comando de raíz. |
 | Desconocido o sin código | Inspeccionar artefactos y proceso de entrega; identificar límites del detector, revisión manual y N/A justificados. No inventar un stack. |
@@ -37,7 +61,7 @@ Actualizar `specs/project-context.md` y los registros de reconocimiento de `spec
 ## Estados y evidencia
 
 - `CONTEXT_PENDING`: faltan decisiones materiales o el inventario inicial aún requiere reconocimiento conversacional.
-- `CONTEXT_RECORDED`: el reconocimiento y sus límites quedaron documentados. No implica compatibilidad universal ni calidad aprobada.
+- `CONTEXT_RECORDED`: el reconocimiento y sus límites quedaron documentados formalmente en `project-context.md` y `memory.db`. No implica compatibilidad universal ni calidad aprobada.
 - `APPLICATION_NOT_VALIDATED`: no se ha demostrado el resultado de las comprobaciones de la aplicación. Puede coexistir con contexto registrado y permite continuar discutiendo o especificando.
 
 Cada afirmación diferencia OBSERVED, DECLARED, EXECUTED, INFERRED, UNKNOWN o NOT APPLICABLE con motivo. Las etiquetas pueden traducirse al idioma del usuario.

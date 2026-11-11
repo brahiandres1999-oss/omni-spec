@@ -231,4 +231,31 @@ describe('Project Environment & Stack Detector', () => {
     assert.match(result.qualityGates, /uv run pytest/);
     assert.match(result.qualityGates, /uv run ruff check \./);
   });
+
+  test('identifies greenfield when directory contains only adapter or meta files (.github, CLAUDE.md, etc.)', async () => {
+    await mkdir(join(tempDir, '.github', 'workflows'), { recursive: true });
+    await writeFile(join(tempDir, '.github', 'workflows', 'ci.yml'), 'name: CI\n');
+    await writeFile(join(tempDir, 'CONSTITUTION.md'), '# Constitution\n');
+    await writeFile(join(tempDir, 'AGENTS.md'), '# Agents\n');
+    await writeFile(join(tempDir, 'CLAUDE.md'), '# Claude\n');
+    await writeFile(join(tempDir, 'GEMINI.md'), '# Gemini\n');
+    await writeFile(join(tempDir, '.omnispecignore'), 'node_modules\n');
+    await writeFile(join(tempDir, '.DS_Store'), '');
+    await writeFile(join(tempDir, 'Thumbs.db'), '');
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, true);
+    assert.equal(result.type, 'greenfield');
+  });
+
+  test('identifies greenfield when directory contains only documents, specifications or PDFs', async () => {
+    await writeFile(join(tempDir, 'Guia_Laboratorio_IA.pdf'), '%PDF-1.4 mock content');
+    await writeFile(join(tempDir, 'README.md'), '# Project Title\n');
+    await writeFile(join(tempDir, 'LICENSE'), 'MIT License');
+
+    const result = await detectProjectEnvironment(tempDir);
+    assert.equal(result.isGreenfield, true);
+    assert.equal(result.type, 'greenfield');
+    assert.equal(result.detectedStack, null);
+  });
 });

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { getProfile } from './profiles/index.mjs';
 import { _initManifestUnlocked, loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
-import { packageEntries } from './assets.mjs';
+import { packageEntries, pluginEntries } from './assets.mjs';
 import { syncManagedFiles } from './managed.mjs';
 import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
@@ -14,6 +14,16 @@ import { FIT_PRESETS } from './fit.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/** @returns {Promise<boolean>} Whether the path exists; errors other than ENOENT propagate. */
+async function pathExists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
 export async function copyDirectoryRecursive(src, dest, overwrite = true) {
   await mkdir(dest, { recursive: true });
   const entries = await readdir(src, { withFileTypes: true });
@@ -23,12 +33,7 @@ export async function copyDirectoryRecursive(src, dest, overwrite = true) {
     if (entry.isDirectory()) {
       await copyDirectoryRecursive(srcPath, destPath, overwrite);
     } else {
-      if (!overwrite) {
-        try {
-          await access(destPath);
-          continue;
-        } catch {}
-      }
+      if (!overwrite && (await pathExists(destPath))) continue;
       await cp(srcPath, destPath, { force: overwrite });
     }
   }
@@ -61,6 +66,9 @@ export const ARCHETYPES = {
   },
 };
 
+const PROFILE_NOTE =
+  'These profile controls are review prompts; applicability must be established for this project. They do not certify regulatory compliance.';
+
 export function buildConstitutionContent(options) {
   const profile = getProfile(options.profile);
   const projectName = options.projectName || 'MyProject';
@@ -74,7 +82,7 @@ export function buildConstitutionContent(options) {
 
 ---
 
-## 1. Governance & Code Surgery (Constitutional Foundation)
+## 1. Governance & Code Surgery: Backend Pragmatic Craft & Zero Code Slop
 
 1. **Pre-Execution Diagnostic:** Before making any non-trivial change, present a structured assessment: *Problem, Proposed Solution, and Consequences/Risks*.
 2. **Strict Non-Destructive Policy:** Destructive changes, large refactors, or database modifications require explicit approval.
@@ -82,10 +90,11 @@ export function buildConstitutionContent(options) {
 4. **Minimal Touch Surgery:** Modify exclusively the files necessary to achieve the verified objective. Do not touch adjacent working code or reformat unrelated modules.
 5. **Demonstrable Quality Gates:** Record actual results and pre-existing failures. Automated gates must pass for automated verification; when none apply, document explicitly labeled manual evidence. A checklist is not proof of behavior.
 6. **Backend Pragmatic Craft & Zero Code Slop:**
-   - *Strict YAGNI & Direct Implementation:* Never add speculative abstraction layers, premature interfaces, DTOs, factories, or wrapper classes when a direct, idiomatic function or standard module satisfies the acceptance criteria.
-   - *Zero Comment Slop:* Avoid comments that only narrate syntax. Preserve accurate API documentation and explanations of purpose, contracts and non-obvious domain constraints.
-   - *Fail-Fast & Transparent Failures:* Strictly forbid defensive \`try/catch\` wrappers that swallow exceptions, return dummy nulls, or silently mask errors without a documented business requirement.
-   - *Zero Spec & Plan Slop:* Specifications and plans must maintain high technical density: tabular evidence, explicit non-goals, and atomic, falsable criteria (\`AC-01\`). No marketing fluff, corporate filler, or conversational apologies.
+   - *Strict YAGNI & Direct Implementation:* Never add speculative layers, DTOs, factories or wrappers when standard functions/modules suffice.
+   - *Zero Comment Slop:* Avoid comments that only narrate syntax. Preserve accurate API documentation, contracts and constraints.
+   - *Fail-Fast & Transparent Failures:* Strictly forbid defensive \`try/catch\` wrappers that swallow exceptions, return nulls, or mask errors.
+   - *Zero Spec & Plan Slop:* Specifications and plans maintain high technical density: tabular evidence, non-goals, atomic criteria (\`AC-01\`).
+7. **Write-Before-Speak & Zero Deferred Slop:** Never claim modifications exist before physically writing them; do not defer agreed requirement adjustments to 'later in code'. Persist scope adjustments to existing artifacts or record in memory, and re-audit before closing the turn.
 
 ---
 
@@ -93,7 +102,7 @@ export function buildConstitutionContent(options) {
 
 ${profile.constitutionInvariants}
 
-These profile controls are review prompts; applicability must be established for this project. They do not certify regulatory compliance.
+${PROFILE_NOTE}
 
 ---
 
@@ -129,28 +138,133 @@ Interface work follows guide design: references, direction, applicable states an
 `;
 }
 
-export function buildSpecsReadmeContent(projectName) {
-  return `# ${projectName} — Spec-Driven Development (OmniSpec)
+/**
+ * Rewrite only the CONSTITUTION.md parts that hold a configured value, preserving every other line.
+ * Used by `configure` so stack, profile, documentation and gates can change without init --force.
+ * @param {string} content Current CONSTITUTION.md text.
+ * @param {{gates?: string, stack?: string, profile?: string, doc?: string}} changes Values to set;
+ *   undefined keys stay untouched, and an empty gates string records that no checks are configured.
+ * @returns {string} Updated text.
+ * @throws {Error} Unknown profile, or a custom constitution without the section a change needs;
+ *   nothing is written in that case.
+ */
+export function configureConstitution(content, { gates, stack, profile, doc }) {
+  const replace = (text, pattern, value, section) => {
+    if (!pattern.test(text))
+      throw new Error(
+        `Custom constitution has no recognizable ${section}. Add it before configuring this value; custom text was preserved.`,
+      );
+    return text.replace(pattern, () => value);
+  };
+  let next = content;
+  if (gates !== undefined)
+    next = replace(
+      next,
+      /^## 4\. Delivery Quality Gates[^\n]*\n[\s\S]*?(?=^## |$(?![\s\S]))/m,
+      `## 4. Delivery Quality Gates\n\nConfigured commands, executed from the project root by verify. Review commands before execution.\n\n\`\`\`text\n${gates || '# No automated checks configured; explicit manual evidence is required.'}\n\`\`\`\n\n`,
+      'Delivery Quality Gates section',
+    );
+  if (profile !== undefined) {
+    const selected = getProfile(profile);
+    next = replace(
+      next,
+      /^## 2\. Domain & Regulatory Invariants[^\n]*\n[\s\S]*?(?=^---|^## )/m,
+      `## 2. Domain & Regulatory Invariants (${selected.name})\n\n${selected.constitutionInvariants}\n\n${PROFILE_NOTE}\n\n`,
+      'Domain & Regulatory Invariants section',
+    );
+  }
+  if (stack !== undefined)
+    next = replace(
+      next,
+      /^\* \*\*Primary Tech Stack:\*\* `[^`\n]*`/m,
+      `* **Primary Tech Stack:** \`${stack}\``,
+      'Primary Tech Stack line',
+    );
+  if (doc !== undefined)
+    next = replace(
+      next,
+      /^\* \*\*Documentation Standard:\*\* `[^`\n]*`/m,
+      `* **Documentation Standard:** \`${doc}\``,
+      'Documentation Standard line',
+    );
+  return next;
+}
 
-This workspace organizes changes into four archetypes with explicit scope and evidence. Start with omni-init to understand the project, or omni-discuss to explore a question without creating a specification.
+/**
+ * specs/README.md for a new project, in the installer language. It describes the conversation-first
+ * cycle and the ceremony routes; it is written once and never replaced on reinstall.
+ * @param {string} projectName Project name for the title.
+ * @param {string} [language] 'es' for Spanish; anything else writes English.
+ * @returns {string} Markdown content.
+ */
+export function buildSpecsReadmeContent(projectName, language = 'en', options = {}) {
+  const pluginMode = normalizeAgents(options.agent).includes('plugin');
+  const templateNoteEs = pluginMode
+    ? 'Las plantillas maestras vienen integradas en OmniSpec y se invocan desde el chat con tu agente.'
+    : 'Las plantillas están en `specs/_templates/`.';
+  const templateNoteEn = pluginMode
+    ? 'Master templates are built into OmniSpec and invoked from chat with your agent.'
+    : 'Templates live in `specs/_templates/`.';
+  if (language === 'es')
+    return `# ${projectName} — OmniSpec
 
-## The 4 Engineering Archetypes
+Aquí quedan los acuerdos de cada cambio: qué se decidió, por qué y con qué evidencia se cerró. Todo empieza en el chat de tu agente: \`/omni-init\` para conocer el proyecto y \`/omni-discuss\` para explorar una idea sin crear documentos.
 
-| Archetype | Template Path | Purpose | Key Artifacts |
+## Cómo avanza un cambio
+
+1. **Conversar:** \`/omni-discuss\` explora y responde; no crea archivos.
+2. **Especificar:** \`/omni-specify\` crea solo el documento principal del cambio.
+3. **Clasificar:** el agente evalúa riesgo, claridad y tamaño con \`fit\`. La ruta decide cuánta documentación hace falta.
+4. **Construir y cerrar:** se implementa y \`/omni-converge\` registra la evidencia con \`verify\` y \`complete\`.
+
+| Ruta | Cuándo | Documentos |
+| :--- | :--- | :--- |
+| **Ligera** | Cambio claro, de bajo riesgo, fácil de revertir y con pruebas | Solo el documento principal |
+| **Estándar** | Toca varios archivos o módulos, o no tiene pruebas | Documento principal + diseño |
+| **Completa** | Riesgo alto, contratos públicos, ambigüedad o difícil de revertir | Documento principal + diseño + tareas |
+
+## Tipos de cambio
+
+| Tipo | Para qué | Documento principal | Se suma en rutas estándar/completa |
 | :--- | :--- | :--- | :--- |
-| **01. Feature** | \`specs/_templates/01-feature/\` | New user capabilities, views, or endpoints. | \`spec.md\` (Clarification, Non-Goals) + \`plan.md\` (Contracts, Rollback) + \`tasks.md\` |
-| **02. Bugfix** | \`specs/_templates/02-bugfix/\` | Incidents, runtime crashes, and defects. | \`bug.md\` (Reproduction) + \`rca.md\` (Evidence and hypotheses) + \`fix.md\` (Scoped fix and regression) |
-| **03. Tech Debt**| \`specs/_templates/03-tech-debt/\` | Refactors, legacy code, outdated packages. | \`audit.md\` (Impact) + \`migration-plan.md\` (Proportional migration) + \`tasks.md\` |
-| **04. RFC / ADR** | \`specs/_templates/04-rfc-idea/\` | Architectural decisions and technical spikes. | \`rfc.md\` (MADR standard with Decision Drivers and trade-offs) |
+| **Feature** | Capacidades nuevas | \`spec.md\` | \`plan.md\`, \`tasks.md\` |
+| **Bugfix** | Errores e incidentes | \`bug.md\` (incluye causa raíz y prueba de regresión) | \`rca.md\`, \`fix.md\` |
+| **Deuda técnica** | Refactors y actualizaciones | \`audit.md\` | \`migration-plan.md\`, \`tasks.md\` |
+| **RFC** | Decisiones de arquitectura | \`rfc.md\` | — |
 
----
+${templateNoteEs} \`specs/project-context.md\` guarda el contexto y las decisiones del proyecto.
 
-## Git Workflow for Specifications
+Las ramas y los commits los decides tú; OmniSpec no los crea.
+`;
+  return `# ${projectName} — OmniSpec
 
-1. Read project-context.md and the active manifest before starting or resuming work.
-2. Complete the appropriate specification and plan before implementation; use audit for structural checks.
-3. Execute scoped tasks and record actual results in verification.md. Use verify then complete to close work.
-4. Git branches and commits are optional user-controlled actions. OmniSpec does not create them.
+This folder keeps the agreements behind each change: what was decided, why, and the evidence it closed with. Everything starts in your agent's chat: \`/omni-init\` to learn the project and \`/omni-discuss\` to explore an idea without creating documents.
+
+## How a change moves
+
+1. **Discuss:** \`/omni-discuss\` explores and answers; it creates no files.
+2. **Specify:** \`/omni-specify\` creates only the change's primary document.
+3. **Classify:** the agent assesses risk, clarity and size with \`fit\`. The route decides how much documentation is needed.
+4. **Build and close:** implement, then \`/omni-converge\` records evidence with \`verify\` and \`complete\`.
+
+| Route | When | Documents |
+| :--- | :--- | :--- |
+| **Light** | Clear, low-risk, easy to roll back and covered by tests | Primary document only |
+| **Standard** | Touches several files or modules, or lacks tests | Primary document + design |
+| **Full** | High risk, public contracts, ambiguity or hard rollback | Primary document + design + tasks |
+
+## Kinds of change
+
+| Kind | For | Primary document | Added on standard/full routes |
+| :--- | :--- | :--- | :--- |
+| **Feature** | New capabilities | \`spec.md\` | \`plan.md\`, \`tasks.md\` |
+| **Bugfix** | Defects and incidents | \`bug.md\` (includes root cause and regression test) | \`rca.md\`, \`fix.md\` |
+| **Tech debt** | Refactors and upgrades | \`audit.md\` | \`migration-plan.md\`, \`tasks.md\` |
+| **RFC** | Architecture decisions | \`rfc.md\` | — |
+
+${templateNoteEn} \`specs/project-context.md\` keeps the project's context and decisions.
+
+Branches and commits are yours to decide; OmniSpec does not create them.
 `;
 }
 
@@ -178,11 +292,7 @@ async function scaffoldUnlocked(baseDir, options) {
 
   // 1. Generate CONSTITUTION.md (preserve if exists and not force)
   const constitutionPath = join(baseDir, 'CONSTITUTION.md');
-  let constitutionExists = false;
-  try {
-    await access(constitutionPath);
-    constitutionExists = true;
-  } catch {}
+  const constitutionExists = await pathExists(constitutionPath);
 
   const existingManifest = await loadManifest(baseDir);
   if (constitutionExists && existingManifest && !force) {
@@ -200,7 +310,8 @@ async function scaffoldUnlocked(baseDir, options) {
   }
 
   const version = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf8')).version;
-  let entries = await packageEntries();
+  const pluginMode = normalizeAgents(options.agent).includes('plugin');
+  let entries = pluginMode ? pluginEntries() : await packageEntries();
   if (existingManifest && !force) {
     const preserved = [];
     for (const entry of entries) {
@@ -235,17 +346,13 @@ async function scaffoldUnlocked(baseDir, options) {
 
   // 4. Generate specs/README.md (preserve if exists and not force)
   const specsReadmePath = join(specsDir, 'README.md');
-  let readmeExists = false;
-  try {
-    await access(specsReadmePath);
-    readmeExists = true;
-  } catch {}
+  const readmeExists = await pathExists(specsReadmePath);
 
   if (!readmeExists || force) {
-    await writeFile(specsReadmePath, buildSpecsReadmeContent(options.projectName), 'utf-8');
+    await writeFile(specsReadmePath, buildSpecsReadmeContent(options.projectName, options.language, options), 'utf-8');
   }
 
-  await ensureProjectContext(baseDir, options.environment);
+  await ensureProjectContext(baseDir, options.environment, options.language);
   await _initManifestUnlocked(baseDir, { ...options, version });
 
   return {
@@ -256,6 +363,20 @@ async function scaffoldUnlocked(baseDir, options) {
   };
 }
 
+/**
+ * Create a specification folder for an archetype and make it the active spec.
+ * Without a route option (light, standard, full or route) the change is unclassified: only the
+ * primary artifact, acceptance.json and verification.md are written and no fit.json is recorded,
+ * so audit, verify and complete ask for classification with fit before anything else.
+ * @param {string} baseDir Project root.
+ * @param {string} rawArchetype feature, bugfix (bug/fix), debt (refactor) or rfc (idea).
+ * @param {string} name Human name; sanitized into the slug.
+ * @param {{light?: boolean, standard?: boolean, full?: boolean, route?: string, title?: string,
+ *   profile?: string}} [options] Explicit route preset and template values.
+ * @returns {Promise<{id: string, slug: string, specDir: string, branch: string, archetype: string,
+ *   route: string|null}>} Created spec; route is null while unclassified.
+ * @throws {Error} Unknown archetype, missing manifest or unsafe path.
+ */
 export async function createSpec(baseDir, rawArchetype, name, options = {}) {
   const requestedType = rawArchetype.toLowerCase();
   const archetypeKey = { bug: 'bugfix', fix: 'bugfix', feat: 'feature', idea: 'rfc' }[requestedType] || requestedType;
@@ -271,7 +392,9 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
     let existingDirs = [];
     try {
       existingDirs = await readdir(join(baseDir, 'specs'));
-    } catch {}
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
 
     const dirNumbers = existingDirs.map(d => parseInt(d.split('-')[0], 10)).filter(n => !Number.isNaN(n));
 
@@ -320,7 +443,8 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
 
     const route = options.light ? 'light' : options.standard ? 'standard' : options.full ? 'full' : options.route;
     const allowedFiles = new Set(files);
-    if (route === 'light') {
+    // An unclassified change starts with the primary artifact only; fit scaffolds the rest on escalation.
+    if (route === 'light' || !route) {
       if (archetypeKey === 'feature') {
         allowedFiles.delete('plan.md');
         allowedFiles.delete('tasks.md');
@@ -469,14 +593,17 @@ export async function scaffoldMissingRouteArtifacts(baseDir, spec, targetRoute) 
           .replaceAll('Incident Title / Short Description', title);
         await writeFile(destFile, content, 'utf-8');
         scaffolded.push(file);
-      } catch {}
+      } catch (error) {
+        // Archetypes may list documents that have no template; any other failure is real.
+        if (error.code !== 'ENOENT') throw error;
+      }
     }
   }
 
   return scaffolded;
 }
 
-export async function ensureProjectContext(baseDir, environment) {
+export async function ensureProjectContext(baseDir, environment, language = 'en') {
   const path = join(baseDir, 'specs', 'project-context.md');
   try {
     await access(path);
@@ -485,13 +612,15 @@ export async function ensureProjectContext(baseDir, environment) {
     if (error.code !== 'ENOENT') throw error;
   }
   try {
-    await writeFile(path, buildContext(environment || (await detectProjectEnvironment(baseDir))), { flag: 'wx' });
+    await writeFile(path, buildContext(environment || (await detectProjectEnvironment(baseDir)), language), {
+      flag: 'wx',
+    });
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
   }
 }
 
-function buildContext(environment) {
+function buildContext(environment, language) {
   const code = value =>
     '`' +
     String(value)
@@ -512,6 +641,60 @@ function buildContext(environment) {
         `- DECLARED runtime constraint: ${code(m.declaredRuntime.constraint)} for ${code(m.declaredRuntime.tool)} in ${code(m.source)}; installed version and compatibility NOT_ASSESSED.`,
     )
     .join('\n');
+  if (language === 'es')
+    return `# Contexto del proyecto
+
+Contexto propiedad del usuario. Ejecuta /omni-init sin instrucciones adicionales para revisar esta semilla; la instalación no completa el onboarding conversacional.
+
+## 1. Estado del onboarding y alcance
+- Estado: CONTEXT_PENDING
+- Validación de la aplicación: APPLICATION_NOT_VALIDATED
+- Fecha del inventario: ${new Date().toISOString()}
+- Cobertura: ${environment.limits || 'Detección heurística'}
+- La instalación no ejecutó scripts del proyecto. Un resultado del detector no prueba la salud de la aplicación.
+
+## 2. Mapa de evidencias
+- Tipo de proyecto observado: ${environment.type}
+- Stack inferido de manifiestos reconocidos: ${environment.detectedStack || 'Undecided'}
+- Fuentes: ${(environment.evidence || []).map(code).join(', ') || 'No se reconocieron manifiestos de build; revisa otros archivos manualmente.'}
+${runtimes || '- Runtimes objetivo, versiones instaladas y compatibilidad: UNKNOWN; revisa la evidencia del proyecto.'}
+- Arquitectura y convenciones: NOT_ASSESSED; revisa la implementación y distínguela de la intención documentada.
+
+## 3. Objetivos y decisiones
+- Propósito, usuarios previstos, restricciones y resultado mínimo: UNKNOWN hasta confirmarlo con evidencia del repositorio o del usuario.
+- Conserva las decisiones ya confirmadas; pregunta solo lo material que la evidencia disponible no responde.
+- Selección de stack y versiones: UNDECIDED hasta su aprobación o delegación explícita; registra fuentes oficiales vigentes de soporte/compatibilidad y su fecha de consulta antes de una selección material.
+- Convención de documentación por módulo: REVIEW_REQUIRED; conserva la documentación de API existente y revisa la evidencia del lenguaje antes de proponer JSDoc, TSDoc, Javadoc u otra convención.
+- Límite de Git y preparación local: UNKNOWN; inicializar, hacer commits y publicar en remoto son operaciones separadas que requieren autorización.
+- Convención e idioma de commits: REVIEW_REQUIRED; conserva una convención existente o propone Conventional Commits 1.0.0 antes del primer commit autorizado.
+- Autorización de publicación/despliegue: NOT_GRANTED por la instalación; conserva cualquier restricción explícita de trabajo solo local.
+- Capacidades de la sesión (preguntas nativas, búsqueda web, terminal, inspección de UI renderizada, delegación): UNKNOWN; revisa la disponibilidad real y registra alternativas y bloqueos dependientes.
+- Dirección de UI y referencias: NOT_ASSESSED; registra tarea, identidad aprobada y fuentes cuando aplique; si no, N/A justificado.
+
+## 4. Matriz de comandos (no ejecutados)
+| Comando | Directorio | Fuente / base | Prerrequisitos | Selección como check / motivo | Ejecución |
+| --- | --- | --- | --- | --- | --- |
+${rows || '| Ninguno detectado | UNKNOWN | Sin fuente de comandos reconocida | NOT_ASSESSED | REVIEW_REQUIRED; pueden aplicar comprobaciones manuales | NOT_RUN |'}
+
+Son candidatos, no checks validados. Revisa las definiciones de scripts y la CI para conocer su propósito real, servicios y datos de prueba aislados antes de elegir checks. Registra solo nombres de variables de entorno, nunca valores secretos. Los checks configurados en el manifiesto son configuración, no evidencia de ejecución.
+
+## 5. Línea base de calidad y requisitos
+- Evidencia de ejecución: ninguna registrada por la instalación. Salud de la aplicación: UNKNOWN.
+- Para un check ejecutado registra comando, directorio, fecha y hora, código de salida, resultado y ubicación de la evidencia; si no, conserva NOT_RUN.
+- Requisitos de seguridad, privacidad, accesibilidad y diseño: NOT_ASSESSED. Registra los requisitos declarados por separado de la evidencia de implementación y de los resultados verificados.
+- La instalación no reprodujo fallos; eso no significa que no los haya.
+
+## 6. Trabajo existente, riesgos y validación pendiente
+- Línea base del trabajo existente: UNKNOWN; revisa el estado de Git en modo lectura si está disponible. Git es opcional; registra errores de inspección en lugar de afirmar un árbol limpio.
+### Conflictos entre fuentes
+<!-- omni:source-conflicts -->
+- NOT_ASSESSED. Compara documentación por módulo, manifiestos, CI, contenedores y código. Conserva el alcance de cada fuente, registra posibles inconsistencias y lleva las restricciones sin resolver a los prerrequisitos de comandos. La instalación no descartó ningún conflicto.
+${(environment.warnings || []).map(w => '- Aviso del detector: ' + w).join('\n')}
+- Pendiente: confirmar objetivos, revisar módulos relevantes y prerrequisitos, revisar checks candidatos y conservar el trabajo previo. Ejecuta checks solo en un paso de validación autorizado aparte.
+
+## 7. Siguiente acción
+Ejecuta /omni-init para registrar el contexto; después usa discuss para explorar o specify para un cambio concreto. El onboarding por sí solo no crea implementación ni especificaciones.
+`;
   return `# Project context
 
 User-owned context. Run /omni-init without extra instructions to review this seed; bootstrap is not completed conversational onboarding.

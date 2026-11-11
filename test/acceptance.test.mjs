@@ -8,11 +8,13 @@ import { verifySpec, completeSpec } from '../src/verification.mjs';
 import { fillSpec } from '../test-support/fixtures.mjs';
 import { runCli } from '../src/cli.mjs';
 import { loadManifest } from '../src/manifest.mjs';
+import { recordContext } from '../src/project-state.mjs';
 let root, spec;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omni-acceptance-'));
   await scaffoldProject(root, { qualityGates: 'node -e "process.exit(0)"' });
-  spec = await createSpec(root, 'feature', 'ui');
+  await recordContext(root);
+  spec = await createSpec(root, 'feature', 'ui', { full: true });
   await fillSpec(root, spec);
 });
 afterEach(async () => {
@@ -25,7 +27,7 @@ async function change(edit, target = spec) {
   await writeFile(path, JSON.stringify(report));
 }
 async function filledSpec(type) {
-  const created = { ...(await createSpec(root, type, `${type}-case`)), type };
+  const created = { ...(await createSpec(root, type, `${type}-case`, { full: true })), type };
   await fillSpec(root, created);
   return created;
 }
@@ -212,4 +214,35 @@ test('completion JSON carries declared coverage even when a legacy record omits 
   assert.equal(completed.verification.acceptance.scope, 'DECLARED_EVIDENCE_WITH_EXECUTED_CHECK_BINDINGS');
   assert.equal(completed.verification.acceptance.truthOfEvidence, 'AGENT_OR_HUMAN_REVIEW_REQUIRED');
   assert.equal(completed.verification.acceptance.criteria[0].method, 'manual');
+});
+
+test('functional criterion in schemaVersion 2 requires automated evidence when gates are configured', async () => {
+  await change(r => {
+    r.schemaVersion = 2;
+    r.criteria[0].kind = 'functional';
+    r.criteria[0].method = 'manual';
+    r.criteria[0].evidence = 'Manual inspection and testing was done carefully.';
+  });
+  await assert.rejects(
+    verifySpec(root, spec.id),
+    /Functional criterion AC-01 requires automated evidence \(method: "automated"\) referencing configured checks\./,
+  );
+});
+
+test('functional criterion in schemaVersion 2 admits manual evidence under manual verification mode', async () => {
+  const manifest = await loadManifest(root);
+  manifest.qualityGates = '';
+  await writeFile(join(root, 'specs/manifest.json'), JSON.stringify(manifest));
+  await change(r => {
+    r.schemaVersion = 2;
+    r.criteria[0].kind = 'functional';
+    r.criteria[0].method = 'manual';
+    r.criteria[0].evidence = 'Manual verification performed for this zero-gate environment.';
+  });
+  const record = await verifySpec(root, spec.id, {
+    manual: 'Manual verification with documented verification.md evidence for zero-gate project.',
+  });
+  assert.equal(record.mode, 'manual');
+  assert.equal(record.passed, true);
+  assert.equal(record.acceptance.criteria[0].method, 'manual');
 });

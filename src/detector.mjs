@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 const ignored = new Set([
   '.git',
+  '.github',
   '.research',
   '.codex',
   'node_modules',
@@ -55,6 +56,13 @@ export const UI_FRAMEWORKS = [
 
 export const UI_COMPONENT_KITS = ['shadcn', 'radix', 'headlessui', 'preline', 'flyonui'];
 
+const DOCUMENT_ASSET_EXTS = /\.(pdf|docx?|odt|rtf|txt|md|markdown|png|jpe?g|gif|svg|ico|webp|drawio|xmind|bmp|tiff?)$/i;
+const DOCUMENT_ASSET_NAMES = new Set(['LICENSE', 'LICENCE', 'NOTICE', 'COPYING', 'README', 'CHANGELOG']);
+
+function isDocumentOrAsset(name) {
+  return DOCUMENT_ASSET_NAMES.has(name) || DOCUMENT_ASSET_EXTS.test(name);
+}
+
 /**
  * Inspect bounded project metadata without running application commands or selecting versions.
  * @param {string} baseDir Project directory to inspect.
@@ -97,7 +105,11 @@ export async function detectProjectEnvironment(baseDir) {
     modules = [];
   const rootEntries = await readdir(baseDir, { withFileTypes: true });
   const meaningful = rootEntries.filter(
-    e => !ignored.has(e.name) && !['CONSTITUTION.md', 'AGENTS.md', '.DS_Store', 'Thumbs.db'].includes(e.name),
+    e =>
+      !ignored.has(e.name) &&
+      !['CONSTITUTION.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.omnispecignore', '.DS_Store', 'Thumbs.db'].includes(
+        e.name,
+      ),
   );
   let visited = 0;
   async function scan(directory, relative = '', depth = 0) {
@@ -323,7 +335,8 @@ export async function detectProjectEnvironment(baseDir) {
     }
   }
   await scan(baseDir);
-  const isGreenfield = meaningful.length === 0;
+  const isGreenfield =
+    modules.length === 0 && (meaningful.length === 0 || meaningful.every(e => e.isFile() && isDocumentOrAsset(e.name)));
   const stacks = [...new Set(modules.map(m => m.stack))];
   const nested = modules.some(m => m.directory !== '.');
   const gates = [];

@@ -2,7 +2,7 @@ import { readFile, access } from 'node:fs/promises';
 import { checkManagedFiles, safePath } from './managed.mjs';
 import { AGENTS, normalizeAgents, onboardingPath } from './integrations.mjs';
 import { compareVersions } from './versions.mjs';
-import { resultSections } from './terminal-ui.mjs';
+import { resultSteps } from './terminal-ui.mjs';
 
 const messages = {
   en: {
@@ -21,15 +21,6 @@ const messages = {
     confirm: 'Prepare OmniSpec in this folder? [Y/n]: ',
     invalidConfirm: 'Enter yes or no.',
     cancelled: 'Cancelled. No installation files were written.',
-    ready: 'OmniSpec files are ready',
-    checked: 'Managed-file integrity and local runtime version checked.',
-    next: 'Next: open this exact folder in your AI tool and start its chat.',
-    discovery: 'Agent discovery is not yet checked. The agent must confirm it can read this installation.',
-    fallback: 'If the skill is missing, refresh/reopen the workspace, or paste this in the agent chat:',
-    later:
-      'Then explain what you want to build. The agent will clarify the goal, pending decisions and a first verifiable outcome.',
-    preserved: 'No application scripts were run. No application was created or validated. Nothing was published.',
-    resume: 'Existing work: check local status and resume the active specification rather than creating a duplicate.',
   },
   es: {
     welcome: 'Prepara esta carpeta para construir con tu agente de IA, con alcance claro y evidencia.',
@@ -49,16 +40,6 @@ const messages = {
     confirm: '¿Preparar OmniSpec en esta carpeta? [S/n]: ',
     invalidConfirm: 'Escribe sí o no.',
     cancelled: 'Cancelado. No se escribieron archivos de instalación.',
-    ready: 'Los archivos de OmniSpec están preparados',
-    checked: 'Integridad de archivos administrados y versión del runtime local comprobadas.',
-    next: 'Siguiente paso: abre esta misma carpeta en tu herramienta de IA e inicia su chat.',
-    discovery:
-      'El descubrimiento por el agente aún no está comprobado. El agente debe confirmar que puede leer esta instalación.',
-    fallback: 'Si no aparece la skill, actualiza/reabre el proyecto o pega esto en el chat del agente:',
-    later:
-      'Después explica qué quieres construir. El agente aclarará el objetivo, las decisiones pendientes y un primer resultado verificable.',
-    preserved: 'No se ejecutaron scripts de aplicación. No se creó ni validó una aplicación. No se publicó nada.',
-    resume: 'Trabajo existente: consulta el estado local y retoma la especificación activa en vez de duplicarla.',
   },
 };
 
@@ -87,10 +68,14 @@ export async function inspectInstallation(root, options, version) {
   const integrity = await checkManagedFiles(root);
   if (!integrity.tracked || integrity.changed.length)
     throw new Error(`Installation incomplete. Run doctor, then update --dry-run. ${integrity.changed.join(', ')}`);
-  for (const name of ['CONSTITUTION.md', 'specs/project-context.md', 'specs/.omni/runtime/bin/omni-spec.mjs'])
-    await access(await safePath(root, name));
-  const runtime = JSON.parse(await readFile(await safePath(root, 'specs/.omni/runtime/package.json'), 'utf8'));
-  if (runtime.version !== version) throw new Error('Local runtime version mismatch. Review update --dry-run.');
+  // In plugin mode, the runtime lives in the host plugin; there is no local copy to check.
+  const pluginMode = normalizeAgents(options.agent).includes('plugin');
+  for (const name of ['CONSTITUTION.md', 'specs/project-context.md']) await access(await safePath(root, name));
+  if (!pluginMode) {
+    await access(await safePath(root, 'specs/.omni/runtime/bin/omni-spec.mjs'));
+    const runtime = JSON.parse(await readFile(await safePath(root, 'specs/.omni/runtime/package.json'), 'utf8'));
+    if (runtime.version !== version) throw new Error('Local runtime version mismatch. Review update --dry-run.');
+  }
   return {
     state: 'FILES_READY',
     version,
@@ -105,39 +90,72 @@ export async function inspectInstallation(root, options, version) {
   };
 }
 
-/** A host-specific handoff plus a prompt that works without slash-command discovery. */
+const TOOL_NAMES = {
+  antigravity: 'Antigravity',
+  plugin: 'Antigravity',
+  claude: 'Claude Code',
+  cursor: 'Cursor',
+  copilot: 'VS Code (GitHub Copilot)',
+  codex: 'Codex',
+  kilo: 'Kilo',
+  opencode: 'OpenCode',
+  gemini: 'Gemini CLI',
+};
+
+const closing = {
+  en: {
+    ready: (version, directory) => `OmniSpec ${version} is ready in ${directory}`,
+    next: 'Next step',
+    open: tools => `1. Open this folder in ${tools}.`,
+    type: invocation => `2. In the chat, type:  ${invocation}`,
+    typeEach: list => `2. In the chat, type: ${list}`,
+    paste: fallback => `2. Paste this in the chat: Read ${fallback} and follow its instructions.`,
+    build: '3. Tell it what you want to build.',
+    resume: '3. Ask it to resume the pending work.',
+    or: ' or ',
+    anyTool: 'your AI tool',
+    missing: invocation => `${invocation} not showing up? Paste this in the chat:`,
+    prompt: fallback => `Read ${fallback} and follow its instructions.`,
+  },
+  es: {
+    ready: (version, directory) => `OmniSpec ${version} está listo en ${directory}`,
+    next: 'Siguiente paso',
+    open: tools => `1. Abre esta carpeta en ${tools}.`,
+    type: invocation => `2. En el chat escribe:  ${invocation}`,
+    typeEach: list => `2. En el chat escribe: ${list}`,
+    paste: fallback => `2. Pega esto en el chat: Lee ${fallback} y sigue sus instrucciones.`,
+    build: '3. Cuéntale qué quieres construir.',
+    resume: '3. Pídele que retome el trabajo pendiente.',
+    or: ' o ',
+    anyTool: 'tu herramienta de IA',
+    missing: invocation => `¿No aparece ${invocation}? Pega esto en el chat:`,
+    prompt: fallback => `Lee ${fallback} y sigue sus instrucciones.`,
+  },
+};
+
+/**
+ * Closing message of init: one line of confirmation, three numbered steps named after the chosen
+ * tools and a fallback prompt. Integrity, discovery and scope stay in the JSON report and in
+ * specs/project-context.md rather than on screen.
+ * @param {object} installation Result of inspectInstallation.
+ * @param {boolean} [hasActiveWork] The project already had an active specification.
+ * @param {object} [presentation] Terminal capabilities for resultSteps.
+ * @returns {string} Text ready to print.
+ */
 export function installationMessage(installation, hasActiveWork = false, presentation = {}) {
-  const t = initText(installation.language);
-  const prompt =
-    installation.language === 'es'
-      ? `Lee ${installation.fallback} y sigue sus instrucciones. Confirma la versión del runtime local y usa el idioma de esta conversación.`
-      : `Read ${installation.fallback} and follow it. Confirm the local runtime version and use the language of this conversation.`;
-  const es = installation.language === 'es';
-  return resultSections(
-    `[OK] ${t.ready} - ${installation.version}`,
-    [
-      {
-        title: es ? 'INSTALACIÓN' : 'INSTALLATION',
-        lines: [
-          `${t.directory}: ${installation.directory}`,
-          `[OK] ${t.checked}`,
-          ...(installation.auditor ? [`[OK] omni-auditor: ${installation.auditor}`] : []),
-        ],
-      },
-      {
-        title: es ? 'SIGUIENTE PASO' : 'NEXT STEP',
-        lines: [
-          t.next,
-          ...installation.nextSteps.map(step => `${step.agent}: ${step.invocation}`),
-          hasActiveWork ? t.resume : t.later,
-        ],
-      },
-      { title: es ? 'SI NO APARECE LA SKILL' : 'IF THE SKILL IS MISSING', lines: [t.fallback, prompt] },
-      {
-        title: es ? 'ESTADO Y ALCANCE' : 'STATUS AND SCOPE',
-        lines: [t.discovery, t.preserved, 'Local CLI: node specs/.omni/runtime/bin/omni-spec.mjs status'],
-      },
-    ],
-    presentation,
-  );
+  const t = closing[installation.language] || closing.en;
+  const steps = installation.nextSteps.filter(step => step.agent !== 'generic');
+  const names = [...new Set(steps.map(step => TOOL_NAMES[step.agent] || step.agent))];
+  const invocation = step => step.invocation.replace(/\s*\(.*\)$/, '');
+  const lines = [t.open(names.length ? names.join(t.or) : t.anyTool)];
+  if (!steps.length) lines.push(t.paste(installation.fallback));
+  else if (new Set(steps.map(invocation)).size === 1) lines.push(t.type(invocation(steps[0])));
+  else
+    lines.push(
+      t.typeEach(steps.map(step => `${TOOL_NAMES[step.agent] || step.agent} → ${invocation(step)}`).join(' · ')),
+    );
+  lines.push(hasActiveWork ? t.resume : t.build);
+  const blocks = [{ title: t.next, lines }];
+  if (steps.length) blocks.push({ title: t.missing(invocation(steps[0])), lines: [t.prompt(installation.fallback)] });
+  return resultSteps(t.ready(installation.version, installation.directory), blocks, presentation);
 }

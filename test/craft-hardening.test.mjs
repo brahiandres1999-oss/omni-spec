@@ -251,8 +251,8 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
 
   test('new specs carry the template sections and audit flags an unfilled Observability', async () => {
     await scaffoldProject(tempDir, { projectName: 'ObservabilityApp' });
-    const feature = await createSpec(tempDir, 'feature', 'signals');
-    const bugfix = await createSpec(tempDir, 'bugfix', 'missing-signal');
+    const feature = await createSpec(tempDir, 'feature', 'signals', { full: true });
+    const bugfix = await createSpec(tempDir, 'bugfix', 'missing-signal', { full: true });
     assert.equal(
       section(await readFile(join(feature.specDir, 'spec.md'), 'utf8'), 4),
       section(await source('templates/01-feature/spec.md'), 4),
@@ -405,4 +405,17 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
     assert.match(implementSkill.instructions, /minimal touch surgery/i);
     assert.match(implementSkill.instructions, /Fail fast without hiding exceptions/i);
   });
+});
+
+test('AC-09: omni-specify starts light, classifies with fit and never treats a missing fit.json as full', async () => {
+  const { instructions } = OMNI_SKILLS.find(s => s.name === 'omni-specify');
+  assert.doesNotMatch(instructions, /Missing fit\.json defaults to full/);
+  assert.match(instructions, /without a route flag it writes only the primary artifact/);
+  assert.match(instructions, /size or missing tests escalate to standard/);
+  assert.match(
+    instructions,
+    /Without fit\.json the change is unclassified: audit, verify and complete stop until fit runs/,
+  );
+  const packaged = await readFile(new URL('../skills/omni-specify/SKILL.md', import.meta.url), 'utf8');
+  assert.doesNotMatch(packaged, /Missing fit\.json defaults to full/);
 });

@@ -1,4 +1,4 @@
-import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, stat, mkdir, readdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -9,7 +9,11 @@ import { writeFileAtomic } from './fs-retry.mjs';
 import { hashProjectFiles, hashTree, digestFiles, changedFiles, newBudget } from './snapshot.mjs';
 import { reviewAcceptance, bindAcceptance } from './acceptance.mjs';
 import { loadChecks, checkDirectory } from './checks.mjs';
-import { assertContextFresh } from './project-state.mjs';
+import { assertContextFresh, readProjectState } from './project-state.mjs';
+import { GuardianError, auditCommand, resolveExecution } from './guardian.mjs';
+import { getAttestationKey, signRecord, verifyRecord } from './attestation.mjs';
+import { hollowTestFindings } from './hollow-guard.mjs';
+import { assertGate } from './gates.mjs';
 
 const placeholders = /\[TODO\]|\[NEEDS CLARIFICATION\]|\b(?:SPEC|BUG|DEBT|RFC)-XXX\b/i;
 
@@ -23,11 +27,11 @@ async function getSpec(root, identifier) {
   return { manifest, spec };
 }
 
-async function ready(root, spec) {
-  await assertContextFresh(root, spec);
+async function ready(root, spec, options = {}) {
   const audit = await auditSpec(root, spec.id);
   if (!audit.valid) throw new Error(`Cannot verify/complete: ${audit.errors.join('; ')}`);
   if (audit.tasks.pending) throw new Error(`Cannot verify/complete: ${audit.tasks.pending} tasks remain pending.`);
+  await assertContextFresh(root, spec);
   let evidence;
   try {
     evidence = (await readFile(await safePath(root, `specs/${spec.slug}/verification.md`), 'utf8'))
@@ -50,7 +54,7 @@ async function ready(root, spec) {
         'RFC requires exactly one Decision: ACCEPTED, REJECTED or DEFERRED and a reasoned verification.md.',
       );
   }
-  const acceptance = await reviewAcceptance(root, spec);
+  const acceptance = await reviewAcceptance(root, spec, options);
   return { ...audit, acceptance };
 }
 
@@ -70,7 +74,8 @@ export async function projectSnapshot(root, spec, gates) {
   const specPath = `specs/${spec.slug}`;
   await safePath(root, specPath);
   for (const [name, digest] of await hashTree(root, specPath, {
-    exclude: new Set([`${specPath}/verification.json`]),
+    // Records and approvals are written after the evidence they describe; they are not inputs.
+    exclude: new Set([`${specPath}/verification.json`, `${specPath}/approvals.json`]),
     label,
     budget,
   }))
@@ -87,20 +92,15 @@ export async function projectSnapshot(root, spec, gates) {
       if (error.code !== 'ENOENT') throw error;
     }
   }
-  let state = { decisions: [], context: null };
-  try {
-    state = JSON.parse(
-      (await readFile(await safePath(root, 'specs/project-state.json'), 'utf8')).replace(/^\uFEFF/, ''),
+  const state = await readProjectState(root);
+  if (state.context !== null || state.decisions.length > 0) {
+    files.set(
+      'specs/project-state.json#decisions-context',
+      createHash('sha256')
+        .update(JSON.stringify({ context: state.context, decisions: state.decisions }))
+        .digest('hex'),
     );
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
   }
-  files.set(
-    'specs/project-state.json#decisions-context',
-    createHash('sha256')
-      .update(JSON.stringify({ decisions: state.decisions ?? [], context: state.context ?? null }))
-      .digest('hex'),
-  );
   const configuration = JSON.stringify({ type: spec.type, gates });
   files.set('#configuration', createHash('sha256').update(configuration).digest('hex'));
   return { fingerprint: digestFiles(files, 'omnispec-snapshot-v3'), files };
@@ -111,9 +111,24 @@ export async function projectFingerprint(root, spec, gates) {
   return (await projectSnapshot(root, spec, gates)).fingerprint;
 }
 
-async function runCommand(check, root, timeoutOverride) {
+/**
+ * Plans a check through Omni-Guardian. A refused or unresolvable command is returned as
+ * `{ blocked }` so it is recorded like any other failed check, without ever reaching spawn().
+ */
+async function planCommand(check, root, cwd, allowedBinaries) {
+  try {
+    const audited = await auditCommand(check.command, { root, cwd: check.cwd, allowedBinaries });
+    return await resolveExecution(audited, { root, cwd });
+  } catch (error) {
+    if (!(error instanceof GuardianError)) throw error;
+    return { blocked: error };
+  }
+}
+
+async function runCommand(check, root, timeoutOverride, allowedBinaries = []) {
   const { command, id: checkId } = check;
   const cwd = await checkDirectory(root, check.cwd);
+  const plan = await planCommand(check, root, cwd, allowedBinaries);
   const timeout = timeoutOverride ?? check.timeoutMs;
   const logName = `specs/.omni/verification-logs/${randomUUID()}.log`;
   const logPath = await safePath(root, logName);
@@ -130,15 +145,18 @@ async function runCommand(check, root, timeoutOverride) {
       timedOut = false,
       cleanupTimer,
       killer,
+      timer = null,
       settled = false;
-    const child = spawn(command, {
-      cwd,
-      shell: true,
-      windowsHide: true,
-      env: process.env,
-      detached: process.platform !== 'win32',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = plan.blocked
+      ? null
+      : spawn(plan.file, plan.args, {
+          cwd,
+          shell: false,
+          windowsHide: true,
+          env: process.env,
+          detached: process.platform !== 'win32',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
     const append = data => {
       outputTotalBytes += data.length;
       const remaining = Math.max(0, outputLimit - outputBytes);
@@ -151,8 +169,7 @@ async function runCommand(check, root, timeoutOverride) {
         terminate();
       }
     };
-    child.stdout.on('data', append);
-    child.stderr.on('data', append);
+
     const finish = result => {
       if (settled) return;
       settled = true;
@@ -166,7 +183,7 @@ async function runCommand(check, root, timeoutOverride) {
         checkCwd: check.cwd,
         kind: check.kind,
         timeoutMs: timeout,
-        processId: child.pid ?? null,
+        processId: child?.pid ?? null,
         startedAt,
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - started,
@@ -219,7 +236,17 @@ async function runCommand(check, root, timeoutOverride) {
         }
       }
     };
-    const timer = setTimeout(() => {
+    if (plan.blocked) {
+      append(
+        Buffer.from(`${plan.blocked.message}
+`),
+      );
+      finish({ exitCode: null, error: plan.blocked.message, errorType: plan.blocked.category });
+      return;
+    }
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    timer = setTimeout(() => {
       timedOut = true;
       terminate();
     }, timeout);
@@ -244,7 +271,7 @@ async function runCommand(check, root, timeoutOverride) {
   return record;
 }
 
-export const VERIFICATION_RECORD_VERSION = 3;
+export const VERIFICATION_RECORD_VERSION = 4;
 
 /**
  * Run approved checks and bind the result to a snapshot. The manifest lock is held only to
@@ -260,9 +287,10 @@ export async function verifySpec(root, identifier, options = {}) {
   return withVerificationLock(root, async () => {
     const prepared = await withManifestLock(root, async () => {
       const { manifest, spec } = await getSpec(root, identifier);
-      const initial = await ready(root, spec);
+      await assertGate(root, spec, manifest, 1);
       const checks = await loadChecks(root, manifest);
       const mode = spec.type === 'rfc' ? 'decision' : checks.length ? 'automated' : 'manual';
+      const initial = await ready(root, spec, { allowManual: mode === 'manual' });
       bindAcceptance(initial.acceptance, checks);
       if (mode === 'manual' && (!options.manual || options.manual.trim().length < 20))
         throw new Error(
@@ -272,13 +300,14 @@ export async function verifySpec(root, identifier, options = {}) {
         throw new Error('Manual verification cannot bypass configured quality gates.');
       const configuration = { qualityGates: manifest.qualityGates, checks };
       const before = await projectSnapshot(root, spec, configuration);
-      return { spec, checks, mode, before };
+      const hollowTests = mode === 'decision' ? [] : await hollowTestFindings(root);
+      return { spec, checks, mode, before, hollowTests, allowedBinaries: manifest.guardian?.allowedBinaries ?? [] };
     });
-    const { spec, checks, mode, before } = prepared;
+    const { spec, checks, mode, before, hollowTests, allowedBinaries } = prepared;
     const results = [];
     if (mode === 'automated')
       for (const check of checks) {
-        const result = await runCommand(check, root, options.timeout);
+        const result = await runCommand(check, root, options.timeout, allowedBinaries);
         results.push(result);
         if (result.exitCode !== 0 || result.timedOut || result.error) break;
       }
@@ -295,12 +324,17 @@ export async function verifySpec(root, identifier, options = {}) {
       let acceptance;
       let acceptanceError = null;
       try {
-        acceptance = bindAcceptance(await reviewAcceptance(root, spec), checks, results);
+        acceptance = bindAcceptance(
+          await reviewAcceptance(root, spec, { allowManual: mode === 'manual' }),
+          checks,
+          results,
+        );
       } catch (error) {
         acceptanceError = error.message;
         acceptance = { criteria: [], automatedChecksPassed: false, error: error.message };
       }
       const passed =
+        !hollowTests.length &&
         !changed.length &&
         !acceptanceError &&
         acceptance.automatedChecksPassed &&
@@ -324,15 +358,70 @@ export async function verifySpec(root, identifier, options = {}) {
         checks,
         timeoutOverride: options.timeout ?? null,
         acceptance,
+        hollowTests,
         results,
       };
+      signRecord(await getAttestationKey(), record);
       await writeFileAtomic(
         await safePath(root, `specs/${spec.slug}/verification.json`),
         JSON.stringify(record, null, 2) + '\n',
       );
-      return record;
+      return { ...record, logCleanup: await pruneVerificationLogs(root, manifest) };
     });
   });
+}
+
+/**
+ * Deletes verification logs that no spec's current verification.json references, including the
+ * logs of the record a verify run just replaced. Runs under the verification and manifest locks.
+ * Only `<uuid>.log` files are candidates. If any record exists but cannot be parsed, its
+ * references are unknown and nothing is deleted.
+ * @param {string} root Project root.
+ * @param {{specs: {slug: string}[]}} manifest Manifest whose specs' records are kept.
+ * @returns {Promise<{removed: number, failed: string[], skipped: string|null}>} Deleted count,
+ *   logs that could not be deleted, and the reason pruning was skipped.
+ */
+async function pruneVerificationLogs(root, manifest) {
+  const directory = await safePath(root, 'specs/.omni/verification-logs');
+  let names;
+  try {
+    names = await readdir(directory);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return { removed: 0, failed: [], skipped: null };
+  }
+  const referenced = new Set();
+  for (const spec of manifest.specs) {
+    let text;
+    try {
+      text = await readFile(await safePath(root, `specs/${spec.slug}/verification.json`), 'utf8');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      continue;
+    }
+    let results;
+    try {
+      results = JSON.parse(text)?.results ?? [];
+    } catch {
+      results = null;
+    }
+    if (!Array.isArray(results))
+      return { removed: 0, failed: [], skipped: `specs/${spec.slug}/verification.json has unreadable results` };
+    for (const result of results) referenced.add(result?.outputLog);
+  }
+  let removed = 0;
+  const failed = [];
+  for (const name of names) {
+    const log = `specs/.omni/verification-logs/${name}`;
+    if (!/^[a-f0-9-]+\.log$/.test(name) || referenced.has(log)) continue;
+    try {
+      await unlink(join(directory, name));
+      removed++;
+    } catch (error) {
+      if (error.code !== 'ENOENT') failed.push(log);
+    }
+  }
+  return { removed, failed, skipped: null };
 }
 
 /** @returns {string} One-line reason a stored verification record failed. */
@@ -340,9 +429,16 @@ export function describeFailure(record) {
   if (record.sourceChangedDuringVerification)
     return `files changed while checks ran (${(record.changedDuringVerification || []).slice(0, 5).join(', ') || 'see record'}${record.changedDuringVerificationCount > 5 ? ', ...' : ''}). Exclude generated outputs in .gitignore or .omnispecignore, or stop concurrent edits.`;
   if (record.acceptance?.error) return `acceptance review failed after checks: ${record.acceptance.error}`;
+  if (record.hollowTests?.length)
+    return `${record.hollowTests
+      .slice(0, 5)
+      .map(item => `${item.code}: ${item.file}:${item.line} ${item.message}`)
+      .join('; ')}.`;
   const failed = (record.results || []).find(result => result.exitCode !== 0 || result.timedOut || result.error);
   if (failed)
-    return `check ${failed.checkId || failed.command} ${failed.timedOut ? 'timed out' : failed.errorType === 'environment' ? 'could not run (environment)' : `exited ${failed.exitCode}`}.`;
+    return failed.errorType === 'policy'
+      ? `check ${failed.checkId || failed.command} was blocked by Omni-Guardian (${failed.error}).`
+      : `check ${failed.checkId || failed.command} ${failed.timedOut ? 'timed out' : failed.errorType === 'environment' ? 'could not run (environment)' : `exited ${failed.exitCode}`}.`;
   if (record.acceptance && !record.acceptance.automatedChecksPassed)
     return 'an automated criterion is not bound to a passing executed check.';
   return 'see verification.json.';
@@ -350,7 +446,9 @@ export function describeFailure(record) {
 
 /** Read-only validation of current audit, criterion bindings, check identities and stored output. */
 export async function inspectVerification(root, spec, manifest) {
-  const initial = await ready(root, spec);
+  const checks = await loadChecks(root, manifest);
+  const expectedMode = spec.type === 'rfc' ? 'decision' : checks.length ? 'automated' : 'manual';
+  const initial = await ready(root, spec, { allowManual: expectedMode === 'manual' });
   let record;
   try {
     record = JSON.parse(await readFile(join(root, 'specs', spec.slug, 'verification.json'), 'utf8'));
@@ -363,7 +461,6 @@ export async function inspectVerification(root, spec, manifest) {
     throw new Error('Verification record does not belong to this specification. Run verify again.');
   if (record.passed !== true)
     throw new Error(`Verification did not pass: ${describeFailure(record)} Run verify again.`);
-  const checks = await loadChecks(root, manifest);
   if (!Array.isArray(record.checks) || JSON.stringify(record.checks) !== JSON.stringify(checks))
     throw new Error(
       'Verification check identity/configuration changed after verification or is missing. Run verify again.',
@@ -371,7 +468,6 @@ export async function inspectVerification(root, spec, manifest) {
   const snapshot = await projectSnapshot(root, spec, { qualityGates: manifest.qualityGates, checks });
   if (record.fingerprint !== snapshot.fingerprint)
     throw new Error('Source, specification or gates changed after verification. Run verify again.');
-  const expectedMode = spec.type === 'rfc' ? 'decision' : checks.length ? 'automated' : 'manual';
   if (record.mode !== expectedMode) throw new Error('Verification mode changed. Run verify again.');
   if (!Array.isArray(record.results) || record.results.some(result => !result || typeof result !== 'object'))
     throw new Error('Invalid verification results. Run verify again.');
@@ -417,6 +513,9 @@ export async function inspectVerification(root, spec, manifest) {
     )
       throw new Error('Verification output log changed. Run verify again.');
   }
+  // Last, so structural problems keep their specific messages; the signature catches forgeries
+  // that are otherwise consistent.
+  verifyRecord(await getAttestationKey(), record);
   return { record, acceptance };
 }
 
@@ -428,6 +527,7 @@ async function completeUnlocked(root, identifier) {
   return withManifestLock(root, async () => {
     const { manifest, spec } = await getSpec(root, identifier);
     const { record, acceptance } = await inspectVerification(root, spec, manifest);
+    await assertGate(root, spec, manifest, 2);
     spec.status = 'COMPLETED';
     spec.completed_at = spec.updated_at = new Date().toISOString();
     spec.verification = {

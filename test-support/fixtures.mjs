@@ -10,7 +10,7 @@ export async function fillSpec(root, spec, { pending = false } = {}) {
       'spec.md':
         '# Greeting\n## 0. Clarification\nThe user confirmed that the greeting must be deterministic and independent of network access.\n## Acceptance Criteria\nAC-01: input Ada produces Hello Ada.\n## Non-Goals\nNo remote calls or persistence.\n',
       'plan.md':
-        '# Plan\n## API Contracts\nThe greet(name) function returns a string.\n## Rollback\nRestore the previous local function if the contract regresses.\n',
+        '# Plan\n## API Contracts\nThe greet(name) function returns a string.\n## Verification\nAC-01: check.cjs asserts that greet("Ada") returns Hello Ada.\n## Rollback\nRestore the previous local function if the contract regresses.\n',
       'tasks.md': checklist,
     },
     bugfix: {
@@ -19,14 +19,14 @@ export async function fillSpec(root, spec, { pending = false } = {}) {
       'rca.md':
         '# Root cause\nA missing return statement in the greeting function caused the deterministic reproduction. The source and assertion provide evidence.\n',
       'fix.md':
-        '# Fix\nRestore the return value without changing callers. Regression: assert the exact greeting in the local check.\n' +
+        '# Fix\nRestore the return value without changing callers.\n## Regression verification\nAC-01: assert the exact greeting in the local check.\n' +
         checklist,
     },
     debt: {
       'audit.md':
         '# Debt\nThe greeting logic is duplicated. AC-01: consolidate the function while preserving the existing return contract for callers.\n',
       'migration-plan.md':
-        '# Migration\nReplace the duplicate helper with the shared function. Verify the greeting assertion before and after; restore the old call if it fails.\n',
+        '# Migration\nReplace the duplicate helper with the shared function. Restore the old call if it fails.\n## Verification\nAC-01: the greeting assertion passes before and after.\n',
       'tasks.md': checklist,
     },
     rfc: {

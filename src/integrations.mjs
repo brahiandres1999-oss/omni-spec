@@ -59,7 +59,7 @@ export function normalizeAgents(raw = 'antigravity') {
     throw new Error(`Invalid agent "${invalid.join(',')}". Valid agents: ${Object.keys(AGENTS).join(', ')}, all.`);
   return [
     ...new Set(
-      normalized.includes('all') ? Object.keys(AGENTS).filter(s => s !== 'generic' && s !== 'plugin') : normalized,
+      normalized.includes('all') ? Object.keys(AGENTS).filter(s => !['generic', 'plugin'].includes(s)) : normalized,
     ),
   ];
 }
@@ -122,7 +122,7 @@ export function integrationEntries(manifest, options = {}) {
     // AGENTS.md is the only file every supported host reads.
     entries.push({ path: 'AGENTS.md', content: rule, section: true });
   }
-  if (!targets.includes('generic') && !targets.includes('plugin'))
+  if (!targets.some(target => ['generic', 'plugin'].includes(target)))
     entries.push({
       path: 'specs/commands/omni-init.md',
       content:

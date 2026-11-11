@@ -1,6 +1,12 @@
 import { readFile, access } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { scaffoldProject, createSpec, scaffoldMissingRouteArtifacts } from './generator.mjs';
+import {
+  scaffoldProject,
+  createSpec,
+  scaffoldMissingRouteArtifacts,
+  ARCHETYPES,
+  configureConstitution,
+} from './generator.mjs';
 import { runWizard } from './wizard.mjs';
 import { loadManifest, saveManifest, withManifestLock, updateSpecStatus, focusSpec, listSpecs } from './manifest.mjs';
 import { auditSpec } from './auditor.mjs';
@@ -12,13 +18,21 @@ import { detectProjectEnvironment } from './detector.mjs';
 import { auditProjectContext } from './context-auditor.mjs';
 import { fitQuestionnaire, specRoute, applyFitPreset, saveFit, readFit } from './fit.mjs';
 import { projectStatus, recordContext, recordSession, recordDecision } from './project-state.mjs';
-import { loadChecks, validateChecks } from './checks.mjs';
+import { loadChecks, validateChecks, gateProblems } from './checks.mjs';
 import { safePath } from './managed.mjs';
 import { writeFileAtomic } from './fs-retry.mjs';
 import { listContracts, readContract, updateContract, contractEffectiveSnapshot } from './contracts.mjs';
 import { fileURLToPath } from 'node:url';
 import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
 import { installationProgress } from './terminal-ui.mjs';
+import { runMcpServer } from './mcp-server.mjs';
+import { memoryPath, openMemory } from './memory.mjs';
+import { indexRepository, summarizeGraph } from './cartography/graph.mjs';
+import { checkBlastRadius, normalizeTargets } from './cartography/blast-radius.mjs';
+import { approveGate, gateStatus } from './gates.mjs';
+import { migrateTasks } from './tasks.mjs';
+import { inspectStaged, installHooks, uninstallHooks } from './guardian.mjs';
+import { createAuthStore, createPassthrough, PASSTHROUGH_PROVIDERS } from './auth.mjs';
 
 const mutating = new Set([
   'create',
@@ -33,6 +47,12 @@ const mutating = new Set([
   'session-record',
   'decision-record',
   'contract-record',
+  'mcp',
+  'approve',
+  'tasks',
+  'cartography',
+  'blast-radius',
+  'memory',
 ]);
 const aliases = {
   switch: 'focus',
@@ -64,7 +84,33 @@ const valueFlags = new Set([
   'ambiguity',
   'reversibility',
   'reasoning',
+  'gate',
+  'actor',
+  'provider',
+  'depth',
+  'fail-on',
+  'category',
+  'scope',
+  'summary',
+  'evidence',
+  'limit',
+  'json-input',
+  'host',
+  'questions',
+  'web',
+  'terminal',
+  'render',
+  'delegation',
+  'source',
+  'id',
+  'topic',
+  'status',
+  'basis',
+  'value',
+  'applies-to',
+  'expected-revision',
 ]);
+export const VALUE_OPTIONS = valueFlags;
 const booleanFlags = new Set([
   'yes',
   'force',
@@ -80,6 +126,7 @@ const booleanFlags = new Set([
   'full',
   'crosses-contract',
   'existing-tests',
+  'replace',
 ]);
 
 function acceptanceSummary(acceptance) {
@@ -92,8 +139,11 @@ function acceptanceSummary(acceptance) {
       ', ',
     )}).\nAutomated criteria are bound to configured check results; this does not prove the adequacy of assertions or the truth of manual evidence.\n${acceptance.criteria
     .filter(item => item.method === 'automated')
-    .map(item => `${item.id}: ${item.execution}`)
-    .join('\n')}`;
+    .map(item => `${item.id}: ${item.execution}${item.limits ? ' WITH LIMITS' : ''}`)
+    .join('\n')}${acceptance.criteria
+    .filter(item => item.limits)
+    .map(item => `\n[LIMITS] ${item.id}: ${item.limits}`)
+    .join('')}`;
 }
 
 function parse(args) {
@@ -105,12 +155,25 @@ function parse(args) {
       positionals.push(arg);
       continue;
     }
-    const name = arg.slice(2);
-    if (booleanFlags.has(name)) flags[name] = true;
-    else if (valueFlags.has(name)) {
-      if (args[i + 1] === undefined || args[i + 1].startsWith('--')) throw new Error(`Missing value for ${arg}`);
-      flags[name] = args[++i];
-      if (name !== 'gates' && !flags[name].trim()) throw new Error(`Empty value for ${arg}`);
+    // --name=value keeps an empty value intact; Windows PowerShell 5.1 drops a separate "" argument.
+    const assigned = arg.indexOf('=');
+    const name = assigned > 2 ? arg.slice(2, assigned) : arg.slice(2);
+    const option = `--${name}`;
+    if (booleanFlags.has(name)) {
+      if (assigned > 2) throw new Error(`${option} does not take a value.`);
+      flags[name] = true;
+    } else if (valueFlags.has(name)) {
+      if (assigned > 2) flags[name] = arg.slice(assigned + 1);
+      else {
+        if (args[i + 1] === undefined || args[i + 1].startsWith('--'))
+          throw new Error(
+            name === 'gates'
+              ? 'Missing value for --gates. Use --gates= to clear it; some shells drop an empty "" argument.'
+              : `Missing value for ${option}`,
+          );
+        flags[name] = args[++i];
+      }
+      if (name !== 'gates' && !flags[name].trim()) throw new Error(`Empty value for ${option}`);
     } else throw new Error(`Unknown option: ${arg}`);
   }
   flags.agent = flags.agent || flags.ai;
@@ -133,7 +196,14 @@ function parse(args) {
  * standard input with `-`. Input files may live outside the project, for example in a
  * temporary directory, so they never enter verification or context snapshots.
  */
-async function readJsonInput(root, from) {
+async function readJsonInput(root, from, jsonInput = null) {
+  if (jsonInput) {
+    try {
+      return JSON.parse(jsonInput);
+    } catch (error) {
+      throw new Error(`Invalid JSON in --json-input: ${error.message}`);
+    }
+  }
   let raw;
   if (from === '-') {
     const chunks = [];
@@ -163,7 +233,7 @@ async function findProjectRoot(start) {
 }
 
 export function printHelp(version = '') {
-  console.log(`OmniSpec v${version} — project-local Spec-Driven Development
+  console.log(`OmniSpec v${version} — Universal Agentic Engineering Engine
 
 omni-spec <command> [arguments] [options]
   init [--yes] [--agent name]     Bootstrap project and chat workflows
@@ -183,8 +253,8 @@ omni-spec <command> [arguments] [options]
     --all                       status --json: keep closed specs' acceptance and decisions
   focus <id|slug>                Select active work without creating duplicates
   audit [id] [--json]            Structural document checks, not code verification
-  fit [id] [--json]              Read the ceremony route for a change and its questionnaire
-  configure --gates <commands>   Set reviewed checks (newline separated; root cwd)
+  fit [id] [--json]              Read the ceremony route; scaffold documents standard/full need
+  configure [--gates|--stack|--profile|--doc]  Set reviewed checks, stack, profile or doc convention
   verify [id]                    Run configured checks and bind evidence to source
     --manual <reason>           Explicit manual evidence when no checks apply
     --timeout <ms>              Per-command timeout (default 120000)
@@ -197,6 +267,21 @@ omni-spec <command> [arguments] [options]
                                  (modified copies block unless --accept-updates backs them up)
   plugin <install|update|status> Manage Antigravity global plugin (~180 KB clean install)
   setup-agent <name[,name]>      Select/persist adapters; keep other existing files
+  mcp                           Serve memory tools to AI hosts over MCP stdio (JSON-RPC)
+  approve <id> --gate <1|2> --actor <name>  Human gate approval on the full route (governance.humanGates)
+  tasks migrate <id>             Move tasks.md into canonical tasks.json (tasks.md becomes its projection)
+  guardian <install|uninstall|check> [--replace]  Omni-Guardian pre-commit hook (conflicts, anti-slop)
+  login --provider <claude|gh|gcloud>  Use an existing CLI session (delegated passthrough)
+  auth status [--json]           Show stored and delegated credentials without secrets
+  memory add --category <pattern|gotcha|convention|constraint> --scope <path> --summary "<text>" [--evidence "<text>"]
+                                 Record pattern, gotcha, convention or constraint observation
+  memory search <query> [--scope <path>] [--limit <n>]
+                                 Search memory FTS5 for decisions and observations
+  memory list [--category <cat>] [--scope <path>] [--limit <n>]
+                                 List recorded observations with optional category/scope filter
+  cartography [--json]           Index the module graph (polyglot, incremental) into specs/.omni/memory.db
+  blast-radius <files...> [--json] [--depth 1..10] [--fail-on low|medium|high]
+                                 Impact of changing files before editing; path#sym1,sym2 limits symbols
   help | version
 
 init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-components
@@ -204,13 +289,13 @@ init options: --name --stack --doc --profile --gates --agent (alias --ai) --ui-c
   --plain disables terminal UI; pipes, TERM=dumb, CI and JSON retain plain output.
   Interactive UI: arrows to move, Space to select tools, Ctrl+A for all, Enter to continue, Esc/Ctrl+C to cancel.
   init asks language, AI tool, UI choices when detected, and destination confirmation; engineering decisions follow in chat.
-  For automation: init --yes --agent <name> --lang en (generic when no tool is selected).
+  For automation: init --yes --agent <name> --lang en (defaults to plugin when Antigravity plugin is installed, or generic).
   npx --yes omni-spec@latest init still opens OmniSpec's installer; npx owns that --yes.
   --force explicitly replaces constitution/templates; existing specs are preserved.
-Agents: ${Object.keys(AGENTS).join(', ')}, all
+Agents: ${Object.keys(AGENTS).join(', ')}, all (use "plugin" for Antigravity global plugin, "antigravity" for local skills mode)
 After bootstrap: /omni-init -> /omni-discuss or /omni-specify.
 Invocation syntax varies by host; use its installed skill/command picker.
-Local CLI: node specs/.omni/runtime/bin/omni-spec.mjs <command>
+Local CLI: node specs/.omni/runtime/bin/omni-spec.mjs <command> (or global omni-spec in plugin mode)
 `);
 }
 
@@ -247,6 +332,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (flags.active && (command !== 'contracts' || positionals.length))
       throw new Error('--active is supported only by contracts without an ID.');
     if (flags.preset !== undefined && command !== 'fit') throw new Error('--preset is supported only by fit.');
+    if ((flags.depth !== undefined || flags['fail-on'] !== undefined) && command !== 'blast-radius')
+      throw new Error('--depth and --fail-on are supported only by blast-radius.');
     if (flags.preset !== undefined && !['light', 'standard', 'full'].includes(flags.preset.toLowerCase()))
       throw new Error('--preset must be light, standard or full.');
     if (flags.route !== undefined && !['create', 'fit'].includes(command))
@@ -268,6 +355,12 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         contracts: 1,
         'contract-record': 1,
         guide: 1,
+        approve: 1,
+        guardian: 1,
+        auth: 1,
+        tasks: 2,
+        memory: 2,
+        'blast-radius': Number.POSITIVE_INFINITY,
       }[command] || 0;
     if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
     const emit = (value, human) =>
@@ -278,6 +371,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       throw new Error(
         `Already inside an OmniSpec project (root: ${root}). Run init from its root; nested projects are not initialized implicitly.`,
       );
+    // Paths given to blast-radius are relative to where the user ran the command, not the root.
+    const invocationDir = resolve(workingDir);
     if (command !== 'init' && root) workingDir = root;
     if (mutating.has(command) && !root) throw new Error('No OmniSpec project found. Run omni-spec init first.');
     switch (command) {
@@ -339,25 +434,85 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         );
         return 0;
       }
-      case 'session-record':
-      case 'decision-record':
+      case 'session-record': {
+        let input;
+        if (flags['json-input'] || flags.from) {
+          input = await readJsonInput(workingDir, flags.from, flags['json-input']);
+        } else if (flags.host) {
+          const capNames = ['questions', 'web', 'terminal', 'render', 'delegation'];
+          const sessionCaps = {};
+          for (const name of capNames) {
+            if (flags[name]) {
+              sessionCaps[name] = {
+                status: flags[name],
+                source: flags.source || `CLI flag --${name}`,
+              };
+            }
+          }
+          input = {
+            host: flags.host,
+            observedAt: new Date().toISOString(),
+            capabilities: sessionCaps,
+          };
+        } else {
+          throw new Error('session-record requires --from <file|->, --json-input <json>, or --host <host>.');
+        }
+        const result = await recordSession(workingDir, input);
+        emit(result);
+        return 0;
+      }
+      case 'decision-record': {
+        let input;
+        if (flags['json-input'] || flags.from) {
+          input = await readJsonInput(workingDir, flags.from, flags['json-input']);
+        } else if (flags.id) {
+          let appliesTo;
+          if (flags['applies-to']) {
+            appliesTo = flags['applies-to'].startsWith('[')
+              ? JSON.parse(flags['applies-to'])
+              : flags['applies-to'].split(',').map(s => s.trim());
+          }
+          input = {
+            id: flags.id,
+            ...(flags.topic ? { topic: flags.topic } : {}),
+            ...(flags.status ? { status: flags.status } : {}),
+            ...(flags.basis ? { basis: flags.basis } : {}),
+            ...(flags.value ? { value: flags.value } : {}),
+            ...(appliesTo ? { appliesTo } : {}),
+            ...(flags['expected-revision'] !== undefined
+              ? { expectedRevision: Number(flags['expected-revision']) }
+              : {}),
+            ...(flags.source
+              ? {
+                  sources: [
+                    {
+                      url: flags.source,
+                      consultedAt: new Date().toISOString(),
+                      appliesTo: flags.topic || flags.id,
+                      authority: 'official',
+                    },
+                  ],
+                }
+              : {}),
+          };
+        } else {
+          throw new Error('decision-record requires --from <file|->, --json-input <json>, or --id <id>.');
+        }
+        const result = await recordDecision(workingDir, input);
+        emit(result);
+        return 0;
+      }
       case 'contract-record': {
-        if (!flags.from) throw new Error(`${command} requires --from <JSON file or ->.`);
-        const input = await readJsonInput(workingDir, flags.from);
+        const input = await readJsonInput(workingDir, flags.from, flags['json-input']);
         const { expectedRevision, ...contractChange } = input;
-        const result =
-          command === 'session-record'
-            ? await recordSession(workingDir, input)
-            : command === 'decision-record'
-              ? await recordDecision(workingDir, input)
-              : await updateContract(workingDir, positionals[0], contractChange, { expectedRevision });
+        const result = await updateContract(workingDir, positionals[0], contractChange, { expectedRevision });
         emit(result);
         return 0;
       }
       case 'checks': {
         if (!root) throw new Error('No OmniSpec project found. Run init first.');
-        if (flags.from) {
-          const input = await readJsonInput(workingDir, flags.from);
+        if (flags.from || flags['json-input']) {
+          const input = await readJsonInput(workingDir, flags.from, flags['json-input']);
           await validateChecks(workingDir, input);
           await withManifestLock(workingDir, async () => {
             await writeFileAtomic(
@@ -387,10 +542,15 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         if (positionals.length !== 2)
           throw new Error('Usage: create <feature|bugfix|debt|rfc> <name> (quote names containing spaces).');
         const spec = await createSpec(workingDir, positionals[0], positionals[1], flags);
-        const routeMsg = spec.route ? ` [Route: ${spec.route.toUpperCase()}]` : '';
+        const unclassified = !spec.route && spec.archetype !== ARCHETYPES.rfc.name;
+        const routeMsg = spec.route
+          ? ` [Route: ${spec.route.toUpperCase()}]`
+          : unclassified
+            ? ' [Route: UNCLASSIFIED]'
+            : '';
         emit(
           spec,
-          `[OK] Created specs/${spec.slug} (${spec.archetype})${routeMsg}.\nSuggested branch: ${spec.branch} (not created).\nClarify requirements, then plan the change; no implementation is verified yet.`,
+          `[OK] Created specs/${spec.slug} (${spec.archetype})${routeMsg}.\nSuggested branch: ${spec.branch} (not created).\n${unclassified ? 'Only the primary artifact was created. Classify the change with fit; standard or full routes scaffold the missing documents.\n' : ''}Clarify requirements, then plan the change; no implementation is verified yet.`,
         );
         return 0;
       }
@@ -431,7 +591,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const result = await verifySpec(workingDir, positionals[0], flags);
         emit(
           result,
-          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Gate mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}${r.outputTruncated ? '\n[OUTPUT TRUNCATED: full bounded log ' + r.outputLog + ']' : ''}${r.error ? '\n' + r.error : ''}`).join('\n')}\n${result.passed ? `Evidence is bound to the current snapshot (${result.attestedFiles} project files outside specs/; ignored paths excluded).` : `Not recorded as passed: ${describeFailure(result)}`}${result.sourceChangedDuringVerification ? `\nChanged while checks ran:\n${result.changedDuringVerification.map(name => '  ' + name).join('\n')}` : ''}\n${acceptanceSummary(result.acceptance)}`,
+          `[VERIFICATION ${result.passed ? 'RECORDED' : 'FAILED'}] Gate mode: ${result.mode}\n${result.results.map(r => `${r.command}: exit ${r.exitCode}${r.timedOut ? ' (timeout)' : ''}\n${r.output}${r.outputTruncated ? '\n[OUTPUT TRUNCATED: full bounded log ' + r.outputLog + ']' : ''}${r.error ? '\n' + r.error : ''}`).join('\n')}\n${result.passed ? `Evidence is bound to the current snapshot (${result.attestedFiles} project files outside specs/; ignored paths excluded).` : `Not recorded as passed: ${describeFailure(result)}`}${result.sourceChangedDuringVerification ? `\nChanged while checks ran:\n${result.changedDuringVerification.map(name => '  ' + name).join('\n')}` : ''}\n${acceptanceSummary(result.acceptance)}${result.logCleanup.failed.map(log => `\n[WARN] Could not delete stale verification log ${log}`).join('')}${result.logCleanup.skipped ? `\n[WARN] Stale verification logs kept: ${result.logCleanup.skipped}` : ''}`,
         );
         return result.passed ? 0 : 1;
       }
@@ -536,6 +696,10 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           );
           return 1;
         }
+        // A fit.json written by hand escalates the same way a preset does.
+        const scaffolded = ['standard', 'full'].includes(route.route)
+          ? await scaffoldMissingRouteArtifacts(workingDir, spec, route.route)
+          : [];
         emit(
           {
             spec: spec.slug,
@@ -545,41 +709,53 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
             reasons: route.reasons,
             artifacts: route.artifacts,
             summary: route.summary,
+            scaffolded,
           },
           `[FIT] ${spec.slug}: ${route.route.toUpperCase()} — ${route.summary}\n${route.reasons.map(r => '- ' + r).join('\n')}\nRequired artifacts: ${
             Object.entries(route.artifacts)
               .filter(([, needed]) => needed)
               .map(([name]) => name)
               .join(', ') || 'primary artifact only'
-          }.`,
+          }.${scaffolded.length ? `\nScaffolded missing artifacts: ${scaffolded.join(', ')}.` : ''}`,
         );
         return 0;
       }
       case 'configure': {
-        if (flags.gates === undefined)
+        const changes = { gates: flags.gates, stack: flags.stack, profile: flags.profile, doc: flags.doc };
+        if (Object.values(changes).every(value => value === undefined))
           throw new Error(
-            'Usage: configure --gates "<reviewed commands>". Use an empty string to explicitly clear gates.',
+            'Usage: configure [--gates "<reviewed commands>"] [--stack "<stack>"] [--profile <id>] [--doc "<convention>"]. Use --gates= to explicitly clear gates.',
           );
+        for (const key of ['stack', 'profile', 'doc'])
+          if (changes[key] !== undefined && !changes[key].trim()) throw new Error(`--${key} cannot be empty.`);
+        if (changes.gates) {
+          const problems = gateProblems(changes.gates);
+          if (problems.length) throw new Error(`Gates not configured:\n${problems.join('\n')}`);
+          // One source of checks: once specs/checks.json defines checks, new ones go there with their cwd.
+          const catalogue = await loadChecks(workingDir, { qualityGates: '' });
+          if (catalogue.length)
+            throw new Error(
+              `Gates not configured: specs/checks.json already defines ${catalogue.map(check => check.id).join(', ')}. Add new checks there with checks --from (id, command, cwd, timeoutMs), or clear gates with configure --gates=.`,
+            );
+        }
         await withManifestLock(workingDir, async () => {
           const manifest = await loadManifest(workingDir);
           const path = join(workingDir, 'CONSTITUTION.md');
-          const content = await readFile(path, 'utf8');
-          const section = `## 4. Delivery Quality Gates\n\nConfigured commands, executed from the project root by verify. Review commands before execution.\n\n\`\`\`text\n${flags.gates || '# No automated checks configured; explicit manual evidence is required.'}\n\`\`\`\n\n`;
-          const pattern = /^## 4\. Delivery Quality Gates[^\n]*\n[\s\S]*?(?=^## |$(?![\s\S]))/m;
-          if (!pattern.test(content))
-            throw new Error(
-              'Custom constitution has no recognizable Delivery Quality Gates section. Add that section before configuring commands; custom text was preserved.',
-            );
-          await writeFileAtomic(
-            path,
-            content.replace(pattern, () => section),
-          );
-          manifest.qualityGates = flags.gates;
+          await writeFileAtomic(path, configureConstitution(await readFile(path, 'utf8'), changes));
+          if (changes.gates !== undefined) manifest.qualityGates = changes.gates;
+          if (changes.stack !== undefined) manifest.stack = changes.stack;
+          if (changes.profile !== undefined) manifest.profile = changes.profile;
+          if (changes.doc !== undefined) manifest.documentationStandard = changes.doc;
           await saveManifest(workingDir, manifest);
         });
+        const configured = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));
         emit(
-          { configured: true, qualityGates: flags.gates },
-          '[OK] Gates configured, not executed. Prior verification becomes stale.',
+          {
+            configured: true,
+            ...(changes.gates !== undefined ? { qualityGates: changes.gates } : {}),
+            changes: configured,
+          },
+          `[OK] Configured ${Object.keys(configured).join(', ')} in specs/manifest.json and CONSTITUTION.md.${changes.gates !== undefined ? ' Gates were not executed. Prior verification becomes stale.' : ''}`,
         );
         return 0;
       }
@@ -670,6 +846,230 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
             `[CLEANED] ${result.project} migrated to plugin mode (v${result.version}).\nRemoved ${result.removed.length} managed files.${result.backups.length ? `\n${result.backups.map(p => 'BACKUP ' + p).join('\n')}` : ''}\nPreserved: ${result.preserved}. Specs: ${result.specsCount}.`,
           );
         }
+        return 0;
+      }
+      case 'approve': {
+        if (positionals.length !== 1 || !['1', '2'].includes(flags.gate) || !flags.actor)
+          throw new Error('Usage: approve <id> --gate <1|2> --actor <name>');
+        const approval = await approveGate(workingDir, positionals[0], Number(flags.gate), { actor: flags.actor });
+        emit(approval, `[OK] Gate ${approval.gate} approved by ${approval.actor} at ${approval.approvedAt}.`);
+        return 0;
+      }
+      case 'tasks': {
+        if (positionals[0] === 'status' && positionals[1]) {
+          emit(await gateStatus(workingDir, positionals[1]));
+          return 0;
+        }
+        if (positionals[0] !== 'migrate' || !positionals[1]) throw new Error('Usage: tasks migrate <id>');
+        const migrated = await migrateTasks(workingDir, positionals[1]);
+        emit(migrated, `[OK] ${migrated.tasks.length} tasks moved to tasks.json; tasks.md is now generated from it.`);
+        return 0;
+      }
+      case 'guardian': {
+        const action = positionals[0] || 'check';
+        if (action === 'install') {
+          const result = await installHooks(workingDir, { force: Boolean(flags.replace) });
+          emit(
+            result,
+            `[OK] Omni-Guardian pre-commit hook installed in ${result.directory}${result.chained ? ' (existing hook kept as pre-commit.local)' : ''}.`,
+          );
+          return 0;
+        }
+        if (action === 'uninstall') {
+          const result = await uninstallHooks(workingDir);
+          emit(result, `[OK] Removed ${result.removed.join(', ') || 'nothing'} from ${result.directory}.`);
+          return 0;
+        }
+        if (action !== 'check') throw new Error('Usage: guardian <install|uninstall|check>');
+        const result = await inspectStaged(workingDir);
+        emit(
+          result,
+          result.violations.length
+            ? result.violations.map(item => `${item.file}:${item.line} ${item.code} ${item.message}`).join('\n')
+            : `[OK] ${result.files.length} staged files passed Omni-Guardian.`,
+        );
+        return result.violations.length ? 1 : 0;
+      }
+      case 'login': {
+        const provider = flags.provider;
+        if (!Object.hasOwn(PASSTHROUGH_PROVIDERS, provider ?? ''))
+          throw new Error(`Usage: login --provider <${Object.keys(PASSTHROUGH_PROVIDERS).join('|')}>`);
+        const status = await createPassthrough().status(provider);
+        if (status.authenticated === false) {
+          emit(
+            status,
+            `[LOGIN REQUIRED] ${provider} is installed but not logged in. Run \`${status.login}\`, then retry.`,
+          );
+          return 1;
+        }
+        emit(
+          status,
+          status.delegated
+            ? `[OK] ${provider} keeps its own session; OmniSpec delegates to it.`
+            : `[OK] ${provider} is authenticated; OmniSpec will use its session without storing tokens.`,
+        );
+        return 0;
+      }
+      case 'auth': {
+        if ((positionals[0] || 'status') !== 'status') throw new Error('Usage: auth status [--json]');
+        const store = createAuthStore();
+        const read = await store.read();
+        const report = {
+          store: {
+            path: store.path,
+            status: read.status,
+            providers: Object.keys(read.data?.providers ?? {}),
+            apiKeys: Object.keys(read.data?.apiKeys ?? {}),
+          },
+          passthrough: await createPassthrough().detect(),
+        };
+        emit(
+          report,
+          `Store: ${report.store.path} (${report.store.status})\nSessions: ${report.store.providers.join(', ') || 'none'}\nAPI keys: ${report.store.apiKeys.join(', ') || 'none'}\n${report.passthrough.map(item => `${item.provider}: ${item.available ? item.version || 'available' : 'not installed'}`).join('\n')}`,
+        );
+        return 0;
+      }
+      case 'cartography': {
+        const memory = openMemory(memoryPath(workingDir));
+        try {
+          const index = indexRepository(workingDir, memory);
+          const summary = summarizeGraph(memory);
+          const report = {
+            schemaVersion: 1,
+            files: index.files,
+            nodes: summary.nodes,
+            edges: summary.edges,
+            languages: summary.languages,
+            nodeTypes: summary.nodeTypes,
+            core: summary.core,
+            cycles: summary.cycles,
+            incremental: index.incremental,
+            parsed: index.parsed,
+            unchanged: index.unchanged,
+            removed: index.removed,
+            skipped: index.skipped,
+            warnings: index.warnings.map(warning => `${warning.code}: ${warning.message}`),
+            timings: { durationMs: Math.round(index.durationMs) },
+          };
+          const languages = Object.entries(report.languages)
+            .map(([language, count]) => `${language}: ${count}`)
+            .join(', ');
+          const cycleText = `${report.cycles.count} cycle${report.cycles.count === 1 ? '' : 's'}`;
+          emit(
+            report,
+            [
+              `Cartography: ${report.files} files (${languages || 'no sources'}) · ${report.edges} edges · ${cycleText} · core: ${report.core.length} · ${report.timings.durationMs} ms`,
+              `Incremental: ${report.incremental ? 'yes' : 'no'} · parsed ${report.parsed} · unchanged ${report.unchanged} · removed ${report.removed}`,
+              ...report.cycles.samples.map(cycle => `[CYCLE] ${cycle.join(' <-> ')}`),
+              ...report.skipped.map(item => `[SKIPPED] ${item.path} (${item.reason})`),
+              ...report.warnings.map(warning => `[WARN] ${warning}`),
+            ].join('\n'),
+          );
+        } finally {
+          memory.close();
+        }
+        return 0;
+      }
+      case 'blast-radius': {
+        if (!positionals.length)
+          throw new Error('Usage: blast-radius <files...> [--json] [--depth 1..10] [--fail-on low|medium|high]');
+        const depth = flags.depth === undefined ? 3 : Number(flags.depth);
+        if (!Number.isInteger(depth) || depth < 1 || depth > 10)
+          throw new Error('--depth must be an integer from 1 to 10.');
+        const levels = ['low', 'medium', 'high'];
+        const failOn = flags['fail-on'];
+        if (failOn !== undefined && !levels.includes(failOn)) throw new Error('--fail-on must be low, medium or high.');
+        const targets = normalizeTargets(workingDir, invocationDir, positionals);
+        const memory = openMemory(memoryPath(workingDir));
+        let report;
+        try {
+          report = await checkBlastRadius(workingDir, memory, targets, { maxDepth: depth });
+        } finally {
+          memory.close();
+        }
+        const human = [
+          `Blast radius (depth ${report.maxDepth}): overall ${report.overall.level.toUpperCase()} ${report.overall.score} (${report.overall.gate})`,
+          ...report.files.flatMap(item => [
+            `${item.file}  ${item.level.toUpperCase()} ${item.score}  gate ${item.gate} · ${item.impactedConsumers.length} consumers${item.rootAnchor ? ' · ROOT_ANCHOR' : ''}${item.symbols ? ` · symbols ${item.symbols.join(', ')}` : ''}`,
+            ...item.impactedConsumers.map(
+              consumer => `  - ${consumer.path} (${consumer.distance}, ${consumer.edgeClass})`,
+            ),
+            ...item.tests.map(test => `  [TEST] ${test}`),
+            ...item.warnings.map(warning => `  [WARN] ${warning}`),
+          ]),
+          ...report.warnings.map(warning => `[WARN] ${warning}`),
+        ].join('\n');
+        emit(report, human);
+        return failOn !== undefined && levels.indexOf(report.overall.level) >= levels.indexOf(failOn) ? 2 : 0;
+      }
+      case 'memory': {
+        const sub = positionals[0];
+        const memory = openMemory(memoryPath(workingDir));
+        try {
+          if (sub === 'add') {
+            if (!flags.category || !flags.scope || !flags.summary) {
+              throw new Error(
+                'Usage: memory add --category <pattern|gotcha|convention|constraint> --scope <path> --summary "<text>" [--evidence "<text>"] [--json]',
+              );
+            }
+            const [id] = memory.addObservations([
+              {
+                category: flags.category,
+                scope: flags.scope,
+                summary: flags.summary,
+                evidence: flags.evidence || null,
+              },
+            ]);
+            const record = {
+              id,
+              category: flags.category,
+              scope: flags.scope,
+              summary: flags.summary,
+              evidence: flags.evidence || null,
+            };
+            emit(record, `[OK] Observation ${id} recorded (${flags.category}) for ${flags.scope}`);
+            return 0;
+          } else if (sub === 'search') {
+            const query = positionals[1];
+            if (!query) {
+              throw new Error('Usage: memory search <query> [--scope <path>] [--limit <n>] [--json]');
+            }
+            const limit = flags.limit ? Number(flags.limit) : 20;
+            const results = memory.searchContext(query, { scope: flags.scope ?? null, limit });
+            emit(
+              { query, results },
+              results.length
+                ? results.map(r => `[${r.source_type}] ${r.source_id}: ${r.content}`).join('\n')
+                : 'No results found.',
+            );
+            return 0;
+          } else if (sub === 'list') {
+            const limit = flags.limit ? Number(flags.limit) : 20;
+            const observations = memory.listObservations({
+              category: flags.category ?? null,
+              scope: flags.scope ?? null,
+              limit,
+            });
+            emit(
+              { observations },
+              observations.length
+                ? observations
+                    .map(
+                      o => `[${o.category}] ${o.scope}: ${o.summary}${o.evidence ? ` (evidence: ${o.evidence})` : ''}`,
+                    )
+                    .join('\n')
+                : 'No observations found.',
+            );
+            return 0;
+          } else {
+            throw new Error(`Unknown memory subcommand: ${sub}. Valid: add, search, list.`);
+          }
+        } finally {
+          memory.close();
+        }
+      }
+      case 'mcp': {
+        await runMcpServer({ root: workingDir, version: await getCliVersion() });
         return 0;
       }
       default:

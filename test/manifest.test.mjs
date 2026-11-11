@@ -1,11 +1,12 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fillSpec } from '../test-support/fixtures.mjs';
 import { verifySpec } from '../src/verification.mjs';
 import { initManifest, loadManifest, addSpec, updateSpecStatus, getActiveSpec } from '../src/manifest.mjs';
+import { FIT_PRESETS } from '../src/fit.mjs';
 
 describe('Manifest State Machine', () => {
   let tempDir;
@@ -86,6 +87,7 @@ describe('Manifest State Machine', () => {
 
     await assert.rejects(updateSpecStatus(tempDir, '001', 'COMPLETED'), /Cannot verify\/complete/);
     await fillSpec(tempDir, { slug: '001-fix-login', type: 'bugfix' });
+    await writeFile(join(tempDir, 'specs', '001-fix-login', 'fit.json'), JSON.stringify(FIT_PRESETS.full));
     await verifySpec(tempDir, '001', { manual: 'Reviewed the fixture greeting contract with explicit evidence.' });
     const updated = await updateSpecStatus(tempDir, '001', 'COMPLETED');
     assert.equal(updated.status, 'COMPLETED');

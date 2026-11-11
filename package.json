@@ -1,7 +1,7 @@
 {
   "name": "omni-spec",
-  "version": "0.8.1",
-  "description": "Universal Spec-Driven Development (SDD) framework and zero-dependency CLI for agentic AI coding.",
+  "version": "0.9.0",
+  "description": "Universal Agentic Engineering Engine and zero-dependency CLI: polyglot cartography, external SQLite memory, proportional contracts, and cryptographic verification gates.",
   "type": "module",
   "main": "src/cli.mjs",
   "repository": {
@@ -21,8 +21,9 @@
     "omni-spec": "bin/omni-spec.mjs"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1",
+    "test": "node --test --test-concurrency=1 --import ./test-support/isolated-home.mjs \"test/**/*.test.mjs\"",
     "test:coverage": "node scripts/coverage.mjs",
+    "bench:cartography": "node scripts/bench-cartography.mjs",
     "lint": "biome ci .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -32,7 +33,8 @@
     "release:pack": "node scripts/release-assets.mjs",
     "pack:dev": "node scripts/pack-dev.mjs",
     "build:skills": "node scripts/build-plugin-skills.mjs",
-    "sync:plugin": "node scripts/sync-plugin.mjs"
+    "sync:plugin": "node scripts/sync-plugin.mjs",
+    "sync:page": "node scripts/sync-page.mjs"
   },
   "files": [
     "bin/",
@@ -47,17 +49,17 @@
     "docs/ONBOARDING.md",
     "docs/STANDARDS.md",
     "docs/COMPATIBILITY.md",
-    "docs/RELEASING.md",
-    "docs/ROADMAP.md",
-    "docs/locking.md",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
     "docs/DELIVERY.md",
-    "docs/INSTALLATION.md",
-    "docs/PILOT.md"
+    "docs/INSTALLATION.md"
   ],
   "keywords": [
+    "agentic-engineering",
+    "agentic-engine",
+    "cartography",
+    "verification-gates",
     "spec-driven-development",
     "sdd",
     "spec-kit",

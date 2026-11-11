@@ -26,8 +26,8 @@ describe('Specification Focus & List Engine', () => {
   });
 
   test('focusSpec switches active spec and updates active_archetype atomically', async () => {
-    const spec1 = await createSpec(tempDir, 'feature', 'user-login');
-    const spec2 = await createSpec(tempDir, 'bugfix', 'session-leak');
+    const spec1 = await createSpec(tempDir, 'feature', 'user-login', { full: true });
+    const spec2 = await createSpec(tempDir, 'bugfix', 'session-leak', { full: true });
 
     let manifest = await loadManifest(tempDir);
     assert.equal(manifest.active_spec, spec2.slug);
@@ -58,8 +58,8 @@ describe('Specification Focus & List Engine', () => {
   });
 
   test('listSpecs returns all specifications and active marker', async () => {
-    await createSpec(tempDir, 'feature', 'feat-alpha');
-    await createSpec(tempDir, 'debt', 'clean-imports');
+    await createSpec(tempDir, 'feature', 'feat-alpha', { full: true });
+    await createSpec(tempDir, 'debt', 'clean-imports', { full: true });
 
     const result = await listSpecs(tempDir);
     assert.equal(result.project, 'FocusTestApp');
@@ -68,8 +68,8 @@ describe('Specification Focus & List Engine', () => {
   });
 
   test('CLI focus and list commands run successfully', async () => {
-    await createSpec(tempDir, 'feature', 'cli-feature');
-    await createSpec(tempDir, 'bugfix', 'cli-bugfix');
+    await createSpec(tempDir, 'feature', 'cli-feature', { full: true });
+    await createSpec(tempDir, 'bugfix', 'cli-bugfix', { full: true });
 
     const originalLog = console.log;
     const output = [];

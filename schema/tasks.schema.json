@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OmniSpec task breakdown",
+  "description": "Canonical task state of a specification. tasks.md is generated from this file.",
+  "type": "object",
+  "required": ["schemaVersion", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "enum": [1]
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,39}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "status": {
+            "enum": ["pending", "in_progress", "done"]
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^AC-[0-9]+$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

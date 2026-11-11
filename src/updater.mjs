@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { loadManifest, saveManifest, withManifestLock, MANIFEST_SCHEMA_URL } from './manifest.mjs';
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
-import { packageEntries } from './assets.mjs';
+import { packageEntries, pluginEntries } from './assets.mjs';
 import { syncManagedFiles, checkManagedFiles, loadRegistry, managedSection, safePath } from './managed.mjs';
 import { ensureProjectContext, buildConstitutionContent } from './generator.mjs';
 import { join } from 'node:path';
@@ -89,7 +89,8 @@ export async function checkProjectVersion(baseDir, options = {}) {
     };
   const integrity = await checkManagedFiles(baseDir);
   const isOutdated = manifest.version !== cliVersion;
-  const isPlugin = manifest.agent === 'plugin';
+  // Plugin projects have no local runtime to keep in sync.
+  const isPlugin = normalizeAgents(manifest.agent).includes('plugin');
   const healthy = !isOutdated && (isPlugin || (integrity.tracked > 0 && !integrity.changed.length));
   const registered = Object.keys((await loadRegistry(baseDir)).files).filter(name => name.startsWith(RUNTIME));
   const absent = new Set(integrity.missing);
@@ -168,12 +169,15 @@ export async function updateProject(baseDir, options = {}) {
     const ignoreAdded = await runtimeIgnoreAdded(baseDir);
     const prune = RUNTIME;
 
+    const isPlugin = normalizeAgents(options.agent || manifest.agent).includes('plugin');
     const entries = [
-      ...(await packageEntries()).map(entry =>
-        replaceRuntime && entry.path.startsWith(RUNTIME) ? { ...entry, replace: true } : entry,
-      ),
+      ...(isPlugin
+        ? pluginEntries()
+        : (await packageEntries()).map(entry =>
+            replaceRuntime && entry.path.startsWith(RUNTIME) ? { ...entry, replace: true } : entry,
+          )),
       ...integrationEntries({ ...manifest, version: cliVersion, agent }),
-      { path: CONSTITUTION_REFERENCE, content: reference },
+      ...(isPlugin ? [] : [{ path: CONSTITUTION_REFERENCE, content: reference }]),
     ];
     const assets = await syncManagedFiles(baseDir, entries, { ...options, prune });
     const notices = [];
@@ -219,7 +223,7 @@ export async function updateProject(baseDir, options = {}) {
       notices,
     };
     if (options.dryRun) return result;
-    await ensureProjectContext(baseDir);
+    await ensureProjectContext(baseDir, undefined, manifest.language);
     manifest.version = cliVersion;
     manifest.schemaVersion = 1;
     manifest.$schema = MANIFEST_SCHEMA_URL;

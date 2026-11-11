@@ -25,7 +25,9 @@ describe('Regression R02 & R13: Concurrency & Lock Integrity', () => {
     await scaffoldProject(tempDir, { projectName: 'ConcurrentApp', profile: 'general' });
 
     const totalSpecs = 8;
-    const promises = Array.from({ length: totalSpecs }, (_, i) => createSpec(tempDir, 'feature', `parallel-task-${i}`));
+    const promises = Array.from({ length: totalSpecs }, (_, i) =>
+      createSpec(tempDir, 'feature', `parallel-task-${i}`, { full: true }),
+    );
 
     const results = await Promise.all(promises);
 

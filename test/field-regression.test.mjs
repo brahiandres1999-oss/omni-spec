@@ -55,7 +55,7 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
     const { mkdir } = await import('node:fs/promises');
     await mkdir(subDir, { recursive: true });
 
-    const code = await runCli(['create', 'feature', 'subdir-created'], subDir);
+    const code = await runCli(['create', 'feature', 'subdir-created', '--full'], subDir);
     assert.equal(code, 0);
 
     // The spec must land in the ROOT project, not in a nested structure.
@@ -71,7 +71,7 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
   });
 
   test('R15: create without any OmniSpec project fails loudly and leaves the directory clean', async () => {
-    const code = await runCli(['create', 'feature', 'ghost-spec'], tempDir);
+    const code = await runCli(['create', 'feature', 'ghost-spec', '--full'], tempDir);
     assert.equal(code, 1);
     assert.equal(await pathExists(join(tempDir, 'CONSTITUTION.md')), false);
     assert.equal(
@@ -157,11 +157,11 @@ describe('Regression R14-R21: Real-World Field Adoption', () => {
 
   test('R19: Spanish diacritics are transliterated into readable slugs', async () => {
     await scaffoldProject(tempDir, { projectName: 'SlugProject' });
-    const spec = await createSpec(tempDir, 'feature', 'Gestión Usuarios Ñandú');
+    const spec = await createSpec(tempDir, 'feature', 'Gestión Usuarios Ñandú', { full: true });
     assert.equal(spec.slug, '001-gestion-usuarios-nandu');
 
     // Names with no ASCII survivors fall back instead of producing an empty slug.
-    const fallback = await createSpec(tempDir, 'feature', '日本語');
+    const fallback = await createSpec(tempDir, 'feature', '日本語', { full: true });
     assert.match(fallback.slug, /^002-spec$/);
   });
 

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
 import { auditSpec } from '../src/auditor.mjs';
 import { verifySpec, completeSpec } from '../src/verification.mjs';
+import { recordContext } from '../src/project-state.mjs';
 import { runCli } from '../src/cli.mjs';
 import { fillSpec } from '../test-support/fixtures.mjs';
 
@@ -13,13 +14,14 @@ let root;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omni-delivery-'));
   await scaffoldProject(root, { agent: 'generic' });
+  await recordContext(root);
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 test('risk-aware light bugfix closes without deleting optional templates and escalates again on risk', async () => {
-  const spec = await createSpec(root, 'bugfix', 'small-regression');
+  const spec = await createSpec(root, 'bugfix', 'small-regression', { full: true });
   const directory = join(root, 'specs', spec.slug);
   await writeFile(
     join(directory, 'bug.md'),
@@ -73,7 +75,7 @@ test('risk-aware light bugfix closes without deleting optional templates and esc
 test('CLI module checks, closure, contract activation and reinitialization preserve effective decisions', async () => {
   await mkdir(join(root, 'api'));
   await writeFile(join(root, 'api/value.cjs'), 'module.exports = 42;');
-  const spec = await createSpec(root, 'feature', 'module-contract');
+  const spec = await createSpec(root, 'feature', 'module-contract', { full: true });
   await fillSpec(root, spec);
   await mkdir(join(root, 'specs/.omni/requests'), { recursive: true });
   await writeFile(
@@ -142,7 +144,7 @@ test('CLI module checks, closure, contract activation and reinitialization prese
 });
 
 test('standard bugfix requires a fix design but does not inflate it with a task checklist', async () => {
-  const spec = await createSpec(root, 'bugfix', 'new-regression-design');
+  const spec = await createSpec(root, 'bugfix', 'new-regression-design', { full: true });
   const directory = join(root, 'specs', spec.slug);
   await writeFile(
     join(directory, 'bug.md'),

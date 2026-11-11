@@ -34,9 +34,21 @@ afterEach(async () => {
 async function project(gates = 'node check.mjs') {
   await scaffoldProject(root, { qualityGates: gates });
   await writeFile(join(root, 'check.mjs'), 'process.exit(0);\n');
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   return spec;
+}
+
+async function editState(mutate) {
+  const { openMemory, memoryPath } = await import('../src/memory.mjs');
+  const memory = openMemory(memoryPath(root));
+  try {
+    const state = memory.getProjectState();
+    mutate(state);
+    memory.setProjectState(state);
+  } finally {
+    memory.close();
+  }
 }
 
 function run(args, input) {
@@ -153,11 +165,10 @@ test('a legacy full-tree context baseline is compared only on current context in
   await project();
   await writeFile(join(root, 'src.mjs'), 'export const x = 1;');
   await recordContext(root);
-  const path = join(root, 'specs', 'project-state.json');
-  const state = JSON.parse(await readFile(path, 'utf8'));
-  delete state.context.scope;
-  state.context.inputs['src.mjs'] = 'legacy-hash-of-source';
-  await writeFile(path, JSON.stringify(state));
+  await editState(state => {
+    delete state.context.scope;
+    state.context.inputs['src.mjs'] = 'legacy-hash-of-source';
+  });
   const freshness = await contextFreshness(root);
   assert.equal(freshness.status, 'CURRENT');
   assert.equal(freshness.scope, 'LEGACY_FULL_SNAPSHOT');
@@ -165,6 +176,7 @@ test('a legacy full-tree context baseline is compared only on current context in
 
 test('agent UI evidence stays valid across later sessions and accepts second-precision times', async () => {
   const spec = await project();
+  await recordContext(root);
   await writeFile(
     join(spec.specDir, 'spec.md'),
     '# UI\n## 0. Clarification\nThe user approved the mobile agenda layout and sample data.\n## Acceptance Criteria\nAC-01 [visual]: no horizontal overflow at 375px.\n## Non-Goals\nNo redesign.\n',
@@ -300,8 +312,10 @@ test('clean preserves user skills and backups, removes only unmodified managed c
     preview.toRemove.every(
       name =>
         name.startsWith('specs/.omni/runtime/') ||
+        name.startsWith('specs/_templates/') ||
         name.startsWith('.agents/skills/omni-') ||
-        name === '.agents/agents/omni-auditor.md',
+        name === '.agents/agents/omni-auditor.md' ||
+        name === 'AGENTS.md',
     ),
   );
   await cleanProject(root);
@@ -356,6 +370,7 @@ test('the init wizard accepts piped answers that arrive before each prompt', asy
 
 test('fit explains the exact file and schema for an unclassified spec', async () => {
   const spec = await project();
+  await rm(join(root, 'specs', spec.slug, 'fit.json'));
   const result = await run(['fit', spec.id]);
   assert.equal(result.code, 0);
   assert.ok(result.stdout.includes(`specs/${spec.slug}/fit.json`));
@@ -445,11 +460,10 @@ test('legacy baselines detect deleted context inputs and ignore never-hashed spe
   const context = join(root, 'specs', 'project-context.md');
   await writeFile(context, (await readFile(context, 'utf8')) + '\nSee [ADR](adr/001.md).\n');
   await recordContext(root);
-  const path = join(root, 'specs', 'project-state.json');
-  const state = JSON.parse(await readFile(path, 'utf8'));
-  delete state.context.scope;
-  delete state.context.inputs['specs/adr/001.md'];
-  await writeFile(path, JSON.stringify(state));
+  await editState(state => {
+    delete state.context.scope;
+    delete state.context.inputs['specs/adr/001.md'];
+  });
   assert.equal((await contextFreshness(root)).status, 'CURRENT');
   await rm(join(root, 'Dockerfile'));
   assert.deepEqual((await contextFreshness(root)).changed, ['Dockerfile']);
@@ -462,8 +476,7 @@ test('citing OmniSpec state files never leaves context permanently stale', async
   const context = join(root, 'specs', 'project-context.md');
   await writeFile(
     context,
-    (await readFile(context, 'utf8')) +
-      `\n[state](project-state.json) [manifest](manifest.json) [record](${spec.slug}/verification.json)\n`,
+    (await readFile(context, 'utf8')) + `\n[manifest](manifest.json) [record](${spec.slug}/verification.json)\n`,
   );
   await recordContext(root);
   assert.equal((await contextFreshness(root)).status, 'CURRENT');
@@ -534,11 +547,10 @@ test('legacy baselines do not report files that are merely ignored today as dele
   await mkdir(join(root, 'vendor', 'lib'), { recursive: true });
   await writeFile(join(root, 'vendor', 'lib', 'composer.json'), '{}');
   await recordContext(root);
-  const path = join(root, 'specs', 'project-state.json');
-  const state = JSON.parse(await readFile(path, 'utf8'));
-  delete state.context.scope;
-  state.context.inputs['vendor/lib/composer.json'] = 'hash-from-a-full-tree-baseline';
-  await writeFile(path, JSON.stringify(state));
+  await editState(state => {
+    delete state.context.scope;
+    state.context.inputs['vendor/lib/composer.json'] = 'hash-from-a-full-tree-baseline';
+  });
   assert.equal((await contextFreshness(root)).status, 'CURRENT');
 });
 

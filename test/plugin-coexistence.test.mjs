@@ -367,3 +367,64 @@ describe('plugin coexistence and duplication diagnosis', () => {
     }
   });
 });
+
+describe('spec 028: plugin version in diagnosis and status', () => {
+  let home;
+  let project;
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'omni-plugin-version-'));
+    project = join(home, 'project');
+    await mkdir(project, { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+
+  async function plugin(version) {
+    const dir = join(home, '.gemini', 'config', 'plugins', 'omni-spec');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'plugin.json'), JSON.stringify({ name: 'omni-spec' }));
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'omni-spec', version }));
+    return dir;
+  }
+
+  function cli(args) {
+    const result = spawnSync(process.execPath, [bin, ...args], {
+      cwd: project,
+      encoding: 'utf8',
+      timeout: 15000,
+      windowsHide: true,
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+    });
+    assert.ifError(result.error);
+    return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+  }
+
+  test('AC-01: coexistence reports the plugin and project versions and whether they match', async () => {
+    await scaffoldProject(project, { agent: 'antigravity' });
+    const projectVersion = JSON.parse(await readFile(join(project, 'specs/manifest.json'), 'utf8')).version;
+    const older = await detectPluginCoexistence(project, { targetDir: await plugin('0.7.0') });
+    assert.equal(older.pluginVersion, '0.7.0');
+    assert.equal(older.projectVersion, projectVersion);
+    assert.equal(older.versionMatches, false);
+    assert.ok(older.message.includes(`Plugin global 0.7.0 y proyecto ${projectVersion}`), older.message);
+    const same = await detectPluginCoexistence(project, { targetDir: await plugin(projectVersion) });
+    assert.equal(same.versionMatches, true);
+    assert.match(same.message, /igual que el proyecto/);
+  });
+
+  test('AC-02: status --json warns PLUGIN_VERSION_MISMATCH only when versions differ', async () => {
+    await scaffoldProject(project, { agent: 'antigravity' });
+    await plugin('0.7.0');
+    const warnings = JSON.parse(cli(['status', '--json']).stdout).progress.warnings;
+    const mismatch = warnings.find(item => item.code === 'PLUGIN_VERSION_MISMATCH');
+    assert.ok(mismatch, JSON.stringify(warnings));
+    assert.equal(mismatch.pluginVersion, '0.7.0');
+    const doctor = cli(['doctor']);
+    assert.match(doctor.stdout, /Plugin global 0\.7\.0/);
+    const projectVersion = JSON.parse(await readFile(join(project, 'specs/manifest.json'), 'utf8')).version;
+    await plugin(projectVersion);
+    const again = JSON.parse(cli(['status', '--json']).stdout).progress.warnings;
+    assert.ok(!again.some(item => item.code === 'PLUGIN_VERSION_MISMATCH'), JSON.stringify(again));
+  });
+});
