@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, unlink, readdir, stat, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink, readdir, stat, rm, rmdir } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -113,10 +113,19 @@ async function participants(lockPath) {
 
 export async function acquireLock(lockPath, maxRetries = 150, delayMs = 50) {
   lockPath = resolve(lockPath);
-  await prepareLockDirectory(lockPath);
   const name = `${process.pid}-${randomUUID()}`;
   const claimPath = join(lockPath, name);
-  await mkdir(claimPath); // Atomic publication of both identity and choosing state.
+  // The lock folder is removed when the last holder leaves (see releaseLock); a claim that loses that race
+  // finds no folder and prepares it again.
+  for (let attempt = 0; ; attempt++) {
+    await prepareLockDirectory(lockPath);
+    try {
+      await mkdir(claimPath); // Atomic publication of both identity and choosing state.
+      break;
+    } catch (error) {
+      if (error.code !== 'ENOENT' || attempt >= 5) throw error;
+    }
+  }
   try {
     // Lamport bakery ordering: announce choosing, choose max+1, publish ticket,
     // then wait for choosing peers and all smaller (ticket, UUID) pairs.
@@ -155,6 +164,13 @@ export async function releaseLock(lockPath, lease) {
   }
   await removeClaim(lease.lockPath, lease.name);
   leases.delete(lease);
+  // Leave no empty lock folder behind in the project. rmdir only removes an empty folder, so a waiting
+  // claim keeps it.
+  try {
+    await rmdir(lease.lockPath);
+  } catch (error) {
+    if (!['ENOTEMPTY', 'EEXIST', 'ENOENT', 'EPERM', 'EBUSY'].includes(error.code)) throw error;
+  }
 }
 
 function lockLabel(lockPath) {

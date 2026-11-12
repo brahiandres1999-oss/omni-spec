@@ -54,7 +54,9 @@ En el artefacto principal cada criterio lleva ID y tipo: `AC-01 [functional]: ..
       "status": "passed",
       "method": "automated",
       "checkIds": ["api-test"],
-      "evidence": "AppointmentServiceTest.rejectsOverlap: dos citas solapadas devuelven 409; limitado a la base H2 de prueba."
+      "evidence": "AppointmentServiceTest.rejectsOverlap: dos citas solapadas devuelven 409; limitado a la base H2 de prueba.",
+      "exercises": "Dos hilos reservan el mismo horario contra H2 con la transacción real del servicio.",
+      "limits": "No ejercita los bloqueos de PostgreSQL de producción."
     },
     {
       "id": "AC-02",
@@ -85,6 +87,8 @@ En el artefacto principal cada criterio lleva ID y tipo: `AC-01 [functional]: ..
 
 - `status`: passed solo cuando la evidencia lo sostiene; si no, pending, failed o blocked.
 - `method`: automated (requiere `checkIds`), manual, inspection o decision.
+- `exercises`: qué ejecuta de verdad la prueba (hilos reales, base de datos, mocks). Obligatorio en criterios automáticos cuando `fit.json` declara riesgo `high` o `critical`.
+- `limits`: lo que la evidencia no demuestra. Opcional; si existe, `status`, `verify` y `complete` muestran el criterio como aprobado con límites.
 - Criterios visual, interaction y accessibility: un check `kind: "ui"` o observaciones reales. Leer CSS/JSX no basta.
 - `artifact`: archivo local dentro de la carpeta de la spec.
 - Observaciones de un agente: necesitan una sesión registrada con `render` disponible antes de observar. Usa su `sessionId` o una hora posterior a ese registro. Las sesiones anteriores se conservan, así que una evidencia válida no caduca por registrar una sesión nueva.

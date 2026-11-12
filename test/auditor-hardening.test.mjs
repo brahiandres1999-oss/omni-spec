@@ -23,7 +23,7 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
 
   test('blocks feature spec when keywords are hidden only inside HTML comments', async () => {
     await scaffoldProject(tempDir, { projectName: 'AuditApp' });
-    const spec = await createSpec(tempDir, 'feature', 'empty-bypass');
+    const spec = await createSpec(tempDir, 'feature', 'empty-bypass', { full: true });
 
     // Case 1: Spec has only HTML comments -> rejected as empty
     await writeFile(
@@ -53,7 +53,7 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
 
   test('blocks feature spec when tasks.md has zero checkbox tasks', async () => {
     await scaffoldProject(tempDir, { projectName: 'AuditApp' });
-    const spec = await createSpec(tempDir, 'feature', 'no-tasks');
+    const spec = await createSpec(tempDir, 'feature', 'no-tasks', { full: true });
 
     await writeFile(
       join(spec.specDir, 'spec.md'),
@@ -76,7 +76,7 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
     await scaffoldProject(tempDir, { projectName: 'AuditApp' });
 
     // 1. Bugfix with empty files
-    const bugSpec = await createSpec(tempDir, 'bugfix', 'crash-fix');
+    const bugSpec = await createSpec(tempDir, 'bugfix', 'crash-fix', { full: true });
     await writeFile(join(bugSpec.specDir, 'bug.md'), '', 'utf-8');
     await writeFile(join(bugSpec.specDir, 'rca.md'), '', 'utf-8');
     await writeFile(join(bugSpec.specDir, 'fix.md'), '', 'utf-8');
@@ -86,7 +86,7 @@ describe('Regression R03 & R04: Auditor Hardening against Bypasses and Empty Fil
     assert.ok(bugReport.errors.some(e => e.includes('bug.md is empty')));
 
     // 2. Tech-debt where an artifact is a directory instead of a regular file
-    const debtSpec = await createSpec(tempDir, 'debt', 'remove-legacy');
+    const debtSpec = await createSpec(tempDir, 'debt', 'remove-legacy', { full: true });
     await rm(join(debtSpec.specDir, 'audit.md'), { force: true });
     await mkdir(join(debtSpec.specDir, 'audit.md')); // Create directory with filename
 

@@ -2,7 +2,7 @@
 
 /**
  * OmniSpec CLI Entrypoint
- * Universal Spec-Driven Development Framework
+ * Universal Agentic Engineering Engine
  */
 
 import { runCli } from '../src/cli.mjs';

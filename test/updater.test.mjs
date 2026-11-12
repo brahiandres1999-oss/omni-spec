@@ -130,7 +130,7 @@ describe('OmniSpec Project Updater & Migration Engine', () => {
 
   test('same-version development migration refreshes owned skills and preserves completed feature evidence', async () => {
     await scaffoldProject(tempDir, { agent: 'antigravity', qualityGates: '' });
-    const spec = await createSpec(tempDir, 'feature', 'existing-work');
+    const spec = await createSpec(tempDir, 'feature', 'existing-work', { full: true });
     await fillSpec(tempDir, spec);
     await verifySpec(tempDir, spec.id, {
       manual: 'Reviewed the existing deterministic feature in this migration fixture.',

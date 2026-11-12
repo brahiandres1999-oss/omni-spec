@@ -46,7 +46,7 @@ describe('Regression R07, R09 & R10: Wizard Configuration & Profile Security Que
       stack: 'Python',
     });
 
-    const spec = await createSpec(tempDir, 'feature', 'fund-transfer');
+    const spec = await createSpec(tempDir, 'feature', 'fund-transfer', { full: true });
     const specContent = await readFile(join(spec.specDir, 'spec.md'), 'utf-8');
 
     // Verify specialized fintech questions are injected in Section 3

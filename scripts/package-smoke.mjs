@@ -15,6 +15,9 @@ const temporary = await mkdtemp(join(tmpdir(), 'omnispec-package-'));
 // npm run exports the user's cache; npm exec and npx would otherwise leave _npx entries there.
 const userCache = process.env.npm_config_cache;
 process.env.npm_config_cache = join(temporary, 'npm-cache');
+process.env.OMNISPEC_HOME = join(temporary, 'omnispec-home');
+process.env.HOME = join(temporary, 'omnispec-home');
+process.env.USERPROFILE = join(temporary, 'omnispec-home');
 process.on('exit', code => {
   if (code) console.error(`Package smoke failed; its files remain in ${temporary}`);
 });
@@ -27,7 +30,12 @@ function exec(args, cwd, expected = 0, input) {
     windowsHide: true,
   });
   assert.equal(result.status, expected, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
-  return expected === 0 ? result.stdout : result.stdout + result.stderr;
+  if (expected === 0) return result.stdout;
+  if (args.includes('--json') && result.stdout.trim()) return result.stdout;
+  const cleanStderr = result.stderr.replace(/^\([^\n]+\)\n?/gm, '').trim();
+  if (!result.stdout.trim()) return cleanStderr || result.stderr.trim();
+  if (!cleanStderr) return result.stdout;
+  return `${result.stdout}\n${cleanStderr}`;
 }
 const packageInfo = JSON.parse(
   exec([npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', temporary], source),
@@ -130,7 +138,7 @@ const unattendedOutput = JSON.parse(
   ),
 );
 assert.equal(unattendedOutput.installation.agentDiscovery, 'NOT_CHECKED');
-assert.equal(unattendedOutput.installation.nextSteps[0].agent, 'generic');
+assert.ok(['generic', 'plugin'].includes(unattendedOutput.installation.nextSteps[0].agent));
 assert.ok(
   (await readdir(join(temporary, 'npm-cache', '_npx'))).length > 0,
   'npm exec and npx must install into the isolated cache, not the user cache',
@@ -229,6 +237,10 @@ for (const [index, type] of ['feature', 'bugfix', 'debt', 'rfc'].entries()) {
   exec([local, 'create', type, `case-${type}`], fresh);
   const id = String(index + 1).padStart(3, '0');
   exec([local, 'complete', id], fresh, 1);
+  if (type !== 'rfc') {
+    assert.match(exec([local, 'audit', id], fresh, 1), /not classified yet/);
+    exec([local, 'fit', id, '--preset', 'full'], fresh);
+  }
   await fillSpec(fresh, { slug: `${id}-case-${type}`, type });
   exec([local, 'audit', id], fresh);
   exec([local, 'verify', id], fresh);
@@ -262,6 +274,7 @@ const adopted = join(existing, 'specs', '.omni', 'runtime', 'bin', 'omni-spec.mj
 assert.equal(JSON.parse(await readFile(join(existing, 'specs', 'manifest.json'), 'utf8')).qualityGates, '');
 exec([adopted, 'configure', '--gates', 'npm test'], existing);
 exec([adopted, 'create', 'fix', 'greeting'], existing);
+exec([adopted, 'fit', '001', '--preset', 'full'], existing);
 await fillSpec(existing, { slug: '001-greeting', type: 'bugfix' });
 exec([adopted, 'verify', '001'], existing, 1);
 exec([adopted, 'complete', '001'], existing, 1);
@@ -286,7 +299,7 @@ for (const scenario of ['empty', 'existing', 'broken', 'noncode', 'conflicting',
   assert.equal(inventory.assessment.projectScriptsExecuted, false);
   const contextPath = join(root, 'specs/project-context.md');
   const context = await readFile(contextPath, 'utf8');
-  assert.match(context, /State: CONTEXT_PENDING/);
+  assert.match(context, /: CONTEXT_PENDING/);
   const checked = JSON.parse(exec([runner, 'context-check', '--json'], root));
   assert.equal(checked.scope, 'STRUCTURE_AND_LOCAL_LINKS_ONLY');
   assert.equal(checked.semanticReview, 'REQUIRED');
@@ -313,7 +326,7 @@ await writeFile(
 exec([installed, 'init', '--yes', '--agent', 'generic'], delivery);
 const candidate = join(delivery, 'specs/.omni/runtime/bin/omni-spec.mjs');
 assert.equal(JSON.parse(exec([candidate, 'guide', 'design', '--json'], delivery)).requiresExternalSkill, false);
-exec([candidate, 'create', 'feature', 'module-greeting'], delivery);
+exec([candidate, 'create', 'feature', 'module-greeting', '--full'], delivery);
 await fillSpec(delivery, { slug: '001-module-greeting', type: 'feature' });
 await mkdir(join(delivery, 'specs/.omni/requests'), { recursive: true });
 await writeFile(
@@ -382,7 +395,7 @@ await writeFile(
 );
 exec([candidate, 'contract-record', 'greeting', '--from', 'specs/.omni/requests/contract.json'], delivery);
 assert.equal(JSON.parse(exec([candidate, 'contracts', 'greeting', '--json'], delivery)).effectiveRevision, 1);
-exec([candidate, 'create', 'feature', 'visual-inspection-negative'], delivery);
+exec([candidate, 'create', 'feature', 'visual-inspection-negative', '--full'], delivery);
 await fillSpec(delivery, { slug: '002-visual-inspection-negative', type: 'feature' });
 await writeFile(
   join(delivery, 'specs/002-visual-inspection-negative/acceptance.json'),

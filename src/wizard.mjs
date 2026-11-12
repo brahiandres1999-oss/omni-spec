@@ -10,6 +10,7 @@ import { normalizeAgents } from './integrations.mjs';
 import { getPluginStatus } from './plugin-manager.mjs';
 import { initText } from './installation.mjs';
 import { supportsTerminalUI, TerminalInstaller } from './terminal-ui.mjs';
+import { gateProblems } from './checks.mjs';
 
 const STACK_PRESETS = [
   { label: 'Node.js / TypeScript', doc: 'TSDoc', gates: 'npm test\nnpm run lint\nnpm run build' },
@@ -156,6 +157,8 @@ export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
     );
   if ((await lstat(directory)).isSymbolicLink()) throw new Error('Use a regular project directory, not a symlink.');
   if (cliOptions.lang !== undefined) initText(cliOptions.lang);
+  const gateIssues = cliOptions.gates ? gateProblems(cliOptions.gates) : [];
+  if (gateIssues.length) throw new Error(`Gates not configured:\n${gateIssues.join('\n')}`);
   const existing = await loadManifest(directory);
   const detected = await detectProjectEnvironment(directory);
   const validProfiles = listProfiles().map(p => p.id);
@@ -185,7 +188,20 @@ export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
     process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || Intl.DateTimeFormat().resolvedOptions().locale;
   let language = cliOptions.lang || existing?.language || (/^es(?:[-_.]|$)/i.test(locale) ? 'es' : 'en');
   initText(language);
-  let agent = normalizeAgents(cliOptions.agent || cliOptions.ai || existing?.agent || 'generic').join(',');
+  const pluginStatus = await getPluginStatus({ targetDir: cliOptions.pluginDir });
+  const isNewProject = !existing;
+  const rawAgent = cliOptions.agent || cliOptions.ai || existing?.agent;
+  let defaultAgent = 'generic';
+  if (isNewProject && pluginStatus.installed) {
+    defaultAgent = 'plugin';
+  }
+  let agent = normalizeAgents(rawAgent || defaultAgent).join(',');
+  const norm = normalizeAgents(agent);
+  if (isNewProject && pluginStatus.installed && norm.length === 1 && norm[0] === 'antigravity') {
+    if (cliOptions.yes && !cliOptions.localSkills && cliOptions.agent !== 'antigravity-project') {
+      agent = 'plugin';
+    }
+  }
   const explicitStack = cliOptions.stack !== undefined;
   const stack = cliOptions.stack || existing?.stack || detected.detectedStack || 'Undecided';
   const preset = STACK_PRESETS[findPresetIndex(stack)];

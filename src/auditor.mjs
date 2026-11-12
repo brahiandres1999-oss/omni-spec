@@ -2,7 +2,9 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadManifest, getActiveSpec } from './manifest.mjs';
 import { safePath } from './managed.mjs';
-import { specRoute } from './fit.mjs';
+import { specRoute, UNCLASSIFIED_MESSAGE } from './fit.mjs';
+import { declaredVersions, contradictedVersions, describeContradiction } from './version-claims.mjs';
+import { parseJsonDocument, taskStats as typedTaskStats, validateTasks } from './tasks.mjs';
 
 function stripHtmlComments(content) {
   return content.replace(/<!--[\s\S]*?-->/g, '');
@@ -40,12 +42,118 @@ async function readRegularFile(filePath) {
   }
 }
 
+const DESIGN_FILE = { feature: 'plan.md', bugfix: 'fix.md', debt: 'migration-plan.md' };
+
+/**
+ * Automated criteria the design document does not trace to verification. A passing check can only
+ * stand for a criterion that the design maps to a test, so each criterion with method "automated"
+ * in acceptance.json must be named inside a section whose heading mentions verification.
+ * @param {string} specDir Absolute specification directory.
+ * @param {string} designFile Design document of the archetype (plan.md, fix.md, migration-plan.md).
+ * @returns {Promise<string[]>} Audit errors; empty when every automated criterion is traced.
+ * @throws {Error} acceptance.json exists but cannot be read for a reason other than absence.
+ */
+async function untracedAutomatedCriteria(specDir, designFile, issues = []) {
+  let acceptance;
+  try {
+    acceptance = JSON.parse((await readFile(join(specDir, 'acceptance.json'), 'utf8')).replace(/^﻿/, ''));
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    if (error instanceof SyntaxError) return ['acceptance.json is not valid JSON.'];
+    throw error;
+  }
+  const errors = [];
+  const automated = [];
+  const criteria = Array.isArray(acceptance?.criteria) ? acceptance.criteria : [];
+  criteria.forEach((item, index) => {
+    if (item?.method !== 'automated' || typeof item.id !== 'string') return;
+    if (item.tests === undefined) {
+      automated.push({ id: item.id, index });
+      return;
+    }
+    // Typed binding: the criterion names its tests, so no Markdown heading is consulted.
+    const tests = Array.isArray(item.tests) ? item.tests : null;
+    const bad = tests ? tests.findIndex(name => typeof name !== 'string' || !name.trim()) : -1;
+    if (!tests?.length || bad !== -1 || new Set(tests).size !== tests.length) {
+      const path = `acceptance.json $.criteria[${index}].tests${bad !== -1 ? `[${bad}]` : ''}`;
+      const message = `${item.id} "tests" must be a non-empty list of unique test names.`;
+      issues.push({ path, code: 'ACCEPTANCE_TESTS_INVALID', message });
+      errors.push(`ACCEPTANCE_TESTS_INVALID: ${path} ${message}`);
+    }
+  });
+  if (!automated.length) return errors;
+  // An unreadable design document is already reported by the archetype checks.
+  const { content } = await readRegularFile(join(specDir, designFile));
+  if (content === undefined) return errors;
+  const design = stripHtmlComments(content);
+  const sections = design.split(/^(?=#{2,3}\s)/m).filter(section => /^#{2,3}\s[^\n]*verif/i.test(section));
+  const unbound = item =>
+    issues.push({
+      path: `acceptance.json $.criteria[${item.index}]`,
+      code: 'ACCEPTANCE_UNBOUND',
+      message: `${item.id} is automated but neither lists its "tests" nor is traced by ${designFile}.`,
+    });
+  if (!sections.length) {
+    automated.forEach(unbound);
+    return [
+      ...errors,
+      `${designFile} has no Verification section; map each automated criterion (${automated.map(item => item.id).join(', ')}) to the test that exercises it.`,
+    ];
+  }
+  const text = sections.join('\n');
+  const untraced = automated.filter(
+    item => !new RegExp(`\\b${item.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(text),
+  );
+  untraced.forEach(unbound);
+  return [
+    ...errors,
+    ...untraced.map(
+      item =>
+        `${item.id} is automated in acceptance.json but the Verification section of ${designFile} names no test for it; add a test that exercises it or change its method.`,
+    ),
+  ];
+}
+
+/**
+ * Tests the design names in its verification sections that tasks.md never mentions. A test is a
+ * backticked identifier that looks like one: `SomethingTest.method`, `SomethingSpec.method` or a
+ * method starting with test/should; a qualified name counts as present when its method appears.
+ * @param {string} specDir Absolute specification directory.
+ * @param {string} designFile plan.md or migration-plan.md.
+ * @returns {Promise<string[]>} One audit error per planned test the task breakdown omits.
+ */
+async function plannedTestsMissingFromTasks(specDir, designFile, typedTasks = null) {
+  const design = (await readRegularFile(join(specDir, designFile))).content;
+  const tasks = typedTasks
+    ? typedTasks.tasks.map(item => item.title).join('\n')
+    : (await readRegularFile(join(specDir, 'tasks.md'))).content;
+  if (design === undefined || tasks === undefined) return [];
+  const verification = stripHtmlComments(design)
+    .split(/^(?=#{2,3}\s)/m)
+    .filter(section => /^#{2,3}\s[^\n]*verif/i.test(section))
+    .join('\n');
+  const tests = new Set();
+  for (const [, name] of verification.matchAll(/`([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)`/g)) {
+    const [owner, method] = name.includes('.') ? name.split('.') : [null, name];
+    if ((owner && /(Test|Tests|Spec)$/.test(owner)) || /^(test|should)[A-Z_]/.test(method)) tests.add(name);
+  }
+  return [...tests]
+    .filter(name => !tasks.includes(name.split('.').pop()))
+    .map(
+      name =>
+        `${name} is planned in the Verification section of ${designFile} but no task in ${typedTasks ? 'tasks.json' : 'tasks.md'} writes or runs it.`,
+    );
+}
+
 /**
  * Validates the completeness and health of a specification artifact
  * to prevent AI coding agents from jumping to code with underspecified requirements.
  *
  * @param {string} baseDir Project root directory
  * @param {string|null} specIdentifier Spec ID (e.g. '001') or slug, defaults to active spec
+ * A non-RFC spec without fit.json is invalid with only the classification error: no route is
+ * assumed, so no plan, task or root-cause artifact is reported as missing.
+ *
  * @returns {Promise<Object>} Audit result with blockers, warnings, and task progress
  */
 export async function auditSpec(baseDir, specIdentifier = null) {
@@ -78,8 +186,11 @@ export async function auditSpec(baseDir, specIdentifier = null) {
   const specDir = await safePath(baseDir, `specs/${spec.slug}`);
   const errors = [];
   const warnings = [];
+  const issues = [];
   let taskStats = { total: 0, completed: 0, pending: 0, percentage: 0 };
   const route = await specRoute(baseDir, spec);
+  if (!route && spec.type !== 'rfc')
+    return { valid: false, spec, specDir, errors: [UNCLASSIFIED_MESSAGE], warnings, issues, tasks: taskStats };
   if (route?.route === 'invalid') errors.push(`fit.json is invalid: ${route.errors.join(' ')}`);
   const needsPlan = !route || route.artifacts.plan;
   const needsTasks = !route || route.artifacts.tasks;
@@ -88,6 +199,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     if (!needsPlan) optionalArtifacts.add(spec.type === 'feature' ? 'plan.md' : 'migration-plan.md');
     if (!needsTasks) optionalArtifacts.add('tasks.md');
   }
+  let typedTasks = null;
   if (spec.type === 'bugfix' && route && route.route !== 'invalid') {
     if (!needsPlan) optionalArtifacts.add('rca.md');
     if (!needsPlan) optionalArtifacts.add('fix.md');
@@ -104,7 +216,32 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     };
   }
 
-  const presentOptional = [...optionalArtifacts].filter(f => files.includes(f));
+  // tasks.json is the canonical task state; tasks.md is then only its projection.
+  if (needsTasks && ['feature', 'debt'].includes(spec.type) && files.includes('tasks.json')) {
+    optionalArtifacts.add('tasks.md');
+    const raw = await readRegularFile(join(specDir, 'tasks.json'));
+    let data = null;
+    if (raw.error) errors.push(`tasks.json could not be read as a regular file: ${raw.error}`);
+    else
+      try {
+        data = parseJsonDocument(raw.content, 'tasks.json');
+      } catch (error) {
+        if (error.code !== 'JSON_PARSE_ERROR') throw error;
+        issues.push({ path: `tasks.json:${error.line}`, code: error.code, message: error.message });
+        errors.push(error.message);
+      }
+    if (data) {
+      const found = validateTasks(data).map(issue => ({ ...issue, path: `tasks.json ${issue.path}` }));
+      issues.push(...found);
+      errors.push(...found.map(issue => `${issue.code}: ${issue.path} ${issue.message}`));
+      if (!found.length) {
+        typedTasks = data;
+        taskStats = typedTaskStats(data);
+      }
+    }
+  }
+
+  const presentOptional = [...optionalArtifacts].filter(f => files.includes(f) && !(typedTasks && f === 'tasks.md'));
   if (presentOptional.length)
     warnings.push(
       `Spec fit route is ${route.route}: ${presentOptional.join(', ')} are not required and are not audited. Keep required decisions in the active contract or select a fuller route.`,
@@ -214,11 +351,11 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         }
       }
 
-      // 3. Audit tasks.md & progress
-      if (needsTasks) {
+      // 3. Audit tasks.md & progress (legacy specifications without tasks.json)
+      if (needsTasks && !optionalArtifacts.has('tasks.md')) {
         const tasksData = await getCleanMandatoryContent('tasks.md', 'feature');
         if (tasksData) {
-          taskStats = checklistStats(tasksData.clean);
+          taskStats = { ...checklistStats(tasksData.clean), source: 'tasks.md' };
 
           if (taskStats.total === 0) {
             errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
@@ -246,7 +383,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         errors.push('fix.md lacks substantive fix strategy and test verification details.');
       }
       if (fixData && needsTasks) {
-        taskStats = checklistStats(fixData.clean);
+        taskStats = { ...checklistStats(fixData.clean), source: 'fix.md' };
         if (!taskStats.total) errors.push('fix.md requires an actionable regression/fix task checklist.');
       }
       break;
@@ -265,10 +402,10 @@ export async function auditSpec(baseDir, specIdentifier = null) {
         }
       }
 
-      if (needsTasks) {
+      if (needsTasks && !optionalArtifacts.has('tasks.md')) {
         const debtTasksData = await getCleanMandatoryContent('tasks.md', 'tech-debt');
         if (debtTasksData) {
-          taskStats = checklistStats(debtTasksData.clean);
+          taskStats = { ...checklistStats(debtTasksData.clean), source: 'tasks.md' };
 
           if (taskStats.total === 0) {
             errors.push('tasks.md has no actionable checkbox tasks defined (- [ ]).');
@@ -290,6 +427,20 @@ export async function auditSpec(baseDir, specIdentifier = null) {
       errors.push(`Unknown specification archetype: "${spec.type}". Valid types are: feature, bugfix, debt, rfc.`);
   }
 
+  const declared = await declaredVersions(baseDir);
+  // Unreadable artifacts are already reported as errors above; only regular files are compared.
+  for (const file of files.filter(name => name.endsWith('.md') && !optionalArtifacts.has(name))) {
+    const { content } = await readRegularFile(join(specDir, file));
+    for (const item of content ? contradictedVersions(content, declared) : [])
+      warnings.push(describeContradiction(`specs/${spec.slug}/${file}`, item));
+  }
+
+  if (needsPlan && Object.hasOwn(DESIGN_FILE, spec.type) && files.includes(DESIGN_FILE[spec.type]))
+    errors.push(...(await untracedAutomatedCriteria(specDir, DESIGN_FILE[spec.type], issues)));
+
+  if (needsTasks && ['feature', 'debt'].includes(spec.type) && (typedTasks || files.includes('tasks.md')))
+    errors.push(...(await plannedTestsMissingFromTasks(specDir, DESIGN_FILE[spec.type], typedTasks)));
+
   const isValid = errors.length === 0;
 
   return {
@@ -298,6 +449,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
     specDir,
     errors,
     warnings,
+    issues,
     tasks: taskStats,
   };
 }

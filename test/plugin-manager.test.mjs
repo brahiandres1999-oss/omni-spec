@@ -100,8 +100,11 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
     const targetDir = join(tempDir, 'plugins', 'omni-spec');
     await installPlugin({ targetDir });
     const manifest = JSON.parse(await readFile(join(targetDir, 'plugin.json'), 'utf8'));
-    // The published schema is a closed object: unknown fields make `agy plugin validate --strict` fail.
-    assert.deepEqual(Object.keys(manifest).sort(), ['$schema', 'description', 'name']);
+    // The published schema is a closed object: unknown fields make `agy plugin validate --strict` fail,
+    // and agy 1.5.1 warns (failing --strict) when version is missing.
+    assert.deepEqual(Object.keys(manifest).sort(), ['$schema', 'description', 'name', 'version']);
+    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.equal(manifest.version, pkg.version);
     assert.match(manifest.name, /^[a-zA-Z0-9-_]+$/);
     assert.equal(manifest.$schema, 'https://antigravity.google/schemas/v1/plugin.json');
   });
@@ -153,7 +156,7 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
     );
     assert.equal(init.status, 0, init.stderr);
     assert.equal(JSON.parse(init.stdout).installation.integrity, 'PASSED');
-    await assertPackageFiles(join(projectDir, 'specs', '.omni', 'runtime'));
+    await assert.rejects(stat(join(projectDir, 'specs', '.omni', 'runtime')), { code: 'ENOENT' });
     assert.deepEqual((await loadManifest(projectDir)).ui, { components: 'shadcn' });
     for (const host of ['.agents', '.claude', '.codex', '.cursor', '.gemini', '.github', '.kilo', '.opencode'])
       await assert.rejects(stat(join(projectDir, host)), { code: 'ENOENT' });
@@ -182,7 +185,8 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
 
     const install = runCli(join(packageCopy, 'bin', 'omni-spec.mjs'), ['plugin', 'install', '--json'], tempDir, home);
     assert.equal(install.status, 1, install.stdout);
-    const { error } = JSON.parse(install.stderr);
+    const jsonIndex = install.stderr.indexOf('{');
+    const { error } = JSON.parse(jsonIndex >= 0 ? install.stderr.slice(jsonIndex) : install.stderr);
     assert.match(error, /Cannot copy assets into the Antigravity plugin: ENOENT/);
     assert.match(error, /Removed the incomplete plugin at /);
     const targetDir = join(home, '.gemini', 'config', 'plugins', 'omni-spec');
@@ -201,7 +205,7 @@ describe('OmniSpec Plugin Manager & Project Cleaner', () => {
       profile: 'general',
     });
 
-    await createSpec(projectDir, 'feature', 'demo-feature');
+    await createSpec(projectDir, 'feature', 'demo-feature', { full: true });
 
     // Confirm legacy elements existed
     await stat(join(projectDir, '.agents', 'skills'));

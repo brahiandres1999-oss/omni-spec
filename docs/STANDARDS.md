@@ -1,11 +1,11 @@
 # Fuentes y decisiones de interoperabilidad
 
-Consulta inicial: 2026-10-22. Actualizado: 2026-10-30 tras el lanzamiento de **OmniSpec 0.8.1 Estable**. Las fuentes de interoperabilidad son documentación oficial o especificaciones primarias. Las referencias de investigación y artículos se identifican por separado en las filas correspondientes. No son una certificación de OmniSpec ni garantizan el comportamiento de un modelo.
+Consulta inicial: 2026-10-22. Actualizado: 2026-11-11 tras el lanzamiento de **OmniSpec 0.9.0 Oficial Estable**. Las fuentes de interoperabilidad son documentación oficial o especificaciones primarias. Las referencias de investigación y artículos se identifican por separado en las filas correspondientes. No son una certificación de OmniSpec ni garantizan el comportamiento de un modelo.
 
 | Fuente | Decisión aplicada | Comprobación local |
 | --- | --- | --- |
 | [Agent Skills specification](https://agentskills.io/specification) | Skills con nombre y descripción, carpeta coincidente y cuerpo Markdown. Se omite `allowed-tools` porque es opcional/experimental y los nombres no son portables. | Nombres, contenido y ubicaciones en pruebas de adaptadores. |
-| [Antigravity skills](https://antigravity.google/docs/skills?tab=ide) | `.agents/skills/<nombre>/SKILL.md`; invocación por nombre en el host. | Nueve archivos instalados; validado con `agy plugin validate --strict`. |
+| [Antigravity skills](https://antigravity.google/docs/skills?tab=ide) | Soporta modo proyecto con `.agents/skills/<nombre>/SKILL.md` e invocación por nombre en el host, y modo plugin global de huella cero (`--agent plugin` en `~/.gemini/config/plugins/omni-spec`) que resuelve skills y runtime desde la configuración de usuario sin alterar el árbol del repositorio. | Nueve archivos instalados en modo proyecto; validado con `agy plugin validate --strict` en ambos modos. |
 | [Antigravity subagents](https://antigravity.google/docs/subagents) (consulta 2026-10-23) | Definición de workspace en `.agents/agents/omni-auditor.md`, con `commandExecutionPolicy: sandbox`. El plugin usa `agents/`; otros hosts pueden leer el rol desde el runtime local. | Instalación, preservación y limpieza comprobadas. |
 | [Antigravity plugins](https://antigravity.google/docs/plugins/) | `plugin.json` se limita al esquema publicado (`$schema`, `name`, `description`); los campos no documentados por Google viven en `plugin.extra.json`. | Manifiesto y `rules/constitution.md` con frontmatter verificados en pruebas. |
 | [Antigravity rules](https://antigravity.google/docs/rules/) | Todo `.md` de `rules/` exige frontmatter con `trigger:` válido; sin él Antigravity descarta la regla en silencio. | `trigger: always_on` obligatorio en prueba. |
@@ -26,13 +26,15 @@ Consulta inicial: 2026-10-22. Actualizado: 2026-10-30 tras el lanzamiento de **O
 | [Yang et al. (Orchid), ASE 2026](https://doi.org/10.1145/3832783.3834403) | Motiva tratar ambigüedad material explícitamente. OmniSpec inspecciona hechos disponibles y pregunta por decisiones faltantes; no convierte toda incertidumbre en una pregunta ni atribuye esa regla universal al estudio. | `ambiguity` es una respuesta obligatoria; `material` o `blocked` escalan a ruta completa. |
 | [Konstantinou et al., arXiv:2607.05139](https://arxiv.org/abs/2607.05139) | Referencia sobre pruebas y detección de fallos. Conservar bugfix en ruta completa es una decisión conservadora de OmniSpec; el estudio no demuestra que todo bugfix necesite todos nuestros artefactos. | Fit v1 conserva bugfix full; v2 considera también riesgo, incertidumbre, reversibilidad y regresión. RFC mantiene su ruta de decisión. |
 | [NIST SSDF 1.1](https://csrc.nist.gov/pubs/sp/800/218/final) | Usado como referencia de prácticas de desarrollo seguro y verificación integrables en el ciclo de vida; no como supuesta certificación SDD. | Evidencia explícita, resultados de pruebas y límites documentados. |
-| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | `0.8.1` es el lanzamiento oficial estable en el canal npm `latest`. El dist-tag oficial es `latest`. | Versión única `0.8.1` en package.json y registry público de npm. |
+| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) | `0.9.0` es el lanzamiento oficial estable en el canal npm `latest`. El dist-tag oficial es `latest`. | Versión única `0.9.0` en package.json y registry público de npm. |
 
-## Qué significa SDD en esta implementación
+## De SDD a Ingeniería Agéntica: El Contrato Proporcional
 
-La intención se registra antes de implementar; el diseño y las tareas responden a ella; los cambios se contrastan con criterios; las decisiones sobreviven a otra sesión. Las propuestas pueden terminar en rechazo o aplazamiento, y una consulta de ayuda no necesita implementación.
+OmniSpec 0.9.0 evoluciona el desarrollo guiado por especificaciones tradicional hacia un **Motor Universal de Ingeniería Agéntica**. En lugar de imponer una burocracia documental rígida para cualquier cambio, el marco adopta el **contrato proporcional**: la ceremonia se ajusta dinámicamente mediante `fit` a la escala real del problema (desde cambios ligeros de 1-2 archivos hasta rediseños arquitectónicos completos con análisis de impacto y radio de explosión).
 
-El motor controla generación, estado, integridad y ejecución explícita de verificaciones. La revisión semántica requiere al agente y, cuando faltan decisiones, al usuario. Ninguna fuente consultada convierte una búsqueda de tokens o un prompt en una demostración de corrección universal.
+La intención se formaliza antes de implementar mediante contratos ejecutables; el diseño y las tareas responden a ella; los cambios se contrastan con criterios medibles y pruebas reales (`acceptance.json`); y las decisiones sobreviven a otra sesión mediante memoria externa persistente SQLite/FTS5. Las propuestas pueden terminar en rechazo o aplazamiento, y una consulta de ayuda no necesita implementación.
+
+El motor controla generación, estado, cartografía AST, integridad y ejecución determinista de verificaciones bajo compuertas estrictas (`Guardian`, `Hollow-Guard` y atestación HMAC-SHA256). La revisión semántica requiere al agente y, cuando faltan decisiones de arquitectura o negocio, al usuario. Ninguna fuente consultada convierte una búsqueda de tokens o un prompt en una demostración de corrección universal.
 
 ## Política para nuevos agentes
 
@@ -51,5 +53,9 @@ Los protocolos compartidos están en `src/protocols.mjs`. Su presencia en los ad
 | [JSDoc](https://jsdoc.app/about-getting-started) y [Javadoc: documentation comment specification](https://docs.oracle.com/en/java/javase/25/docs/specs/javadoc/doc-comment-spec.html) | Documentar contratos según lenguaje y revisar significado. La referencia de sintaxis no impone Java 25 ni acredita documentación correcta por contar etiquetas. |
 | [OpenAI: designing frontends](https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4) | Referencias visuales, dirección explícita y revisión del resultado. No exige un modelo concreto ni prueba calidad universal. |
 | [Playwright: accessibility testing](https://playwright.dev/docs/accessibility-testing) | Las comprobaciones automáticas son parciales y deben complementarse con evaluación adecuada. Playwright no es obligatorio para todas las interfaces. |
+| [Node.js SQLite (node:sqlite DatabaseSync & FTS5)](https://nodejs.org/api/sqlite.html) | Motor relacional embebido y búsqueda de texto completo para `memory.db` externo sin dependencias. |
+| [Windows DPAPI (CryptProtectData)](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata) & [RFC 2104 HMAC-SHA256](https://datatracker.ietf.org/doc/html/rfc2104) | Protección de claves en reposo y atestación criptográfica de `verification.json` v4. |
+| [EARS (Mavin et al., Easy Approach to Requirements Syntax)](https://ieeexplore.ieee.org/document/5328509) | Sintaxis estructurada de criterios de aceptación verificables (`AC-01 [functional]`). |
+| Pushdown DFA Lexing & [Node/TS/Python/Go/Rust/Java Module Resolution](https://nodejs.org/api/esm.html) | Cartografía estática políglota y cálculo de radio de impacto (`blast-radius`). |
 
 La selección de la herramienta de preguntas se basa en capacidades expuestas y permisos de la sesión, no en asumir una API común entre hosts. La inspección renderizada y la investigación web también se registran como disponibles, ausentes o desconocidas.

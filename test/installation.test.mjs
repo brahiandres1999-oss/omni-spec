@@ -46,7 +46,7 @@ test('bare init asks language, tool and destination confirmation, with no engine
   assert.match(result.stdout, /Language \/ Idioma/);
   assert.match(result.stdout, /Herramienta \[generic\]/);
   assert.match(result.stdout, /\$omni-init/);
-  assert.match(result.stdout, /abre esta misma carpeta/);
+  assert.match(result.stdout, /1\. Abre esta carpeta en Codex\./);
   assert.doesNotMatch(
     result.stdout,
     /primary technology stack|Preferred Documentation Standard|Quality Gates command|regulatory & architectural/,
@@ -175,13 +175,13 @@ test('reinitialization preserves configuration, language, authored context and a
     stack: 'Python',
     docStandard: 'PEP257',
   });
-  const spec = await createSpec(root, 'feature', 'loans');
+  const spec = await createSpec(root, 'feature', 'loans', { full: true });
   await writeFile(join(root, 'specs/project-context.md'), '# User-owned context');
   const constitution = await readFile(join(root, 'CONSTITUTION.md'), 'utf8');
   const result = run(['init'], 's\n');
   assert.equal(result.code, 0, result.stderr);
   assert.doesNotMatch(result.stdout, /Herramienta \[generic\]|Language \/ Idioma/);
-  assert.match(result.stdout, /retoma la especificación activa/);
+  assert.match(result.stdout, /3\. Pídele que retome el trabajo pendiente\./);
   const manifest = await loadManifest(root);
   assert.equal(manifest.active_spec, spec.slug);
   assert.equal(manifest.profile, 'fintech');
@@ -222,8 +222,8 @@ test('reinitialization preserves an edited fallback and reports the conflict', a
 test('plain and JSON installation keep machine-safe output without ANSI sequences', async () => {
   const plain = run(['init', '--plain', '--lang', 'es', '--agent', 'antigravity'], 's\n');
   assert.equal(plain.code, 0, plain.stderr);
-  assert.match(plain.stdout, /SIGUIENTE PASO/);
-  assert.match(plain.stdout, /\.agents\/agents\/omni-auditor\.md/);
+  assert.match(plain.stdout, /Siguiente paso/);
+  assert.match(await readFile(join(root, '.agents/agents/omni-auditor.md'), 'utf8'), /omni-auditor/);
   assert.ok(!plain.stdout.includes(String.fromCharCode(27)));
   const json = run(['init', '--yes', '--json', '--plain']);
   assert.equal(json.code, 0, json.stderr);
@@ -279,4 +279,234 @@ test('installation checks the package Node minimum before writing', async () => 
   await assertInstallationRuntime('24.0.0');
   await assertInstallationRuntime('18.0.0', { bun: '1.2.0' });
   assert.deepEqual(await readdir(root), []);
+});
+
+test('AC-01: the init closing shows numbered steps, the tool name and a fallback, without internal notices', async () => {
+  const es = run(['init', '--yes', '--agent', 'antigravity', '--lang', 'es']);
+  assert.equal(es.code, 0, es.stderr);
+  for (const text of [
+    `OmniSpec ${version} está listo en`,
+    'Siguiente paso',
+    '1. Abre esta carpeta en Antigravity.',
+    '2. En el chat escribe:  /omni-init',
+    '3. Cuéntale qué quieres construir.',
+    '¿No aparece /omni-init? Pega esto en el chat:',
+    'Lee .agents/skills/omni-init/SKILL.md y sigue sus instrucciones.',
+  ])
+    assert.ok(es.stdout.includes(text), text);
+  for (const text of ['ESTADO Y ALCANCE', 'Local CLI', 'omni-auditor', 'descubrimiento', 'No se publicó'])
+    assert.ok(!es.stdout.includes(text), text);
+
+  const many = run(
+    ['init', '--yes', '--agent', 'claude,codex', '--lang', 'en'],
+    '',
+    await mkdtemp(join(tmpdir(), 'omni-many-')),
+  );
+  assert.equal(many.code, 0, many.stderr);
+  assert.match(many.stdout, /1\. Open this folder in Claude Code or Codex\./);
+  assert.match(many.stdout, /2\. In the chat, type: Claude Code → \/omni-init · Codex → \$omni-init/);
+  assert.doesNotMatch(many.stdout, /STATUS AND SCOPE|Local CLI/);
+
+  const generic = run(['init', '--yes', '--lang', 'es'], '', await mkdtemp(join(tmpdir(), 'omni-generic-')));
+  assert.match(generic.stdout, /1\. Abre esta carpeta en tu herramienta de IA\./);
+  assert.match(
+    generic.stdout,
+    /2\. Pega esto en el chat: Lee specs\/commands\/omni-init\.md y sigue sus instrucciones\./,
+  );
+  assert.doesNotMatch(generic.stdout, /¿No aparece/);
+});
+
+test('AC-02: the JSON report of init keeps discovery, onboarding, steps, fallback and auditor', async () => {
+  const result = run(['init', '--yes', '--agent', 'antigravity', '--lang', 'es', '--json']);
+  assert.equal(result.code, 0, result.stderr);
+  const { installation } = JSON.parse(result.stdout);
+  assert.equal(installation.agentDiscovery, 'NOT_CHECKED');
+  assert.equal(installation.projectOnboarding, 'PENDING');
+  assert.deepEqual(installation.nextSteps, [{ agent: 'antigravity', invocation: '/omni-init' }]);
+  assert.equal(installation.fallback, '.agents/skills/omni-init/SKILL.md');
+  assert.equal(installation.auditor, '.agents/agents/omni-auditor.md');
+});
+
+test('AC-03, AC-04 and AC-05: README and context follow the installer language and the ceremony routes', async () => {
+  for (const [language, expected] of [
+    [
+      'es',
+      {
+        readme: /Cómo avanza un cambio[\s\S]*\*\*Ligera\*\*[\s\S]*Solo el documento principal/,
+        context: /^# Contexto del proyecto/,
+      },
+    ],
+    [
+      'en',
+      { readme: /How a change moves[\s\S]*\*\*Light\*\*[\s\S]*Primary document only/, context: /^# Project context/ },
+    ],
+  ]) {
+    const dir = await mkdtemp(join(tmpdir(), `omni-lang-${language}-`));
+    assert.equal(run(['init', '--yes', '--agent', 'claude', '--lang', language], '', dir).code, 0);
+    const readme = await readFile(join(dir, 'specs/README.md'), 'utf8');
+    const context = await readFile(join(dir, 'specs/project-context.md'), 'utf8');
+    assert.match(readme, expected.readme, language);
+    assert.match(readme, /`fit`/, language);
+    assert.doesNotMatch(readme, /Spec-Driven Development|specification and plan before implementation/, language);
+    assert.match(context, expected.context, language);
+    for (const marker of ['CONTEXT_PENDING', 'APPLICATION_NOT_VALIDATED', '<!-- omni:source-conflicts -->'])
+      assert.ok(context.includes(marker), `${language}: ${marker}`);
+    const check = run(['context-check', '--json'], '', dir);
+    assert.equal(JSON.parse(check.stdout).valid, true, `${language}: ${check.stdout}`);
+    assert.match(await readFile(join(dir, 'CONSTITUTION.md'), 'utf8'), /^# CONSTITUTION — /, language);
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('spec 028 AC-03: configure sets stack, profile and documentation without init --force', async () => {
+  assert.equal(run(['init', '--yes', '--agent', 'claude', '--lang', 'es']).code, 0);
+  const before = await readFile(join(root, 'CONSTITUTION.md'), 'utf8');
+  const result = run(['configure', '--stack', 'Java 25 + Spring Boot', '--profile', 'fintech', '--doc', 'Javadoc']);
+  assert.equal(result.code, 0, result.stderr);
+  const manifest = await loadManifest(root);
+  assert.equal(manifest.stack, 'Java 25 + Spring Boot');
+  assert.equal(manifest.profile, 'fintech');
+  assert.equal(manifest.documentationStandard, 'Javadoc');
+  const after = await readFile(join(root, 'CONSTITUTION.md'), 'utf8');
+  assert.match(after, /^\* \*\*Primary Tech Stack:\*\* `Java 25 \+ Spring Boot`$/m);
+  assert.match(after, /^\* \*\*Documentation Standard:\*\* `Javadoc` \(All public APIs/m);
+  assert.match(after, /^## 2\. Domain & Regulatory Invariants \(Fintech, Banking & Payments\)$/m);
+  assert.match(after, /idempotency/);
+  for (const kept of ['## 1. Governance & Code Surgery', '## 4. Delivery Quality Gates', '## 5. UI Ergonomics'])
+    assert.ok(after.includes(kept), kept);
+  assert.equal(after.split('\n## ').length, before.split('\n## ').length);
+
+  const invalid = run(['configure', '--profile', 'nope']);
+  assert.equal(invalid.code, 1);
+  assert.match(invalid.stderr, /Invalid profile "nope"/);
+  assert.equal(await readFile(join(root, 'CONSTITUTION.md'), 'utf8'), after);
+
+  await writeFile(join(root, 'CONSTITUTION.md'), '# Our own rules\n');
+  const custom = run(['configure', '--stack', 'Go']);
+  assert.equal(custom.code, 1);
+  assert.match(custom.stderr, /no recognizable Primary Tech Stack line/);
+  assert.equal(await readFile(join(root, 'CONSTITUTION.md'), 'utf8'), '# Our own rules\n');
+  assert.equal((await loadManifest(root)).stack, 'Java 25 + Spring Boot');
+});
+
+test('spec 028 AC-04: specs/.gitignore ignores the regenerated reference and keeps histories versioned', async () => {
+  assert.equal(run(['init', '--yes', '--lang', 'en']).code, 0);
+  const ignore = await readFile(join(root, 'specs/.gitignore'), 'utf8');
+  assert.match(ignore, /^\.omni\/reference\/$/m);
+  assert.doesNotMatch(ignore, /^\.omni\/(context|decision)-history\/$/m);
+  assert.match(ignore, /Specs, records, context, decisions and contracts stay versioned\./);
+  assert.match(ignore, /^project-state\.json$/m);
+});
+
+test('scaffoldProject with agent: "plugin" does not create specs/.omni/runtime/ or specs/_templates/', async () => {
+  await scaffoldProject(root, { agent: 'plugin' });
+  const specsEntries = await readdir(join(root, 'specs'));
+  assert.ok(!specsEntries.includes('_templates'), 'specs/_templates should not exist in plugin mode');
+
+  let omniEntries = [];
+  try {
+    omniEntries = await readdir(join(root, 'specs', '.omni'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  assert.ok(!omniEntries.includes('runtime'), 'specs/.omni/runtime should not exist in plugin mode');
+
+  const manifest = await loadManifest(root);
+  assert.equal(manifest.agent, 'plugin');
+});
+
+test('spec 029 AC-01 and AC-02: status asks to confirm placeholder configuration only after context is recorded', async () => {
+  assert.equal(run(['init', '--yes', '--agent', 'claude', '--lang', 'es']).code, 0);
+  const pending = () =>
+    JSON.parse(run(['status', '--json']).stdout).progress.warnings.find(item => item.code === 'CONFIGURATION_PENDING');
+  assert.equal(pending(), undefined);
+  assert.equal(run(['context-record']).code, 0);
+  const warning = pending();
+  assert.deepEqual(warning.fields, ['stack', 'doc']);
+  assert.equal(warning.profile, 'general');
+  assert.match(warning.action, /^configure --stack "<confirmed value>" --doc "<confirmed value>"$/);
+  assert.match(warning.message, /run configure only after confirmation/);
+  assert.match(warning.message, /fintech/);
+  assert.equal(run(['configure', '--stack', 'Node.js 24', '--doc', 'JSDoc']).code, 0);
+  assert.equal(run(['context-record']).code, 0);
+  assert.equal(pending(), undefined);
+});
+
+test('spec 029 AC-03: the omni-init closing is written for the person and asks for pending configuration', async () => {
+  const { OMNI_SKILLS } = await import('../src/workflows.mjs');
+  const { instructions } = OMNI_SKILLS.find(skill => skill.name === 'omni-init');
+  for (const text of [
+    'Write the final chat reply for the person, in their language and plain words',
+    'keep internal labels (CONTEXT_RECORDED, delivery, blockers, session IDs, command logs) in project-context.md',
+    'every CONFIGURATION_PENDING field from status',
+    'run configure only after they confirm',
+    "Do not announce '100% ready'",
+  ])
+    assert.ok(instructions.includes(text), text);
+  assert.ok(!instructions.includes('Return a concise summary: onboarding state'));
+});
+
+test('spec 030 AC-01: gateProblems rejects directory changes and ";" chains, and accepts portable lines', async () => {
+  const { gateProblems } = await import('../src/checks.mjs');
+  assert.equal(gateProblems('cd backend && .\\mvnw.cmd test; cd frontend && npm run build').length, 2);
+  assert.match(gateProblems('pushd api && go test ./...')[0], /changes directory/);
+  assert.match(gateProblems('npm test; npm run lint')[0], /cmd\.exe/);
+  assert.deepEqual(gateProblems('npm test\nnpm run lint\n# cd comment; ignored'), []);
+  assert.deepEqual(gateProblems('node -e "console.log(1); console.log(2)"'), []);
+  assert.deepEqual(gateProblems('npm run build:cd-docs'), []);
+});
+
+test('spec 030 AC-02 and AC-03: configure and init refuse non-portable gates without writing; catalogue overlap warns', async () => {
+  const rejected = run(['init', '--yes', '--gates', 'cd app && npm test']);
+  assert.equal(rejected.code, 1);
+  assert.match(rejected.stderr, /changes directory/);
+  assert.deepEqual(await readdir(root), []);
+
+  assert.equal(run(['init', '--yes', '--lang', 'en']).code, 0);
+  const constitution = await readFile(join(root, 'CONSTITUTION.md'), 'utf8');
+  const broken = run(['configure', '--gates', 'cd backend && npm test; cd web && npm run build']);
+  assert.equal(broken.code, 1);
+  assert.match(broken.stderr, /changes directory[\s\S]*cmd\.exe/);
+  assert.equal(await readFile(join(root, 'CONSTITUTION.md'), 'utf8'), constitution);
+  assert.equal((await loadManifest(root)).qualityGates, '');
+
+  await mkdir(join(root, 'web'));
+  await writeFile(
+    join(root, 'specs/checks.json'),
+    JSON.stringify({ schemaVersion: 1, checks: [{ id: 'web-build', command: 'npm run build', cwd: 'web' }] }),
+  );
+  // Spec 031 AC-01: with a catalogue, gates are refused instead of duplicating checks.
+  const before = await readFile(join(root, 'specs/manifest.json'), 'utf8');
+  const overlap = run(['configure', '--gates', 'npm test']);
+  assert.equal(overlap.code, 1);
+  assert.match(
+    overlap.stderr,
+    /specs\/checks\.json already defines web-build\. Add new checks there with checks --from/,
+  );
+  assert.equal(await readFile(join(root, 'specs/manifest.json'), 'utf8'), before);
+  assert.equal(run(['configure', '--gates', '']).code, 0);
+});
+
+test('spec 030 AC-04: omni-init records configuration confirmations and refreshes context afterwards', async () => {
+  const { OMNI_SKILLS } = await import('../src/workflows.mjs');
+  const { instructions } = OMNI_SKILLS.find(skill => skill.name === 'omni-init');
+  for (const text of [
+    'Record the confirmation with decision-record',
+    'update project-context.md to the configured values before context-record',
+    'Register module commands with checks --from and a cwd per module',
+  ])
+    assert.ok(instructions.includes(text), text);
+});
+
+test('BUG-032: --name=value works, so an empty gates value survives shells that drop "" arguments', async () => {
+  assert.equal(run(['init', '--yes', '--lang', 'en', '--gates=npm test']).code, 0);
+  assert.equal((await loadManifest(root)).qualityGates, 'npm test');
+  const dropped = run(['configure', '--gates']);
+  assert.equal(dropped.code, 1);
+  assert.match(dropped.stderr, /Missing value for --gates\. Use --gates= to clear it/);
+  const cleared = run(['configure', '--gates=']);
+  assert.equal(cleared.code, 0, cleared.stderr);
+  assert.equal((await loadManifest(root)).qualityGates, '');
+  assert.match(run(['configure', '--stack=']).stderr, /Empty value for --stack/);
+  assert.match(run(['status', '--json=yes']).stderr, /--json does not take a value/);
 });

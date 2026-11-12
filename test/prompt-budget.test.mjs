@@ -7,9 +7,9 @@ import { HOST_RULE } from '../src/protocols.mjs';
 import { integrationEntries } from '../src/integrations.mjs';
 import { profiles } from '../src/profiles/index.mjs';
 
-// Character caps. The constitution, the common block and omni-plan use the 0.8.0 targets of
-// docs/AUDIT-HEXAGON-REPORT.md §4.4; every other text is its size after the context-economy
-// change plus 5 %. Shorten a text that exceeds its cap instead of raising the cap.
+// Character caps. The constitution, the common block and omni-plan use established targets;
+// every other text is its size after the context-economy change plus 5 %. Shorten a text that exceeds
+// its cap instead of raising the cap.
 const CAPS = {
   constitution: 6000,
   common: 6600,

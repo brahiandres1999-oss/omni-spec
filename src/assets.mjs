@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 // Machine-local OmniSpec state and the portable runtime, which update restores with the
 // manifest's version. Specifications, acceptance/verification records, context, decisions
-// and contracts stay versioned.
+// and contracts stay versioned; the CONSTITUTION reference is rebuilt by update.
 export const SPECS_GITIGNORE = `# OMNI-SPEC-START
-# OmniSpec local state and restorable runtime (managed section). Specs and their records remain versioned.
+# OmniSpec local state, restorable runtime and regenerated reference (managed section).
+# Specs, records, context, decisions and contracts stay versioned.
 manifest.lock/
 *.tmp
 manifest.json.tmp.*
@@ -15,6 +16,11 @@ manifest.json.tmp.*
 .omni/backups/
 .omni/inputs/
 .omni/runtime/
+.omni/reference/
+.omni/memory.db*
+.omni/quarantine/
+project-state.json
+decisions/*.json.tmp.*
 # OMNI-SPEC-END`;
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -27,6 +33,11 @@ async function files(directory, destination) {
     else if (entry.isFile()) result.push({ path: target, content: await readFile(path, 'utf8') });
   }
   return result;
+}
+
+/** What a project installed in plugin mode keeps: only its ignore rules (runtime and templates live in plugin/host). */
+export function pluginEntries() {
+  return [{ path: 'specs/.gitignore', content: SPECS_GITIGNORE, section: 'hash' }];
 }
 
 export async function packageEntries() {

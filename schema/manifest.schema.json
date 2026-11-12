@@ -105,6 +105,12 @@
           "branch": {
             "type": "string",
             "description": "Assigned Git branch for the specification work."
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Optional person responsible for the specification."
           }
         },
         "additionalProperties": true

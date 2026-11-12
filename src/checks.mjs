@@ -1,6 +1,7 @@
 import { readFile, lstat, stat } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, win32 } from 'node:path';
 import { safePath } from './managed.mjs';
+import { tokenizeCommand } from './guardian.mjs';
 
 export const DEFAULT_CHECK_TIMEOUT = 120000;
 const allowedKeys = new Set(['id', 'command', 'cwd', 'timeoutMs', 'kind', 'enabled']);
@@ -61,6 +62,11 @@ export async function validateChecks(root, catalogue) {
         'Invalid checks.json entry: unique non-reserved ID, approved command and supported fields required.',
       );
     ids.add(item.id);
+    try {
+      tokenizeCommand(item.command);
+    } catch (error) {
+      throw new Error(`Invalid checks.json entry ${item.id}: ${error.message}`, { cause: error });
+    }
     const timeoutMs = item.timeoutMs ?? DEFAULT_CHECK_TIMEOUT;
     if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 3600000)
       throw new Error(`Invalid timeoutMs for check ${item.id}; use 100 through 3600000.`);
@@ -70,6 +76,36 @@ export async function validateChecks(root, catalogue) {
     if (item.enabled !== false) checks.push(normalized);
   }
   return checks;
+}
+
+/**
+ * Reject gate lines that only work in some shells. Gates run from the project root through the
+ * platform shell (cmd.exe on Windows), where `;` does not separate commands and a `cd` chain leaves
+ * the next command in the wrong directory; module commands belong in checks.json with their cwd.
+ * @param {string} gates Newline-separated gate commands; `#` lines are comments.
+ * @returns {string[]} One message per offending line, empty when every line is portable.
+ */
+export function gateProblems(gates) {
+  const problems = [];
+  for (const line of gates.split(/\r?\n/).map(item => item.trim())) {
+    if (!line || line.startsWith('#')) continue;
+    if (/(?:^|&&|\|\||;)\s*(?:cd|pushd|chdir|set-location)\b/i.test(line))
+      problems.push(
+        `"${line}" changes directory. Gates run from the project root; register module commands with checks --from and a cwd per module.`,
+      );
+    let quote = null;
+    for (const char of line) {
+      if (quote) quote = char === quote ? null : quote;
+      else if (char === '"' || char === "'") quote = char;
+      else if (char === ';') {
+        problems.push(
+          `"${line}" uses ";" to chain commands, which cmd.exe does not support. Put each command on its own line.`,
+        );
+        break;
+      }
+    }
+  }
+  return problems;
 }
 
 /** Load the catalogue plus compatible legacy gates, without running either. */

@@ -168,7 +168,7 @@ test('AC-03: Git ignores the runtime and still versions the manifest, the regist
 
 test('AC-04, AC-05: update restores a deleted runtime from the package and keeps project files', async () => {
   await scaffoldProject(root);
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await updateProject(root);
   const kept = [
     'CONSTITUTION.md',
@@ -450,10 +450,17 @@ test('AC-25: doctor summarizes a runtime of another version in one line', async 
 
 test('AC-26: in plugin mode doctor neither summarizes nor lists the unused local runtime', async () => {
   const missing = await projectIn('missing', { agent: 'plugin' });
-  assert.ok(Object.keys((await readRegistry(missing)).files).some(name => name.startsWith(RUNTIME)));
-  await removeRuntime(missing);
+  assert.equal(
+    Object.keys((await readRegistry(missing)).files).some(name => name.startsWith(RUNTIME)),
+    false,
+  );
+  await register(missing, { [`${RUNTIME}bin/omni-spec.mjs`]: { hash: 'dummy', section: false } });
+
   const other = await projectIn('other', { agent: 'plugin' });
-  await setRuntimeVersion(other, '0.0.1');
+  await mkdir(join(other, RUNTIME), { recursive: true });
+  await writeFile(runtimePackage(other), JSON.stringify({ name: 'omni-spec', version: '0.0.1' }, null, 2) + '\n');
+  await register(other, { [`${RUNTIME}package.json`]: { hash: 'dummy', section: false } });
+
   for (const dir of [missing, other]) {
     const text = await run(['doctor'], dir);
     assert.equal(text.code, 0, text.stdout);
@@ -465,7 +472,15 @@ test('AC-26: in plugin mode doctor neither summarizes nor lists the unused local
   }
 });
 
-test('AC-11, AC-18, AC-19, AC-27, AC-29: status warns when the CLI and project versions differ', async () => {
+test('AC-11, AC-18, AC-19, AC-27, AC-29: status warns when the CLI and project versions differ', async t => {
+  // A plugin installed in the real home directory would add PLUGIN_VERSION_MISMATCH; isolate it.
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  process.env.HOME = process.env.USERPROFILE = root;
+  t.after(() => {
+    for (const [key, value] of Object.entries(saved))
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+  });
   const cases = [
     { projectVersion: '999.0.0', agent: 'antigravity', action: 'npx omni-spec@999.0.0 update' },
     {

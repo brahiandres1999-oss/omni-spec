@@ -132,7 +132,7 @@ test('integration write failures do not report successful initialization', async
 for (const type of ['feature', 'bugfix', 'debt', 'rfc'])
   test(`${type}: block draft, verify evidence, complete and preserve history`, async () => {
     await scaffoldProject(root);
-    const created = await createSpec(root, type, `work-${type}`);
+    const created = await createSpec(root, type, `work-${type}`, { full: true });
     await assert.rejects(updateSpecStatus(root, created.id, 'COMPLETED'), /Cannot verify\/complete/);
     await fillSpec(root, { ...created, type });
     if (type !== 'rfc') {
@@ -151,7 +151,7 @@ for (const type of ['feature', 'bugfix', 'debt', 'rfc'])
 test('automated checks run in project root; failing checks cannot close', async () => {
   await scaffoldProject(root, { qualityGates: 'node check.cjs' });
   await writeFile(join(root, 'check.cjs'), 'process.exit(1)');
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   assert.equal((await verifySpec(root, spec.id)).passed, false);
   await assert.rejects(updateSpecStatus(root, spec.id, 'COMPLETED'), /did not pass/);
@@ -163,7 +163,7 @@ test('automated checks run in project root; failing checks cannot close', async 
 
 test('changed source invalidates verification until rerun', async () => {
   await scaffoldProject(root);
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   await verifySpec(root, spec.id, manual);
   await writeFile(join(root, 'greeting.txt'), 'changed');
@@ -174,7 +174,7 @@ test('changed source invalidates verification until rerun', async () => {
 
 test('changed gates invalidate evidence and configure keeps constitution in sync', async () => {
   await scaffoldProject(root);
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   await verifySpec(root, spec.id, manual);
   assert.equal(await runCli(['configure', '--gates', 'node check.cjs'], root), 0);
@@ -184,7 +184,7 @@ test('changed gates invalidate evidence and configure keeps constitution in sync
 
 test('manual evidence requires a specific reason and authored verification document', async () => {
   await scaffoldProject(root);
-  const spec = await createSpec(root, 'feature', 'greeting');
+  const spec = await createSpec(root, 'feature', 'greeting', { full: true });
   await fillSpec(root, spec);
   await assert.rejects(verifySpec(root, spec.id), /No quality gates/);
   await writeFile(join(spec.specDir, 'verification.md'), '# Empty\n[TODO]');
@@ -193,8 +193,8 @@ test('manual evidence requires a specific reason and authored verification docum
 
 test('focus rejects ambiguous partial names and aliases route correctly', async () => {
   await scaffoldProject(root);
-  await createSpec(root, 'fix', 'login-one');
-  await createSpec(root, 'bug', 'login-two');
+  await createSpec(root, 'fix', 'login-one', { full: true });
+  await createSpec(root, 'bug', 'login-two', { full: true });
   await assert.rejects(focusSpec(root, 'login'), /Ambiguous/);
   assert.equal((await focusSpec(root, '001')).type, 'bugfix');
 });
@@ -260,7 +260,7 @@ test('verification timeout fails and cannot close the specification', async () =
     join(root, 'hang.cjs'),
     'console.log("CHILD_PID=" + process.pid); setInterval(() => {}, 1000); setTimeout(() => process.exit(0), 10000)',
   );
-  const spec = await createSpec(root, 'feature', 'timeout');
+  const spec = await createSpec(root, 'feature', 'timeout', { full: true });
   await fillSpec(root, spec);
   const started = Date.now();
   const result = await verifySpec(root, spec.id, { timeout: 500 });
@@ -287,7 +287,7 @@ test('concurrent initializations preserve a usable managed installation', async 
 
 test('example checkboxes in code fences cannot satisfy required tasks', async () => {
   await scaffoldProject(root);
-  const spec = await createSpec(root, 'feature', 'examples');
+  const spec = await createSpec(root, 'feature', 'examples', { full: true });
   await fillSpec(root, spec);
   await writeFile(
     join(spec.specDir, 'tasks.md'),

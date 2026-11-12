@@ -197,6 +197,7 @@ export function compileIgnoreRule(line, base = '') {
   try {
     regex = new RegExp(`^${source}$`);
   } catch {
+    // guardian-allow SLOP_SWALLOWED_ERROR: Git ignores an invalid pattern; the caller skips the rule.
     return null;
   }
   return { negate, dirOnly, anchored, base, regex };
@@ -294,6 +295,7 @@ async function internalFileTarget(root, name) {
     if (/^(?:\.git|specs)(?:\/|$)/.test(inside) || /(?:^|\/)\.omni(?:\/|$)/.test(inside)) return null;
     return (await stat(target)).isFile() ? target : null;
   } catch {
+    // guardian-allow SLOP_SWALLOWED_ERROR: an unresolvable link is excluded from the snapshot, as Git does.
     return null;
   }
 }

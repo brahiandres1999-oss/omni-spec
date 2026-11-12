@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile, readFile, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, readFile, access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -11,6 +11,7 @@ import {
   FIT_SCHEMA_VERSION,
   FIT_PRESETS,
   fitQuestionnaire,
+  UNCLASSIFIED_MESSAGE,
 } from '../src/fit.mjs';
 import { auditSpec } from '../src/auditor.mjs';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
@@ -174,11 +175,29 @@ describe('Spec Fit risk-aware opt-in version 2', () => {
       { ambiguity: 'material' },
       { crossesContract: true },
       { reasoning: 'partial' },
-      { modules: 2 },
-      { files: 3 },
     ])
       assert.equal(classifyFit({ ...lowRisk, ...change }, { type: 'feature' }).route, 'full');
     assert.equal(classifyFit({ ...lowRisk, risk: 'critical' }, { type: 'rfc' }).route, 'decision');
+  });
+
+  test('AC-07: size alone escalates a clear low-risk change to standard, naming the size', () => {
+    for (const [change, pattern] of [
+      [{ files: 3 }, /3 affected files .*size escalates to standard/],
+      [{ modules: 2 }, /2 modules .*size escalates to standard/],
+      [{ files: 9, modules: 4 }, /size escalates to standard/],
+    ])
+      for (const type of ['feature', 'bugfix', 'debt']) {
+        const result = classifyFit({ ...lowRisk, ...change }, { type });
+        assert.equal(result.route, 'standard', JSON.stringify(change));
+        assert.match(result.reasons.join(' '), pattern);
+      }
+  });
+
+  test('AC-08: size never lowers a full route, and size reasons stay visible', () => {
+    const result = classifyFit({ ...lowRisk, files: 5, crossesContract: true }, { type: 'feature' });
+    assert.equal(result.route, 'full');
+    assert.match(result.reasons.join(' '), /public contract/);
+    assert.match(result.reasons.join(' '), /5 affected files/);
   });
 });
 
@@ -203,7 +222,7 @@ describe('Spec Fit in the working project', () => {
       stack: 'Node.js',
       docStandard: 'JSDoc',
     });
-    const spec = await createSpec(tempDir, type, 'small change');
+    const spec = await createSpec(tempDir, type, 'small change', { full: true });
     const dir = join(tempDir, 'specs', spec.slug);
     await writeFile(join(dir, type === 'debt' ? 'audit.md' : 'spec.md'), lightSpec, 'utf8');
     return { spec, dir };
@@ -220,14 +239,128 @@ describe('Spec Fit in the working project', () => {
     assert.equal(report.tasks.total, 0);
   });
 
-  test('without a fit.json the full route still demands the design and the task breakdown', async () => {
-    const { spec, dir } = await project();
-    await rm(join(dir, 'plan.md'));
-    await rm(join(dir, 'tasks.md'));
-    const report = await auditSpec(tempDir, spec.id);
-    assert.equal(report.valid, false);
-    assert.match(report.errors.join(' '), /Missing mandatory feature artifact: plan.md/);
-    assert.match(report.errors.join(' '), /Missing mandatory feature artifact: tasks.md/);
+  test('AC-04: without a fit.json audit asks for classification and reports no missing artifact', async () => {
+    for (const type of ['feature', 'bugfix', 'debt']) {
+      await rm(tempDir, { recursive: true, force: true });
+      await mkdir(tempDir, { recursive: true });
+      const { spec, dir } = await project(type);
+      await rm(join(dir, 'fit.json'));
+      for (const name of ['plan.md', 'tasks.md', 'rca.md', 'fix.md', 'migration-plan.md'])
+        await rm(join(dir, name), { force: true });
+      const report = await auditSpec(tempDir, spec.id);
+      assert.equal(report.valid, false);
+      assert.deepEqual(report.errors, [UNCLASSIFIED_MESSAGE]);
+      assert.match(report.errors[0], /`fit`/);
+      assert.match(report.errors[0], /`fit --preset full`/);
+    }
+  });
+
+  async function unclassified(type) {
+    await scaffoldProject(tempDir, { projectName: 'FitApp', profile: 'general' });
+    const spec = await createSpec(tempDir, type, `${type} default`);
+    return { spec, files: (await readdir(spec.specDir)).sort() };
+  }
+
+  test('AC-01: create without a route writes only the primary artifact and no fit.json', async () => {
+    for (const [type, primary] of [
+      ['feature', 'spec.md'],
+      ['bugfix', 'bug.md'],
+      ['debt', 'audit.md'],
+    ]) {
+      await rm(tempDir, { recursive: true, force: true });
+      await mkdir(tempDir, { recursive: true });
+      const { spec, files } = await unclassified(type);
+      assert.equal(spec.route, null);
+      assert.deepEqual(files, ['acceptance.json', primary, 'verification.md'].sort(), type);
+    }
+  });
+
+  test('AC-01: the create command reports the change as unclassified', async () => {
+    await scaffoldProject(tempDir, { projectName: 'FitApp', profile: 'general' });
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      assert.equal(await runCli(['create', 'bugfix', 'tiny-fix'], tempDir), 0);
+      assert.equal(await runCli(['create', 'rfc', 'some-idea'], tempDir), 0);
+    } finally {
+      console.log = original;
+    }
+    assert.match(lines[0], /\[Route: UNCLASSIFIED\]/);
+    assert.match(lines[0], /Classify the change with fit/);
+    assert.doesNotMatch(lines[1], /UNCLASSIFIED/);
+  });
+
+  test('AC-02: an explicit route keeps its preset fit.json and route artifacts', async () => {
+    await scaffoldProject(tempDir, { projectName: 'FitApp', profile: 'general' });
+    const expected = {
+      light: ['acceptance.json', 'fit.json', 'spec.md', 'verification.md'],
+      standard: ['acceptance.json', 'fit.json', 'plan.md', 'spec.md', 'verification.md'],
+      full: ['acceptance.json', 'fit.json', 'plan.md', 'spec.md', 'tasks.md', 'verification.md'],
+    };
+    for (const [route, files] of Object.entries(expected)) {
+      const spec = await createSpec(tempDir, 'feature', `explicit ${route}`, { [route]: true });
+      assert.equal(spec.route, route);
+      assert.deepEqual((await readdir(spec.specDir)).sort(), files, route);
+      assert.deepEqual(JSON.parse(await readFile(join(spec.specDir, 'fit.json'), 'utf8')), FIT_PRESETS[route]);
+    }
+  });
+
+  test('AC-05: classifying an unclassified spec as full scaffolds missing documents without overwriting', async () => {
+    const { spec } = await unclassified('feature');
+    const authored = '# [SPEC-001] Authored\n\nKeep me.\n';
+    await writeFile(join(spec.specDir, 'spec.md'), authored, 'utf8');
+    const original = console.log;
+    console.log = () => {};
+    try {
+      assert.equal(await runCli(['fit', spec.id, '--preset', 'full'], tempDir), 0);
+    } finally {
+      console.log = original;
+    }
+    const files = (await readdir(spec.specDir)).sort();
+    assert.ok(files.includes('plan.md') && files.includes('tasks.md'), files.join(','));
+    assert.equal(await readFile(join(spec.specDir, 'spec.md'), 'utf8'), authored);
+  });
+
+  test('BUG-026: fit reading a hand-written fit.json scaffolds the missing route documents', async () => {
+    for (const [type, answers, expected] of [
+      ['feature', { files: 6, modules: 2 }, ['plan.md']],
+      ['feature', { crossesContract: true }, ['plan.md', 'tasks.md']],
+      ['bugfix', { risk: 'high' }, ['fix.md', 'rca.md']],
+      ['debt', { files: 4 }, ['migration-plan.md']],
+    ]) {
+      await rm(tempDir, { recursive: true, force: true });
+      await mkdir(tempDir, { recursive: true });
+      const { spec } = await unclassified(type);
+      const primary = join(spec.specDir, type === 'feature' ? 'spec.md' : type === 'bugfix' ? 'bug.md' : 'audit.md');
+      await writeFile(primary, 'Authored.\n', 'utf8');
+      await writeFile(join(spec.specDir, 'fit.json'), JSON.stringify({ ...FIT_PRESETS.light, ...answers }), 'utf8');
+      const lines = [];
+      const original = console.log;
+      console.log = value => lines.push(value);
+      try {
+        assert.equal(await runCli(['fit', spec.id, '--json'], tempDir), 0);
+      } finally {
+        console.log = original;
+      }
+      const label = `${type} ${JSON.stringify(answers)}`;
+      assert.deepEqual(JSON.parse(lines.join('\n')).scaffolded.sort(), expected, label);
+      const files = await readdir(spec.specDir);
+      for (const name of expected) assert.ok(files.includes(name), `${label}: ${name}`);
+      assert.ok(!files.includes('tasks.md') || expected.includes('tasks.md'), label);
+      assert.equal(await readFile(primary, 'utf8'), 'Authored.\n', label);
+    }
+  });
+
+  test('AC-06: a bugfix bug.md carries root cause, minimal fix and regression verification', async () => {
+    const { spec } = await unclassified('bugfix');
+    const bug = await readFile(join(spec.specDir, 'bug.md'), 'utf8');
+    for (const heading of [
+      '## Reproduction and environment',
+      '## Root cause and minimal fix',
+      '## Regression verification',
+    ])
+      assert.ok(bug.includes(heading), heading);
   });
 
   test('an invalid fit.json is reported instead of silently falling back', async () => {
@@ -240,7 +373,7 @@ describe('Spec Fit in the working project', () => {
 
   test('the full route keeps requiring plan.md and tasks.md', async () => {
     const { spec, dir } = await project();
-    await writeFile(join(dir, 'fit.json'), JSON.stringify({ ...baseAnswers, files: 5 }), 'utf8');
+    await writeFile(join(dir, 'fit.json'), JSON.stringify({ ...baseAnswers, crossesContract: true }), 'utf8');
     const report = await auditSpec(tempDir, spec.id);
     assert.equal(report.valid, false);
     assert.match(report.errors.join(' '), /File plan.md still contains/);
@@ -324,7 +457,8 @@ describe('Spec Fit in the working project', () => {
   });
 
   test('the CLI prints the questionnaire when the change is not classified yet', async () => {
-    const { spec } = await project();
+    const { spec, dir } = await project();
+    await rm(join(dir, 'fit.json'));
     const lines = [];
     const original = console.log;
     console.log = value => lines.push(value);
@@ -374,7 +508,10 @@ describe('Spec Fit in the working project', () => {
     assert.equal(FIT_PRESETS.light.risk, 'low');
     assert.equal(FIT_PRESETS.light.files, 1);
     assert.equal(FIT_PRESETS.standard.existingTests, false);
-    assert.equal(FIT_PRESETS.full.risk, 'high');
+    // Spec 033: the full preset reaches the full route through the contract answer, not through risk.
+    assert.equal(FIT_PRESETS.full.risk, 'low');
+    assert.equal(FIT_PRESETS.full.crossesContract, true);
+    assert.equal(classifyFit(FIT_PRESETS.full, { type: 'feature' }).route, 'full');
   });
 
   test('a byte order mark in fit.json does not break the route', async () => {
@@ -459,7 +596,7 @@ describe('Spec Fit in the working project', () => {
 
   test('CLI fit rejects unknown preset with descriptive error', async () => {
     await scaffoldProject(tempDir, { projectName: 'InvalidPresetApp' });
-    const spec = await createSpec(tempDir, 'feature', 'invalid-preset');
+    const spec = await createSpec(tempDir, 'feature', 'invalid-preset', { full: true });
     const errors = [];
     const original = console.error;
     console.error = value => errors.push(value);

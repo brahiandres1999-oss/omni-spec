@@ -3,8 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.8.1-blue.svg" alt="Version 0.8.1"></a>
-  <a href="docs/releases/0.8.1.md"><img src="https://img.shields.io/badge/canal-latest-green.svg" alt="0.8.1 Oficial"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.9.0-blue.svg" alt="Version 0.9.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -13,16 +12,14 @@
 
 ---
 
-# OmniSpec 0.8.1
+# OmniSpec 0.9.0
 
-> **Desarrollo Guiado por Especificaciones (SDD) para Agentes de IA.**  
-> Escribe especificaciones claras, elimina el código de relleno (*AI slop*) y programa con tu agente favorito sin perder el control ni el contexto entre sesiones.
+> **Motor Universal de Ingeniería Agéntica (Universal Agentic Engineering Engine).**  
+> Evoluciona más allá de la burocracia documental del SDD tradicional mediante contratos de alcance proporcional (`fit`), cartografía políglota de dependencias AST y *blast-radius*, memoria persistente SQLite/FTS5 sin residuos en el repositorio (`%LOCALAPPDATA%\OmniSpec\workspaces\<id>\memory.db`) y compuertas de verificación deterministas y criptográficas (`Guardian`, `Hollow-Guard`, HMAC-SHA256).
 
-Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec es un framework universal, sin dependencias runtime externas, con CLI portable y adaptadores según formatos documentados que vive dentro de tu repositorio. Funciona directamente desde el chat de tu editor preferido (Cursor, VS Code, Claude Code, Antigravity y más), soportando instalación directa como **Plugin nativo en Google Antigravity** y subagentes autónomos de auditoría (`omni-auditor`).
+Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec evoluciona el desarrollo guiado por especificaciones hacia un **Motor Universal de Ingeniería Agéntica (Universal Agentic Engineering Engine)** sin dependencias runtime externas, con CLI portable y adaptadores según formatos documentados que vive dentro de tu repositorio. Funciona directamente desde el chat de tu editor preferido (Cursor, VS Code, Claude Code, Antigravity y más), soportando instalación directa como **Plugin nativo en Google Antigravity** (con modo de huella cero en el repositorio) y subagentes autónomos de auditoría (`omni-auditor`).
 
 ---
-
-> **OmniSpec 0.8.1 — Lanzamiento Oficial Estable.** Disponible en el canal npm `latest` y en GitHub Releases. Consulta las [notas de lanzamiento](docs/releases/0.8.1.md).
 
 ## ¿Por qué OmniSpec?
 
@@ -38,7 +35,7 @@ OmniSpec resuelve esto con un ciclo de ingeniería riguroso:
 
 ---
 
-## Empezar con 0.8.1
+## Empezar con OmniSpec
 
 ### 1. Prepara la carpeta donde vas a trabajar
 
@@ -166,38 +163,47 @@ node specs/.omni/runtime/bin/omni-spec.mjs setup-agent cursor,copilot,claude
 
 ## Referencia del CLI
 
-Usa el runtime instalado (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`) o el tarball del [piloto](docs/PILOT.md). Después de publicar la Preview, los comandos por nombre serán los siguientes. `@preview` selecciona la Preview; `@latest` conserva la versión normal publicada.
+Usa el runtime instalado (`node specs/.omni/runtime/bin/omni-spec.mjs <comando>`), el plugin global de Antigravity (`node ~/.gemini/config/plugins/omni-spec/bin/omni-spec.mjs <comando>`) o `npx omni-spec <comando>`:
 
 ```sh
 # Inspección y diagnóstico
-npx omni-spec@preview status                 # Muestra el estado del proyecto y trabajo activo
-npx omni-spec@preview status --json --all    # Incluye la aceptación y las decisiones de specs cerradas
-npx omni-spec@preview doctor                 # Verifica integridad de archivos y adaptadores
-npx omni-spec@preview inspect --json         # Muestra tecnologías, módulos y comandos detectados
+npx omni-spec status                 # Muestra el estado del proyecto, memoria activa y trabajo en curso
+npx omni-spec status --json --all    # Incluye la aceptación y las decisiones de specs cerradas
+npx omni-spec doctor                 # Verifica integridad de archivos y adaptadores
+npx omni-spec inspect --json         # Muestra tecnologías, módulos y comandos detectados
+
+# Memoria persistente FTS5 y Cartografía
+npx omni-spec memory add --category gotcha --scope src/auth --summary "Tokens expiran en 15m"
+npx omni-spec memory search "tokens"
+npx omni-spec memory list
+npx omni-spec cartography --json
+npx omni-spec blast-radius src/cli.mjs --json
 
 # Gestión de especificaciones
-npx omni-spec@preview create feature auth    # Crea manualmente un nuevo trabajo estructurado
-npx omni-spec@preview list                   # Lista todas las especificaciones activas y cerradas
-npx omni-spec@preview focus 001              # Enfoca el trabajo activo en la spec 001
+npx omni-spec create feature auth    # Crea manualmente un nuevo trabajo estructurado
+npx omni-spec list                   # Lista todas las especificaciones activas y cerradas
+npx omni-spec focus 001              # Enfoca el trabajo activo en la spec 001
 
 # Ceremonia proporcional al cambio
-npx omni-spec@preview fit 001                # Pregunta y deriva la ruta: light, standard o full
+npx omni-spec fit 001                # Pregunta y deriva la ruta: light, standard o full
 
-# Contexto, sesión y decisiones
-npx omni-spec@preview context-check          # Estructura y enlaces locales del contexto
-npx omni-spec@preview context-record         # Guarda el baseline de entradas de contexto
-npx omni-spec@preview session-record --from specs/.omni/inputs/session.json   # Capacidades reales del host
-npx omni-spec@preview decision-record --from -   # Decisión/delegación leída de stdin
-npx omni-spec@preview guide evidence         # Forma exacta de cada JSON (también: guide setup, guide design)
+# Contexto, sesión y decisiones (sin archivos temporales)
+npx omni-spec context-check          # Estructura y enlaces locales del contexto
+npx omni-spec context-record         # Guarda el baseline de entradas de contexto en memory.db
+npx omni-spec session-record --host Antigravity --questions available --web available --terminal available --render available --delegation available
+npx omni-spec decision-record --id stack --topic stack --status approved --basis "Confirmado por el usuario"
+npx omni-spec guide evidence         # Forma exacta de cada JSON (también: guide setup, guide design)
 
-# Calidad y Verificación
-npx omni-spec@preview audit 001              # Audita consistencia de artefactos y placeholders
-npx omni-spec@preview checks --from specs/.omni/inputs/checks.json   # Catálogo de checks con ID y cwd por módulo
-npx omni-spec@preview configure --gates "npm test"  # Gates heredados desde la raíz
-npx omni-spec@preview verify 001             # Ejecuta los checks y liga la evidencia a la huella
-npx omni-spec@preview complete 001           # Cierra el trabajo tras comprobar evidencia
-npx omni-spec@preview contracts              # Contratos de capacidad vigentes y propuestos
-npx omni-spec@preview contracts --active     # Solo los contratos activos, sin historial
+# Calidad, Guardian y Verificación
+npx omni-spec guardian install       # Instala el hook pre-commit anti-slop
+npx omni-spec audit 001              # Audita consistencia de artefactos y placeholders
+npx omni-spec checks --from -        # Catálogo de checks con ID y cwd por módulo
+npx omni-spec configure --gates "npm test"  # Gates heredados desde la raíz
+npx omni-spec configure --stack "Java 25 + Spring Boot" --profile fintech --doc "Javadoc"  # Sin init --force
+npx omni-spec verify 001             # Ejecuta los checks y firma criptográficamente (HMAC-SHA256)
+npx omni-spec complete 001           # Cierra el trabajo tras comprobar evidencia
+npx omni-spec contracts              # Contratos de capacidad vigentes y propuestos
+npx omni-spec contracts --active     # Solo los contratos activos, sin historial
 ```
 
 ### Qué atesta `verify`
@@ -209,7 +215,10 @@ npx omni-spec@preview contracts --active     # Solo los contratos activos, sin h
 No todo cambio necesita el ciclo completo. OmniSpec incorpora **triaje dinámico** y atajos de ceremonia para evitar la burocracia documental innecesaria:
 
 ```sh
-# Crear directamente una especificación en modo ligero (sin plan.md ni tasks.md):
+# Crear sin ruta: solo el documento principal; el cambio queda sin clasificar hasta usar fit
+omni-spec create feature arreglo-etiqueta
+
+# O fijar la ruta al crear:
 omni-spec create feature arreglo-etiqueta --light
 
 # O mutar y escalar la ruta según evoluciona el alcance técnico:
@@ -221,10 +230,10 @@ omni-spec fit --preset full       # Modo completo: diseño, desglose de tareas y
 | Ruta | Artefactos Requeridos | Cuándo Usarla |
 | :--- | :--- | :--- |
 | **light** | `spec.md` + `acceptance.json` | Cambio pequeño (1-2 archivos), local, claro y con tests existentes. |
-| **standard** | `spec.md` + diseño (`plan.md` / `migration-plan.md` / `rca.md` + `fix.md`) | Cambio con incertidumbre de diseño o sin cobertura previa de pruebas. |
-| **full** | `spec.md` + diseño + desglose de tareas (`tasks.md`) | ≥3 archivos, múltiples módulos, cambios de contratos públicos o riesgo elevado. |
+| **standard** | `spec.md` + diseño (`plan.md` / `migration-plan.md` / `rca.md` + `fix.md`) | Cambio de bajo riesgo que toca ≥3 archivos o varios módulos, o sin cobertura previa de pruebas. |
+| **full** | `spec.md` + diseño + desglose de tareas (`tasks.md`) | Riesgo alto o crítico, contratos públicos, ambigüedad o incertidumbre, o reversión difícil. |
 
-La ruta se **deriva** de `specs/<slug>/fit.json` (mediante el cuestionario interactivo o los presets canónicos) y se evalúa automáticamente. En v2 se ponderan consecuencia (*risk*), incertidumbre (*uncertainty*) y reversibilidad (*reversibility*).
+La ruta se **deriva** de `specs/<slug>/fit.json` (mediante el cuestionario interactivo o los presets canónicos) y se evalúa automáticamente. Sin `fit.json`, `audit`, `verify` y `complete` se detienen y piden clasificar con `fit` (o `fit --preset full` para conservar los documentos de una spec abierta con una versión anterior). Un bug ligero cierra en `bug.md`, que incluye causa raíz, corrección mínima y verificación de regresión. En v2 se ponderan consecuencia (*risk*), incertidumbre (*uncertainty*) y reversibilidad (*reversibility*).
 
 **Andamiaje dinámico en escalada:** Si un cambio ligero escala en complejidad, ejecutar `omni-spec fit --preset standard` o `--preset full` no solo actualiza las reglas de auditoría, sino que genera automáticamente en disco los artefactos faltantes (`scaffoldMissingRouteArtifacts`) preservando cualquier contenido o decisión previa sin sobreescrituras destructivas.
 
@@ -318,26 +327,23 @@ Restaurar requiere el paquete de esa versión: normalmente se descarga del regis
 
 ## Estado del Proyecto & Visión
 
-OmniSpec nace como una iniciativa personal con el propósito de contar con un framework de *Spec-Driven Development* verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, sin ataduras a dependencias externas ni flujos rígidos.
+OmniSpec nace con el propósito de ofrecer un Motor Universal de Ingeniería Agéntica (*Universal Agentic Engineering Engine*) verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, superando la burocracia documental del SDD tradicional mediante contratos proporcionales, cartografía de dependencias, memoria persistente externa y compuertas de verificación criptográfica sin ataduras a dependencias externas.
 
-La versión actual es **OmniSpec 0.8.1** (canal `latest`). Las [notas de la versión 0.8.1](docs/releases/0.8.1.md) detallan la modernización visual del instalador y compatibilidad consolidada. Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
+La versión actual es **OmniSpec 0.9.0** (canal `latest`). Consulta las [notas de lanzamiento 0.9.0](docs/releases/0.9.0.md). Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
 
 ---
 
 ## Documentación
 
-- [0.8.1 Estable: notas de lanzamiento](docs/releases/0.8.1.md)
-- [0.8.0 Estable: arquitectura y pilares SDD](docs/releases/0.8.0.md)
-- [Próximas entregas: presets y avisos de actualización pendientes](docs/ROADMAP.md)
+- [0.9.0 Oficial: Motor Universal de Ingeniería Agéntica (notas de lanzamiento)](docs/releases/0.9.0.md)
+- [0.8.1 Estable](docs/releases/0.8.1.md) · [0.8.0 Estable: arquitectura y pilares SDD](docs/releases/0.8.0.md)
 - [Publicada: 0.7.0-preview.2](docs/releases/0.7.0-preview.2.md) · [Historial de candidatas: 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [Publicada: 0.6.1](docs/releases/0.6.1.md)
-- [Piloto local con el paquete exacto](docs/PILOT.md)
 - [Instalación, automatización y recuperación](docs/INSTALLATION.md)
-- [Evaluación de comportamiento de los agentes](docs/BEHAVIOR-EVALUATION.md)
-- [Entrega, evidencia y formatos](docs/DELIVERY.md)
 - [Contrato de Onboarding (/omni-init)](docs/ONBOARDING.md)
+- [Entrega, evidencia y formatos](docs/DELIVERY.md)
 - [Estándares de los Adaptadores de Agentes](docs/STANDARDS.md)
 - [Matriz de Compatibilidad y Límites](docs/COMPATIBILITY.md)
-- [Coordinación Local y Bloqueos](docs/locking.md)
+- [Publicación e instalación de versiones](docs/RELEASING.md)
 - [Historial de Cambios (CHANGELOG)](CHANGELOG.md)
 
 ---

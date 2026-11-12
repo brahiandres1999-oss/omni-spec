@@ -17,11 +17,15 @@ const result = spawnSync(
   [
     '--test',
     '--test-concurrency=1',
+    '--import',
+    './test-support/isolated-home.mjs',
     '--experimental-test-coverage',
     '--test-reporter=spec',
     '--test-reporter=lcov',
     '--test-reporter-destination=stdout',
     `--test-reporter-destination=${lcovPath}`,
+    // Same scope as `npm test`.
+    'test/**/*.test.mjs',
   ],
   { cwd: root, stdio: 'inherit', windowsHide: true },
 );

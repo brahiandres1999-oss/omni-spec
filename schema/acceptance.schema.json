@@ -28,6 +28,16 @@
           "evidence": {
             "type": "string"
           },
+          "exercises": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the test really runs (threads, database, mocks). Required for automated criteria when fit.json declares high or critical risk."
+          },
+          "limits": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the evidence does not prove; status, verify and complete report the criterion as passed with limits."
+          },
           "checkCommands": {
             "type": "array",
             "minItems": 1,
@@ -44,6 +54,16 @@
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "tests": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "description": "Tests that exercise an automated criterion (file and test name). When present, the audit traces the criterion from this data instead of the design document's Verification heading.",
             "items": {
               "type": "string",
               "minLength": 1

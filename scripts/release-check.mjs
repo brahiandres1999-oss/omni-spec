@@ -16,6 +16,8 @@ const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'u
 const lock = JSON.parse(await readFile(new URL('../package-lock.json', import.meta.url), 'utf8'));
 assert.equal(lock.version, meta.version, 'Lockfile version must match package');
 assert.equal(lock.packages?.['']?.version, meta.version, 'Lockfile root package version must match package');
+const plugin = JSON.parse(await readFile(new URL('../plugin.json', import.meta.url), 'utf8'));
+assert.equal(plugin.version, meta.version, 'Antigravity plugin.json version must match package');
 const banner = await readFile(new URL('../assets/omni-spec-banner.svg', import.meta.url), 'utf8');
 assert.ok(banner.includes(meta.version.split('-')[0]), 'Banner must identify the current release family');
 if (meta.npmTag === 'preview') assert.ok(banner.includes('Preview'), 'Banner must identify Preview status');

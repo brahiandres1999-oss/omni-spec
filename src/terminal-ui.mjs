@@ -386,6 +386,29 @@ export function resultSections(title, sections, { output = process.stdout, env =
   return lines.join('\n');
 }
 
+/**
+ * Short closing message: a highlighted title and indented blocks without rules, so the one action
+ * the reader needs stands out. Lines wrap only on a rich terminal, as in resultSections.
+ * @param {string} title Highlighted first line.
+ * @param {{title?: string, lines: string[]}[]} blocks Optional block title and its lines.
+ * @param {{output?: object, env?: object, plain?: boolean}} [presentation] Terminal capabilities.
+ * @returns {string} Text ready to print.
+ */
+export function resultSteps(title, blocks, { output = process.stdout, env = process.env, plain = false } = {}) {
+  const rich = Boolean(!plain && output.isTTY && env.TERM !== 'dumb' && !env.CI);
+  const color = rich && colorEnabled(output, env),
+    depth = output.getColorDepth?.() || 4;
+  const width = Math.max(24, Math.min((output.columns || 90) - 6, 94));
+  const lines = ['', `  ${paint(terminalText(title), 'amber', color, depth)}`];
+  for (const block of blocks) {
+    lines.push('');
+    if (block.title) lines.push(`  ${paint(terminalText(block.title), 'blue', color, depth)}`);
+    for (const line of block.lines)
+      for (const part of rich ? wrap(line, width) : [terminalText(line)]) lines.push(`    ${part}`);
+  }
+  return lines.join('\n');
+}
+
 /** Stage updates correspond to real awaited operations, without estimated percentages or delays. */
 export function installationProgress(output, language, plain = false, env = process.env) {
   const enabled = Boolean(!plain && output.isTTY && env.TERM !== 'dumb' && !env.CI);

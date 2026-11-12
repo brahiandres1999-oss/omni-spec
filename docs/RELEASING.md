@@ -1,119 +1,129 @@
-# Publicación e instalación de OmniSpec
+# Publicación y Gestión de Releases de OmniSpec
 
-Versión oficial: **OmniSpec 0.8.1**, canal npm `latest`, GitHub Releases oficial. Publicada el 2026-10-30. Las [notas de lanzamiento](releases/0.8.1.md) describen cambios, arquitectura y compatibilidad consolidada.
+> **Guía exclusiva para mantenedores del repositorio.**  
+> Esta guía documenta el protocolo operativo para empaquetar, etiquetar, publicar y distribuir versiones oficiales de OmniSpec.  
+> Para instrucciones de instalación, inicialización de proyectos, actualización o migración dirigidas a usuarios finales, consulta la [Guía de Instalación](INSTALLATION.md).
 
-Comprobar cuentas, permisos y estado del registro antes de publicar futuras versiones. Los pasos de esta guía se ejecutan para la versión autorizada por el mantenedor. Un paquete público npm distribuye las fuentes incluidas en su tarball; la visibilidad del repositorio se administra por separado.
+Versión oficial actual: **OmniSpec 0.9.0** (canal npm `latest`, GitHub Releases oficial).  
+Consulta las [Notas de lanzamiento de 0.9.0](releases/0.9.0.md) para detalles de arquitectura, cartografía AST, memoria SQLite/FTS5 externa y contratos proporcionales.
 
-## Release en GitHub
+---
 
-### Ruta de integración de 0.8.0-preview.2
+## Flujo Oficial de Publicación
 
-1. Revisar el diff de la candidata en `next/0.8`, actualizar notas y roadmap y ejecutar los controles locales. Los trabajos 015/016 permanecen para otra entrega del mismo paquete.
-2. Crear un commit con Conventional Commits y enviarlo a `origin/next/0.8`. Abrir un PR con base `main` y comparar el contenido completo de la rama; el PR conserva los límites de aceptación pendientes.
-3. Comprobar la CI del último commit del PR antes de integrarlo. Un PR en borrador permite dejar preparado el cambio mientras falten revisiones o autenticación. Conservar `next/0.8` para continuar el desarrollo.
-4. Después de integrar, comprobar el commit exacto de `main` y su CI. Crear `v0.8.0-preview.2` sobre ese commit validado; no etiquetar una copia local distinta.
-5. Comprobar que el workflow `Release` termina correctamente y publica la prerelease de GitHub con tarball y SHA-256.
-6. Ejecutar manualmente `Publish npm (configured trusted publisher required)` desde Actions con esa etiqueta. npm debe tener configurado el Trusted Publisher del repositorio y `publish-npm.yml`. Como alternativa, el mantenedor puede publicar el mismo tarball mediante el flujo manual descrito abajo.
-7. Verificar la versión, integridad y canal en npm y probar una instalación desechable por versión exacta. La publicación en `preview` conserva `latest`; promover a estable es una decisión posterior.
+El proceso de liberación de una nueva versión se ejecuta siguiendo estrictamente los siguientes pasos ordenados.
 
-La observación de interacción de coexistencia y los recorridos en hosts reales se registran separadamente de la CI. Publicar una Preview no permite declararlos aprobados ni cerrar criterios pendientes sin evidencia.
+### 1. Creación de la rama de release
 
-### Procedimiento y artefactos
+Toda versión se prepara a partir de la rama principal (`main`) en una rama dedicada con la convención de nomenclatura `release/vX.Y.Z`:
 
-1. Ejecutar `npm test`, `npm run test:package`, `npm run release:check` y `git diff --check`.
-2. Revisar y crear el commit con código, pruebas, workflows y documentación. Las salidas locales (`artifacts/`, `coverage/`, tarballs) están en `.gitignore` y no se versionan.
-3. Crear la etiqueta anotada correspondiente a package.json y enviarla solo después de autorización expresa. Para esta candidata sería `v0.8.0-preview.2`; no se ha creado ni enviado. No mover una etiqueta publicada para cambiar sus bytes.
-4. El workflow `release.yml` tiene configurada validación Ubuntu/Windows con Node 22.19, 22, 24 y 26, comprueba versión/etiqueta/notas y distingue prerelease mediante sufijo. La configuración no demuestra una ejecución remota.
-5. La release adjunta el tarball y su SHA256 con el nombre derivado de la versión. Comprobar el resultado del workflow, no solo que exista la etiqueta.
-
-`npm run release:pack` produce los mismos tipos de artefactos localmente en `artifacts/release/`. El checksum identifica cada archivo concreto; no se promete que dos empaquetados separados tengan bytes idénticos. El workflow npm descarga y verifica el archivo concreto publicado en GitHub.
-
-## Publicación manual en npm
-
-`npx` ejecuta paquetes de npm. Antes de publicar, probar el tarball local de [PILOT](PILOT.md). Después, `npx --yes omni-spec@preview init` selecciona la Preview y `@0.8.0-preview.2` fija sus bytes por versión. `@latest` sigue seleccionando la publicación normal. No poner tokens ni credenciales en URLs.
-
-1. Crear una cuenta en [npm](https://www.npmjs.com/signup), verificar el correo y configurar la autenticación que solicite npm para publicar. No compartir contraseña, códigos de un solo uso ni tokens con el agente.
-2. En una terminal propia ejecutar `npm login --auth-type=web --registry=https://registry.npmjs.org/` y completar el navegador. `npm whoami --registry=https://registry.npmjs.org/` confirma la identidad.
-3. Seleccionar el tarball y checksum de la versión autorizada y comprobar SHA-256. En PowerShell: `Get-FileHash ./omni-spec-0.8.1.tgz -Algorithm SHA256`; comparar con el archivo `.sha256`.
-4. Publicar ese archivo:
-
-```sh
-npm publish ./omni-spec-0.8.1.tgz --access public --registry=https://registry.npmjs.org/
+```bash
+git checkout main
+git pull origin main
+git checkout -b release/v0.9.0
 ```
 
-5. Completar la autenticación adicional que npm solicite. Comprobar versión e integridad exactas con npm view y probar el comando por nombre en un proyecto desechable.
+### 2. Ejecución y validación de compuertas de calidad locales
 
-El nombre `omni-spec` ya está publicado en npm por el mantenedor (versión 0.6.1 en `latest`, consultado el 2026-10-23); publicar una prerelease con `--tag preview` no cambia lo que instala `npx omni-spec` sin versión. Si la cuenta publicadora cambia, confirmar antes su permiso sobre el paquete. No modificar silenciosamente un tarball o etiqueta ya publicados. npm no permite reutilizar una combinación nombre/versión publicada.
+Antes de consolidar o etiquetar cualquier cambio, todas las compuertas de calidad y consistencia deben ejecutarse en local y superarse con cero errores y cero advertencias:
 
-## Publicaciones posteriores mediante GitHub Actions
+```bash
+# 1. Suite de pruebas unitarias e integración (runner nativo de Node.js)
+npm test
 
-Después de tener el paquete y acceso a sus ajustes en npm, configurar un **Trusted Publisher** para:
+# 2. Análisis estático y formateo con Biome
+npm run lint
 
-- Organización/usuario GitHub: `brahiandres1999-oss`.
-- Repositorio: `omni-spec`.
-- Archivo workflow: `publish-npm.yml`.
+# 3. Smoke test integral del empaquetado y bootstrap aislado
+npm run test:package
 
-El workflow existe pero no se ejecuta al crear una release: se inicia manualmente en Actions con la etiqueta existente. Usa Node 24, npm 11 y OIDC (`id-token: write`); requiere haber configurado la relación de confianza en npm. Descarga el tarball de GitHub, valida el checksum y usa el canal calculado desde la versión: `preview` para Preview, `next` para otras prereleases y `latest` para versiones normales, sin un token npm persistente. La configuración de esa cuenta no se crea desde el repositorio.
+# 4. Verificación estricta de coherencia de versión, metadatos, banner y changelog
+npm run release:check
 
-La generación automática de provenance de npm tiene requisitos propios, entre ellos la visibilidad del repositorio; comprobarlos para la publicación concreta. Publicación, checksum y provenance son comprobaciones distintas.
-
-Mantener versión y canal alineados: `0.8.0-preview.N` → `preview`; otras prereleases → `next`; versiones normales → `latest`. Para cada versión actualizar paquete, lockfile, README/banner, changelog y `docs/releases/<version>.md`. `release:check` rechaza inconsistencias. Las publicaciones npm no permiten reutilizar nombre/versión.
-
-## Uso desde npm una vez publicado
-
-```sh
-# Sin instalación global
-npx --yes omni-spec@0.8.0-preview.2 init --yes --agent antigravity
-
-# CLI global opcional; no inicializa todos los proyectos automáticamente
-npm install --global omni-spec@preview
-omni-spec init --yes --agent antigravity
+# 5. Sincronización de esquemas, documentación y activos de OmniPage
+npm run sync:page
 ```
 
-Cada `init` copia el runtime al proyecto. La instalación global solo facilita el comando de bootstrap/actualización. Un proyecto Python, Java o de otro stack no necesita un `package.json` de aplicación para utilizar ese runtime.
+> **Regla de integridad:** `npm run release:check` valida que `dependencies` en `package.json` permanezca estrictamente vacío (cero dependencias externas en producción), que la versión coincida exactamente en `package.json`, `package-lock.json`, `plugin.json`, `README.md`, `CHANGELOG.md` y `assets/omni-spec-banner.svg`, y que el archivo de notas correspondiente en `docs/releases/X.Y.Z.md` exista físicamente.
 
-## Actualizar proyectos
+### 3. Consolidación en un único commit squashed
 
-Abrir la raíz del proyecto destino. Una vez disponible la versión en npm:
+Todos los cambios del release deben consolidarse en un único commit estructurado bajo la especificación [Conventional Commits](https://www.conventionalcommits.org/):
 
-```sh
-npx --yes omni-spec@0.8.0-preview.2 update --dry-run
-npx --yes omni-spec@0.8.0-preview.2 update
+```bash
+git add .
+git commit -m "feat(release): 0.9.0 — Universal Agentic Engineering Engine"
 ```
 
-Antes de publicar en npm, utilizar una copia del código o su tarball local:
+- **Autoría:** El commit debe ser firmado y atribuido exclusivamente al mantenedor oficial.
+- **Sin coautorías de IA:** Omitir estrictamente cualquier trailer automático de coautoría (`Co-authored-by: ...`), identificadores de chat o enlaces efímeros de sesión.
 
-```sh
-npx --yes --package="/ruta/al/omni-spec-0.8.1.tgz" omni-spec update --dry-run
+### 4. Creación de la etiqueta anotada
+
+Crear la etiqueta Git anotada correspondiente a la versión SemVer exacta:
+
+```bash
+git tag -a v0.9.0 -m "Release v0.9.0 — Universal Agentic Engineering Engine"
 ```
 
-Después de revisar, repetir sin `--dry-run`. Se conservan contexto, constitución, especificaciones y selección de agente. Archivos administrados personalizados bloquean la operación; `--accept-updates` acepta su reemplazo con copia de respaldo después de revisar conflictos. Recargar el agente después de actualizar skills/comandos.
+> **Importante:** Nunca usar etiquetas ligeras (`lightweight tags`). Las etiquetas anotadas garantizan la trazabilidad del autor, la fecha y el mensaje criptográfico inmutable del release. No mover ni sobrescribir jamás una etiqueta ya publicada.
 
-Actualizar el CLI global (`npm install -g omni-spec@preview`) no actualiza las copias de los proyectos; ejecutar `omni-spec update` dentro de cada uno. Ejecutar el `update` del runtime viejo utiliza los recursos viejos, no descarga una versión nueva.
+### 5. Envío remoto, Pull Request e integración
 
-### Copias locales de 0.7.0-rc.1 o rc.2
+Enviar la rama de release junto con su etiqueta al repositorio remoto en GitHub:
 
-SemVer ordena `0.8.0-preview.2` después de `0.7.0-rc.1` y `rc.2`: pasar de esas candidatas locales a la Preview actual es una subida de versión y no requiere `--allow-downgrade`. Con el CLI de la Preview, revisar:
-
-```sh
-npm exec --offline --yes --package "/ruta/al/omni-spec-0.8.1.tgz" -- omni-spec update --dry-run
+```bash
+git push -u origin release/v0.9.0 --tags
 ```
 
-Si la revisión es correcta, repetir sin `--dry-run`. Se conservan contexto, configuración y especificaciones; las personalizaciones administradas siguen sujetas a revisión/respaldo. Desde 0.6.1 tampoco hace falta `--allow-downgrade`.
+1. Abrir un **Pull Request** desde `release/v0.9.0` hacia `main`.
+2. Verificar que los flujos de integración continua en GitHub Actions (`ci.yml` y `validate.yml`) concluyan exitosamente en todas las matrices de sistemas operativos (Ubuntu, Windows) y runtimes soportados (Node.js 22.19.0+, 24, 26).
+3. Tras la aprobación final, integrar el Pull Request en `main` (merge commit o squash según convención del repositorio).
 
-### Copias de desarrollo que ya dicen 0.5.0
+### 6. Release automatizado en GitHub Actions
 
-Usar el mismo procedimiento: CLI nuevo, `update --dry-run` y `update`. El actualizador compara archivos aunque coincida el número de versión; subir desde 0.5.0 o 0.5.0-rc.1 a esta candidata no requiere permitir downgrade. Se preservan los trabajos completados y sus registros de verificación; no se les atribuyen comprobaciones nuevas.
+El flujo automatizado `.github/workflows/release.yml` se dispara automáticamente ante la recepción del tag `v*` (ejemplo `v0.9.0`):
 
-### Especificaciones anteriores al registro por criterio
+1. **Validación:** Invoca `validate.yml` para re-ejecutar la matriz de pruebas completas multiplataforma.
+2. **Empaquetado (`npm run release:pack`):** Construye el tarball oficial reproducible (`omni-spec-0.9.0.tgz`) y calcula su firma criptográfica `omni-spec-0.9.0.tgz.sha256` en el directorio `artifacts/release/`.
+3. **Publicación del GitHub Release:** Utiliza la acción `softprops/action-gh-release` para publicar la Release oficial en GitHub, adjuntando el archivo tarball y su suma SHA-256, empleando el contenido de `docs/releases/0.9.0.md` como cuerpo oficial de la nota de lanzamiento. Versiones con sufijos preliminares (ej. `-preview.N`, `-rc.N`) se marcan automáticamente como prereleases.
 
-`update` no reescribe las especificaciones. Para volver a verificar/completar una antigua, el agente debe asignar IDs `AC-01`, `AC-02`, etc. en su artefacto principal y crear `acceptance.json` con esos mismos IDs, método (`automated`, `manual`, `inspection`, `decision`), estado y evidencia específica. Una RFC sin otros criterios usa `DECISION`. Un estado distinto de `passed`, una fila ausente o un ID inventado bloquea el cierre.
+### 7. Publicación en el registro público de npm
 
-Una evidencia manual concreta es válida cuando corresponde. Una inspección de código no demuestra una interacción ejecutada o conformidad de accesibilidad. Una afirmación falsa puede llenar el JSON: la revisión de significado sigue siendo necesaria. Modificar criterios o evidencia invalida la huella de verificación y exige otra ejecución de `verify`.
+La publicación en npm se realiza mediante el flujo automatizado `.github/workflows/publish-npm.yml`:
 
-## Fuentes oficiales
+- **Activación:** Se dispara manualmente mediante `workflow_dispatch` desde la interfaz de GitHub Actions indicando la etiqueta existente (ej. `v0.9.0`).
+- **npm Trusted Publisher (OIDC):** El workflow opera mediante autenticación federada OIDC (`id-token: write`), prescindiendo totalmente de contraseñas o tokens npm persistentes en secretos del repositorio.
+- **Verificación de Integridad:** Descarga el tarball exacto generado por la GitHub Release, valida que su hash SHA-256 coincida byte a byte (`node scripts/release-assets.mjs verify`), y publica el paquete bajo el canal correspondiente (`latest` para versiones estables como 0.9.0, `preview` para preliminares).
 
-- [npm publish](https://docs.npmjs.com/cli/v11/commands/npm-publish/): publicación, acceso y versiones no reutilizables.
-- [npx](https://docs.npmjs.com/cli/v11/commands/npx/): ejecución de paquetes.
-- [Trusted publishing](https://docs.npmjs.com/trusted-publishers/): configuración OIDC y requisitos de npm/runtime.
-- [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html): orden de versiones prerelease y estables.
+#### Procedimiento de contingencia / Publicación manual de emergencia
+
+En caso de que la federación OIDC o GitHub Actions no estuviesen disponibles temporalmente, el mantenedor oficial puede publicar el tarball verificado de forma manual:
+
+1. Iniciar sesión en npm en una terminal local segura:
+   ```bash
+   npm login --auth-type=web --registry=https://registry.npmjs.org/
+   npm whoami --registry=https://registry.npmjs.org/
+   ```
+2. Generar y verificar la suma SHA-256 del paquete:
+   ```bash
+   # En Windows PowerShell:
+   Get-FileHash ./artifacts/release/omni-spec-0.9.0.tgz -Algorithm SHA256
+   ```
+3. Publicar el archivo empaquetado exacto:
+   ```bash
+   npm publish ./artifacts/release/omni-spec-0.9.0.tgz --access public --tag latest --registry=https://registry.npmjs.org/
+   ```
+
+> **Advertencia:** npm no permite reutilizar ni reemplazar ninguna combinación de nombre y versión previamente publicada. Nunca alteres un tarball después de ser publicado.
+
+---
+
+## Documentación y Referencias Relacionadas
+
+- [Guía de Instalación para usuarios finales](INSTALLATION.md)
+- [Guía de Contribución](../CONTRIBUTING.md)
+- [Notas de Versión OmniSpec 0.9.0](releases/0.9.0.md)
+- [npm Trusted Publishers](https://docs.npmjs.com/trusted-publishers/)
+- [Especificación SemVer 2.0.0](https://semver.org/spec/v2.0.0.html)
+- [Conventional Commits 1.0.0](https://www.conventionalcommits.org/)

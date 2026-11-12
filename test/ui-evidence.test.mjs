@@ -5,14 +5,15 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { scaffoldProject, createSpec } from '../src/generator.mjs';
 import { verifySpec, completeSpec } from '../src/verification.mjs';
-import { recordSession } from '../src/project-state.mjs';
+import { recordSession, recordContext } from '../src/project-state.mjs';
 import { fillSpec } from '../test-support/fixtures.mjs';
 
 let root, spec, criterion;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omni-ui-evidence-'));
   await scaffoldProject(root);
-  spec = await createSpec(root, 'feature', 'interface');
+  await recordContext(root);
+  spec = await createSpec(root, 'feature', 'interface', { full: true });
   await fillSpec(root, spec);
   criterion = {
     id: 'AC-01',

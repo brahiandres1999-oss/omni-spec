@@ -12,7 +12,7 @@ const gates = 'node -e "process.exit(0)"';
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'omni-evidence-'));
   await scaffoldProject(root, { qualityGates: gates });
-  spec = await createSpec(root, 'feature', 'nested evidence');
+  spec = await createSpec(root, 'feature', 'nested evidence', { full: true });
   spec.type = 'feature';
   await fillSpec(root, spec);
 });

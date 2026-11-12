@@ -58,6 +58,15 @@ export function citedProjectFiles(text) {
 export const CONTEXT_CHARACTER_LIMIT = 24000;
 
 /**
+ * Token estimate shared by the context auditor and the Studio Skill Hub: four characters per
+ * token over the BOM-less, LF-normalized text. An estimate, not a model tokenizer.
+ * @param {string} text
+ */
+export function estimateTokens(text) {
+  return Math.round(text.replace(/^﻿/, '').replace(/\r\n/g, '\n').length / 4);
+}
+
+/**
  * Check the structure and local links of specs/project-context.md. The check is deliberately
  * structural: the existence of a citation is not proof of its meaning. A context longer than
  * CONTEXT_CHARACTER_LIMIT, counted without BOM and with each CRLF as one line break, adds a
@@ -127,7 +136,7 @@ export async function auditProjectContext(root) {
     warnings.push('No local Markdown citations checked. Backtick paths and prose citations require manual review.');
   const characters = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').length;
   const withinBudget = characters <= CONTEXT_CHARACTER_LIMIT;
-  const tokensEstimated = Math.round(characters / 4);
+  const tokensEstimated = estimateTokens(text);
   if (!withinBudget)
     warnings.push(
       `specs/project-context.md has ${characters} characters, above the ${CONTEXT_CHARACTER_LIMIT} (about 6,000 tokens) that every workflow reads. Distill it: keep current state, decisions, open risks and next action; summarize completed work.`,
