@@ -9,8 +9,18 @@ export function omniHome(env = process.env) {
   return join(local, 'OmniSpec');
 }
 
+function canonicalRoot(root) {
+  const resolved = resolve(root);
+  try {
+    return fs.realpathSync(resolved);
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return resolved;
+    throw error;
+  }
+}
+
 export function workspaceId(root, platform = process.platform) {
-  let key = resolve(root).replaceAll('\\', '/').replace(/\/+$/, '');
+  let key = canonicalRoot(root).replaceAll('\\', '/').replace(/\/+$/, '');
   if (platform === 'win32') key = key.toLowerCase();
   return createHash('sha256').update(key, 'utf8').digest('hex').slice(0, 16);
 }
@@ -18,14 +28,12 @@ export function workspaceId(root, platform = process.platform) {
 export const sameRoot = (a, b) => workspaceId(a) === workspaceId(b);
 
 export function workspaceDir(root, env = process.env) {
-  const dir = join(omniHome(env), 'workspaces', workspaceId(root));
+  const canonical = canonicalRoot(root);
+  const dir = join(omniHome(env), 'workspaces', workspaceId(canonical));
   fs.mkdirSync(dir, { recursive: true });
   const marker = join(dir, 'workspace.json');
   if (!fs.existsSync(marker)) {
-    fs.writeFileSync(
-      marker,
-      JSON.stringify({ root: resolve(root), createdAt: new Date().toISOString() }, null, 2) + '\n',
-    );
+    fs.writeFileSync(marker, `${JSON.stringify({ root: canonical, createdAt: new Date().toISOString() }, null, 2)}\n`);
   }
   return dir;
 }
