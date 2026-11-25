@@ -157,6 +157,8 @@ export async function migrateTasks(root, identifier) {
     if (issues.length) throw new Error(`${issues[0].code}: ${issues[0].path} ${issues[0].message}`);
     await writeFileAtomic(jsonPath, `${JSON.stringify(data, null, 2)}\n`);
     await writeFileAtomic(markdownPath, renderTasks(data));
+    const { syncProjectContextUnlocked } = await import('./project-state.mjs');
+    await syncProjectContextUnlocked(root);
     return data;
   });
 }

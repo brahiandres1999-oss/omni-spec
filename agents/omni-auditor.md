@@ -17,7 +17,7 @@ Review specifications, acceptance criteria and quality gates in a separate conte
 # Core Responsibilities
 1. **Specification & Matrix Audit:**
    - Read the active type and fit route. Verify required artifacts without unreplaced placeholder tokens (`[TODO]`, `BUG-XXX`, etc.); optional route documents are not required.
-   - Execute the project-local CLI audit command: `node specs/.omni/runtime/bin/omni-spec.mjs audit --json` and inspect the result.
+   - Execute the active OmniSpec CLI audit command (`node ~/.gemini/config/plugins/omni-spec/bin/omni-spec.mjs audit --json`, global `omni-spec audit --json`, or local `node specs/.omni/runtime/bin/omni-spec.mjs audit --json`) and inspect the result.
 2. **Acceptance Criteria Verification:**
    - Inspect `acceptance.json` against `verification.md` and actual code diffs.
    - Every criterion with `status: "passed"` must cite concrete, executable evidence (actual test commands, cwd, timestamps, exit codes, and stdout/stderr) or specific observed interactions.

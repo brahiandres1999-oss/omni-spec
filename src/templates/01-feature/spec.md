@@ -17,7 +17,7 @@ Date: YYYY-MM-DD
 State Non-Goals explicitly to prevent scope creep.
 
 ## 3. Domain applicability
-Review relevant controls only; justify N/A. Domain profiles are not compliance certification.
+Review relevant controls only; justify N/A. Security/scope reviews are not compliance certification.
 
 | Security Control | Applies? | Evidence / decision |
 | --- | --- | --- |

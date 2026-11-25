@@ -34,7 +34,7 @@ export function isResolutionConfig(path) {
 
 /** JSON with comments and trailing commas (tsconfig/jsconfig), string-aware. */
 export function parseJsonc(text) {
-  const source = text.replace(/^﻿/, '');
+  const source = text.replace(/^\uFEFF/, '');
   let stripped = '';
   let index = 0;
   let copied = 0;
@@ -89,7 +89,7 @@ export function parseJsonc(text) {
 
 /** The `packages:` list of a pnpm-workspace.yaml (block or flow style). */
 export function parsePnpmWorkspace(text) {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/);
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
   const unquote = value =>
     value
       .replace(/\s+#.*$/, '')
@@ -199,7 +199,7 @@ export function createResolver(root, options = {}) {
     let value = null;
     if (text !== null) {
       try {
-        value = jsonc ? parseJsonc(text) : JSON.parse(text.replace(/^﻿/, ''));
+        value = jsonc ? parseJsonc(text) : JSON.parse(text.replace(/^\uFEFF/, ''));
       } catch (error) {
         warn(code, path, `${path}: ${error.message}`);
       }

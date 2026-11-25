@@ -63,7 +63,7 @@ export const CONTEXT_CHARACTER_LIMIT = 24000;
  * @param {string} text
  */
 export function estimateTokens(text) {
-  return Math.round(text.replace(/^﻿/, '').replace(/\r\n/g, '\n').length / 4);
+  return Math.round(text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').length / 4);
 }
 
 /**

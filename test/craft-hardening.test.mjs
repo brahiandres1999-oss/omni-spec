@@ -104,7 +104,7 @@ describe('Delivery protocol distribution (not a generated-product quality evalua
   });
 
   test('update preserves a different constitution and writes the light one as reference', async () => {
-    await scaffoldProject(tempDir, { projectName: 'RefApp', profile: 'fintech' });
+    await scaffoldProject(tempDir, { projectName: 'RefApp', profile: 'general' });
     const constitution = join(tempDir, 'CONSTITUTION.md');
     const own = '# Our constitution\r\n\r\nKept byte for byte.\r\n';
     await writeFile(constitution, own);

@@ -25,8 +25,41 @@ export function supportsTerminalUI(input, output, env = process.env, plain = fal
   );
 }
 
-function colorEnabled(output, env) {
-  return Boolean(output.isTTY && !Object.hasOwn(env, 'NO_COLOR') && env.FORCE_COLOR !== '0' && output.hasColors?.(16));
+function ensureUtf8Output(output) {
+  if (output === process.stdout && typeof output?.setDefaultEncoding === 'function') {
+    output.setDefaultEncoding('utf8');
+  }
+}
+
+/** Detect TrueColor (24-bit) support across PowerShell, Windows Terminal, VS Code, iTerm2, WezTerm, and standard POSIX TTYs. */
+export function resolveColorDepth(output, env = process.env) {
+  if (env.FORCE_COLOR === '1') return 4;
+  if (env.FORCE_COLOR === '2') return 8;
+  if (env.FORCE_COLOR === '3') return 24;
+  const reported = typeof output?.getColorDepth === 'function' ? output.getColorDepth(env) : 4;
+  const colorterm = String(env.COLORTERM || '').toLowerCase();
+  const termProgram = String(env.TERM_PROGRAM || '').toLowerCase();
+  if (
+    colorterm === 'truecolor' ||
+    colorterm === '24bit' ||
+    env.WT_SESSION ||
+    termProgram === 'vscode' ||
+    termProgram === 'iterm.app' ||
+    termProgram === 'wezterm'
+  ) {
+    return Math.max(reported || 4, 24);
+  }
+  return reported || 4;
+}
+
+function colorEnabled(output, env = process.env) {
+  return Boolean(
+    output?.isTTY &&
+      !Object.hasOwn(env, 'NO_COLOR') &&
+      env.FORCE_COLOR !== '0' &&
+      env.TERM !== 'dumb' &&
+      (typeof output.hasColors === 'function' ? output.hasColors(16) : true),
+  );
 }
 
 function paint(value, role, color, depth = 24) {
@@ -35,6 +68,17 @@ function paint(value, role, color, depth = 24) {
   const rgb = palette[role];
   const code = depth >= 24 ? `38;2;${rgb.join(';')}` : { blue: 94, amber: 33, green: 32, ink: 97, muted: 90 }[role];
   return `${ESC}${code}m${value}${reset}`;
+}
+
+function paintDetailLine(line, color, depth) {
+  if (!color) return line;
+  const colonIdx = line.indexOf(': ');
+  if (colonIdx > 0 && colonIdx <= 32 && !line.startsWith('http')) {
+    const key = line.slice(0, colonIdx + 1);
+    const rest = line.slice(colonIdx + 1);
+    return paint(key, 'blue', color, depth) + paint(rest, 'muted', color, depth);
+  }
+  return paint(line, 'muted', color, depth);
 }
 
 /** Keep user-controlled paths and declarations from injecting terminal control sequences. */
@@ -103,8 +147,8 @@ const BANNER_PARTS = [
 ];
 
 /** Clean dual-tone ASCII wordmark for OmniSpec: corporate blue for Omni and warm amber for Spec. */
-export function logoLines(color = false, depth = 24, { version = '0.8.1' } = {}) {
-  const versionTag = version?.startsWith('v') ? version : `v${version || '0.8.1'}`;
+export function logoLines(color = false, depth = 24, { version = '0.10.0' } = {}) {
+  const versionTag = version?.startsWith('v') ? version : `v${version || '0.10.0'}`;
   const lines = BANNER_PARTS.map(
     ([omni, spec]) => paint(omni, 'blue', color, depth) + paint(spec, 'amber', color, depth),
   );
@@ -160,10 +204,22 @@ function frameLayout({
       );
     }
   } else
-    lines.push(`  ${paint('OmniSpec', 'amber', color, depth)}  ${fit(version ? `v${version}` : 'v0.8.1', width - 11)}`);
+    lines.push(
+      `  ${paint('OmniSpec', 'amber', color, depth)}  ${fit(version ? `v${version}` : 'v0.10.0', width - 11)}`,
+    );
+  const clampedStep = Math.max(1, Math.min(3, Number(step) || 1));
+  const stepLabel = `${es ? 'PREPARAR PROYECTO' : 'PREPARE PROJECT'}   ${clampedStep} / 3`;
+  const stepBarPlain = `[${'='.repeat(clampedStep * 2)}${'.'.repeat((3 - clampedStep) * 2)}]`;
+  const stepBarStyled = color
+    ? `${paint('[', 'muted', color, depth)}${paint('='.repeat(clampedStep * 2), 'amber', color, depth)}${paint(`${'.'.repeat((3 - clampedStep) * 2)}]`, 'muted', color, depth)}`
+    : stepBarPlain;
+  const stepLine =
+    width >= textWidth(stepLabel) + 10
+      ? `  ${paint(stepLabel, 'muted', color, depth)}  ${stepBarStyled}`
+      : `  ${paint(fit(stepLabel, width), 'muted', color, depth)}`;
   lines.push(
     '',
-    `  ${paint(`${es ? 'PREPARAR PROYECTO' : 'PREPARE PROJECT'}   ${step} / 3`, 'muted', color, depth)}`,
+    stepLine,
     `  ${paint('-'.repeat(width), 'muted', color, depth)}`,
     `  ${paint(fit(title, width), 'ink', color, depth)}`,
     '',
@@ -180,7 +236,7 @@ function frameLayout({
   }
   const firstDetail = Math.min(Math.max(0, detailsOffset), Math.max(0, detailLines.length - detailRoom));
   for (const line of detailLines.slice(firstDetail, firstDetail + detailRoom))
-    lines.push(`  ${paint(line, 'muted', color, depth)}`);
+    lines.push(`  ${paintDetailLine(line, color, depth)}`);
   if (detailLines.length > detailRoom)
     lines.push(
       `  ${paint(fit(`${firstDetail + 1}-${firstDetail + detailRoom} / ${detailLines.length} | PgUp/PgDn`, width), 'amber', color, depth)}`,
@@ -241,11 +297,12 @@ function restoreRawMode(input, wasRaw) {
 /** Own raw input only while prompting; always restore the cursor, screen and prior raw mode. */
 export class TerminalInstaller {
   constructor(input, output, { version = '', env = process.env } = {}) {
+    ensureUtf8Output(output);
     this.input = input;
     this.output = output;
     this.version = version;
     this.color = colorEnabled(output, env);
-    this.depth = output.getColorDepth?.() || 4;
+    this.depth = resolveColorDepth(output, env);
     this.wasRaw = Boolean(input.isRaw);
     this.wasPaused = input.readableFlowing !== true;
     this.closed = false;
@@ -369,9 +426,10 @@ export class TerminalInstaller {
 
 /** Final result remains in scrollback, grouped by purpose and readable with or without color. */
 export function resultSections(title, sections, { output = process.stdout, env = process.env, plain = false } = {}) {
+  ensureUtf8Output(output);
   const rich = Boolean(!plain && output.isTTY && env.TERM !== 'dumb' && !env.CI);
   const color = rich && colorEnabled(output, env),
-    depth = output.getColorDepth?.() || 4;
+    depth = resolveColorDepth(output, env);
   const width = Math.max(24, Math.min((output.columns || 90) - 4, 96));
   const lines = ['', `  ${paint(terminalText(title), 'amber', color, depth)}`];
   for (const section of sections) {
@@ -391,44 +449,71 @@ export function resultSections(title, sections, { output = process.stdout, env =
  * the reader needs stands out. Lines wrap only on a rich terminal, as in resultSections.
  * @param {string} title Highlighted first line.
  * @param {{title?: string, lines: string[]}[]} blocks Optional block title and its lines.
- * @param {{output?: object, env?: object, plain?: boolean}} [presentation] Terminal capabilities.
+ * @param {{output?: object, env?: object, plain?: boolean, version?: string, showLogo?: boolean}} [presentation] Terminal capabilities.
  * @returns {string} Text ready to print.
  */
-export function resultSteps(title, blocks, { output = process.stdout, env = process.env, plain = false } = {}) {
+export function resultSteps(
+  title,
+  blocks,
+  { output = process.stdout, env = process.env, plain = false, version = '0.10.0', showLogo = false } = {},
+) {
+  ensureUtf8Output(output);
   const rich = Boolean(!plain && output.isTTY && env.TERM !== 'dumb' && !env.CI);
   const color = rich && colorEnabled(output, env),
-    depth = output.getColorDepth?.() || 4;
+    depth = resolveColorDepth(output, env);
   const width = Math.max(24, Math.min((output.columns || 90) - 6, 94));
-  const lines = ['', `  ${paint(terminalText(title), 'amber', color, depth)}`];
+  const lines = [''];
+  if (rich && showLogo && (output.columns || 90) >= 52) {
+    for (const line of logoLines(color, depth, { version })) lines.push(`  ${line}`);
+    lines.push(`  ${paint('-'.repeat(width), 'muted', color, depth)}`, '');
+  }
+  const badge = rich ? `${paint('[OK]', 'green', color, depth)} ` : '';
+  lines.push(`  ${badge}${paint(terminalText(title), 'amber', color, depth)}`);
   for (const block of blocks) {
     lines.push('');
     if (block.title) lines.push(`  ${paint(terminalText(block.title), 'blue', color, depth)}`);
     for (const line of block.lines)
-      for (const part of rich ? wrap(line, width) : [terminalText(line)]) lines.push(`    ${part}`);
+      for (const part of rich ? wrap(line, width) : [terminalText(line)])
+        lines.push(`    ${rich ? paint(part, 'ink', color, depth) : part}`);
   }
   return lines.join('\n');
 }
 
 /** Stage updates correspond to real awaited operations, without estimated percentages or delays. */
-export function installationProgress(output, language, plain = false, env = process.env) {
+export function installationProgress(output, language, plain = false, env = process.env, { version = '0.10.0' } = {}) {
+  ensureUtf8Output(output);
   const enabled = Boolean(!plain && output.isTTY && env.TERM !== 'dumb' && !env.CI);
   const color = colorEnabled(output, env),
-    depth = output.getColorDepth?.() || 4;
+    depth = resolveColorDepth(output, env);
+  const versionTag = version?.startsWith('v') ? version : `v${version || '0.10.0'}`;
+  const columns = output?.columns || 90;
   return {
     start() {
-      if (enabled)
+      if (!enabled) return;
+      if (columns >= 52) {
+        const banner = logoLines(color, depth, { version })
+          .map(line => `  ${line}`)
+          .join('\n');
         output.write(
-          `\n  ${paint('OmniSpec', 'amber', color, depth)}\n  ${language === 'es' ? 'Instalando archivos...' : 'Installing files...'}\n`,
+          `\n${banner}\n\n  ${paint('>', 'amber', color, depth)} ${paint(language === 'es' ? 'Instalando archivos...' : 'Installing files...', 'muted', color, depth)}\n`,
         );
+      } else {
+        output.write(
+          `\n  ${paint('OmniSpec', 'amber', color, depth)} ${paint(versionTag, 'muted', color, depth)}\n  ${language === 'es' ? 'Instalando archivos...' : 'Installing files...'}\n`,
+        );
+      }
     },
     files() {
       if (enabled)
         output.write(
-          `  [OK] ${language === 'es' ? 'Archivos preparados. Comprobando integridad...' : 'Files prepared. Checking integrity...'}\n`,
+          `  ${paint('[OK]', 'green', color, depth)} ${language === 'es' ? 'Archivos preparados. Comprobando integridad...' : 'Files prepared. Checking integrity...'}\n`,
         );
     },
     done() {
-      if (enabled) output.write(`  [OK] ${language === 'es' ? 'Integridad comprobada.' : 'Integrity checked.'}\n`);
+      if (enabled)
+        output.write(
+          `  ${paint('[OK]', 'green', color, depth)} ${language === 'es' ? 'Integridad comprobada.' : 'Integrity checked.'}\n`,
+        );
     },
   };
 }

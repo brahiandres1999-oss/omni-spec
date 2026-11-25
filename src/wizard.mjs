@@ -214,7 +214,7 @@ export async function runWizard(baseDir, cliOptions = {}, streams = {}) {
       (changedStack ? preset?.doc : existing?.documentationStandard) ||
       detected.docStandard ||
       'Project conventions',
-    profile: cliOptions.profile || existing?.profile || 'general',
+    profile: cliOptions.profile || (validProfiles.includes(existing?.profile) ? existing.profile : 'general'),
     qualityGates: cliOptions.gates ?? existing?.qualityGates ?? '',
     environment: detected,
     agent,

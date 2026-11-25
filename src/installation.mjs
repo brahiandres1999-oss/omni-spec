@@ -157,5 +157,8 @@ export function installationMessage(installation, hasActiveWork = false, present
   lines.push(hasActiveWork ? t.resume : t.build);
   const blocks = [{ title: t.next, lines }];
   if (steps.length) blocks.push({ title: t.missing(invocation(steps[0])), lines: [t.prompt(installation.fallback)] });
-  return resultSteps(t.ready(installation.version, installation.directory), blocks, presentation);
+  return resultSteps(t.ready(installation.version, installation.directory), blocks, {
+    version: installation.version,
+    ...presentation,
+  });
 }

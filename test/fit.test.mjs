@@ -642,4 +642,70 @@ describe('Spec Fit in the working project', () => {
     assert.equal(report.route, 'invalid');
     assert.ok(report.errors.some(e => e.includes('"files" is invalid')));
   });
+
+  test('CLI fit with individual small flags (--files 1 --modules 1 --risk low) without --preset derives light route instead of full', async () => {
+    await scaffoldProject(tempDir, { projectName: 'FlagOnlyLightApp' });
+    const spec = await createSpec(tempDir, 'feature', 'tiny-label-change');
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--files', '1', '--modules', '1', '--risk', 'low', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    const report = JSON.parse(lines.join('\n'));
+    assert.equal(report.route, 'light');
+    assert.deepEqual(report.scaffolded, []);
+    await assert.rejects(access(join(spec.specDir, 'plan.md')));
+    await assert.rejects(access(join(spec.specDir, 'tasks.md')));
+
+    // Updating files to 2 on an existing light spec preserves light route
+    lines.length = 0;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--files', '2', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    const updated = JSON.parse(lines.join('\n'));
+    assert.equal(updated.route, 'light');
+    await assert.rejects(access(join(spec.specDir, 'plan.md')));
+
+    // Passing --existing-tests=false escalates light to standard (plan.md only, no tasks.md)
+    lines.length = 0;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['fit', spec.id, '--existing-tests=false', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    const standardReport = JSON.parse(lines.join('\n'));
+    assert.equal(standardReport.route, 'standard');
+    assert.deepEqual(standardReport.scaffolded, ['plan.md']);
+    await access(join(spec.specDir, 'plan.md'));
+    await assert.rejects(access(join(spec.specDir, 'tasks.md')));
+  });
+
+  test('CLI create --preset light initializes light route directly', async () => {
+    await scaffoldProject(tempDir, { projectName: 'PresetCreateApp' });
+    const lines = [];
+    const original = console.log;
+    console.log = value => lines.push(value);
+    try {
+      const code = await runCli(['create', 'feature', 'preset-light-feature', '--preset', 'light', '--json'], tempDir);
+      assert.equal(code, 0);
+    } finally {
+      console.log = original;
+    }
+    const created = JSON.parse(lines.join('\n'));
+    assert.equal(created.route, 'light');
+    const dir = join(tempDir, 'specs', created.slug);
+    await access(join(dir, 'fit.json'));
+    await assert.rejects(access(join(dir, 'plan.md')));
+    await assert.rejects(access(join(dir, 'tasks.md')));
+  });
 });

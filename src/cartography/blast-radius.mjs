@@ -131,7 +131,7 @@ export function isTestModule(path) {
 
 function readJson(root, path) {
   try {
-    return { value: JSON.parse(fs.readFileSync(join(root, ...path.split('/')), 'utf8').replace(/^﻿/, '')) };
+    return { value: JSON.parse(fs.readFileSync(join(root, ...path.split('/')), 'utf8').replace(/^\uFEFF/, '')) };
   } catch (error) {
     return error.code === 'ENOENT' ? { missing: true } : { error };
   }

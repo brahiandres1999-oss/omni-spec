@@ -13,7 +13,7 @@ const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
 
 const stringArray = { type: 'array', items: { type: 'string' } };
-const OBSERVATION_CATEGORIES = new Set(['pattern', 'gotcha', 'convention', 'constraint']);
+const OBSERVATION_CATEGORIES = new Set(['pattern', 'gotcha', 'convention', 'constraint', 'review-remark']);
 
 export const TOOLS = [
   {
@@ -60,8 +60,8 @@ export const TOOLS = [
       properties: {
         category: {
           type: 'string',
-          enum: ['pattern', 'gotcha', 'convention', 'constraint'],
-          description: 'Tipo de aprendizaje: pattern, gotcha, convention o constraint',
+          enum: ['pattern', 'gotcha', 'convention', 'constraint', 'review-remark'],
+          description: 'Tipo de aprendizaje: pattern, gotcha, convention, constraint o review-remark',
         },
         scope: { type: 'string', description: 'Archivo, directorio o módulo al que aplica' },
         summary: { type: 'string', description: 'Descripción clara del aprendizaje' },
@@ -99,7 +99,7 @@ function argumentProblems({ inputSchema }, args) {
 
 function readAcceptance(root, spec) {
   const path = join(root, 'specs', spec.slug, 'acceptance.json');
-  return fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8').replace(/^﻿/, '')) : null;
+  return fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8').replace(/^\uFEFF/, '')) : null;
 }
 
 function hasTable(db, name) {
@@ -109,7 +109,12 @@ function hasTable(db, name) {
 function toolHandlers(root, memory) {
   return {
     async omni_search_context({ query, scope }) {
-      await syncFromGit(memory, root);
+      await syncFromGit(memory, root).catch(error => {
+        if (/HEAD:\.\/specs/.test(error.message)) {
+          return memory.syncSpecs(root, { treeOid: '', status: '', prefix: '' });
+        }
+        throw error;
+      });
       return { results: memory.searchContext(query, { scope: scope ?? null }) };
     },
     async omni_get_active_spec() {

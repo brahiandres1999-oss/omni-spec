@@ -2,5 +2,5 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "omni-spec",
   "description": "Universal Agentic Engineering Engine and zero-dependency CLI: polyglot cartography, external SQLite memory, proportional contracts, and cryptographic verification gates.",
-  "version": "0.9.0"
+  "version": "0.10.0"
 }

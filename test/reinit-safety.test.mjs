@@ -22,7 +22,7 @@ describe('Regression R01: Re-initialization & Non-destructive Safety', () => {
   });
 
   test('re-running scaffoldProject preserves customized CONSTITUTION.md and existing specs', async () => {
-    const options = { projectName: 'PaymentService', profile: 'fintech', stack: 'Node.js', docStandard: 'TSDoc' };
+    const options = { projectName: 'PaymentService', profile: 'general', stack: 'Node.js', docStandard: 'TSDoc' };
     await scaffoldProject(tempDir, options);
 
     // Create a first specification and customize constitution

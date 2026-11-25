@@ -1,9 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { OMNI_SKILLS } from '../src/workflows.mjs';
 import { HOST_RULE } from '../src/protocols.mjs';
 
-const skillsDir = join(process.cwd(), 'skills');
+const pkgRoot = fileURLToPath(new URL('..', import.meta.url));
+const targetRoot = process.cwd() === dirname(pkgRoot) ? pkgRoot : process.cwd();
+const skillsDir = join(targetRoot, 'skills');
 
 for (const skill of OMNI_SKILLS) {
   const dir = join(skillsDir, skill.name);
@@ -12,7 +15,7 @@ for (const skill of OMNI_SKILLS) {
   await writeFile(join(dir, 'SKILL.md'), content, 'utf-8');
 }
 
-const rulesDir = join(process.cwd(), 'rules');
+const rulesDir = join(targetRoot, 'rules');
 await mkdir(rulesDir, { recursive: true });
 await writeFile(
   join(rulesDir, 'constitution.md'),

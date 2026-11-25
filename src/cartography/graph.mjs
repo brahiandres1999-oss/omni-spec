@@ -1,6 +1,6 @@
 /**
  * Module graph for brownfield cartography (blueprint §4.3.3-§4.3.5): single-threaded streaming
- * indexer into specs/.omni/memory.db (batched BEGIN IMMEDIATE writes, mtime/size/hash incremental
+ * indexer into workspace memory.db (batched BEGIN IMMEDIATE writes, mtime/size/hash incremental
  * cache), recursive SQLite CTE with a cycle guard, and lexical barrel unwinding.
  */
 import fs from 'node:fs';

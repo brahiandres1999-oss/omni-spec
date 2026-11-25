@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-15
+
+### Added
+- **Omni-Design Native Engine (`src/design/`):** Zero-dependency Frontend & UI engineering subsystem conditionally activated on UI scope without increasing base skill prompt budgets.
+- **Mathematical Contrast, Concentric Geometry & DTCG 2025.10 Engine (`src/design/tokens.mjs`):** `omni-spec design contrast` (WCAG 2.2 relative luminance + perceptual OKLCH `ΔL`), `omni-spec design scaffold` (archetype presets `precision-dark`, `swiss-editorial`, `high-density-ops`, `warm-craft`), `calculateConcentricRadius` (`r_inner = max(0, r_outer - padding)`) and `omni-spec design tokens` (validates modular scales 1.125–1.333, 2+1 font family cap, 4px/8px spatial rhythm, max 3 border radii, concentric pairs, surface `ΔL` bounds and cubic-bezier curves).
+- **Deterministic UI-Slop Guard (`src/design/ui-slop-guard.mjs`):** `omni-spec design check` lexical/structural inspector blocking generic AI purple/indigo gradients (`UI_CLICHE_GRADIENT`), nested card-itis (`UI_CARDITIS_NESTING`), decorative pulse dots (`UI_DECORATIVE_PULSE_DOT`), thick left accents (`UI_THICK_LEFT_ACCENT`), mechanical comment headings (`UI_MECHANICAL_HEADER_PREFIX`), suppressed focus outlines (`UI_FOCUS_SUPPRESSED`), elastic bounce curves (`UI_BANNED_BOUNCE_EASING`), non-compositor layout animations (`UI_NON_COMPOSITOR_ANIMATION`), excessive static pill badges (`UI_STATIC_PILL_BADGE`) and arbitrary magic z-index values (`UI_RAW_MAGIC_ZINDEX`).
+- **On-Demand Omni-Design Engineering Lenses (`src/design/lenses.mjs`):** `omni-spec guide design --lens <grill|wayfinder|distill|bolder|quieter|polish|tokens|anti-slop>` and `omni-spec design grill [id]` enforcing pre-design interrogation, domain archetype wayfinding, zero-pill discipline and iterative visual critique.
+- **Auditor UI Contradiction Gate (`src/auditor.mjs`):** Blocks specifications declaring `[visual]`, `[interaction]` or `[accessibility]` criteria when `plan.md` marks `## UI & Interaction Design` as `N/A` (`UI_DESIGN_CONTRADICTION`).
+
 ## [0.9.0] — 2026-11-10
 
 Official stable release on npm `latest` channel, GitHub Releases and Google Antigravity Plugin. Marks OmniSpec's evolution into the **Universal Agentic Engineering Engine**: polyglot AST cartography and blast-radius analysis, zero-residue external SQLite/FTS5 memory, proportional contracts (`fit`), and deterministic cryptographic verification gates (`Guardian`, `Hollow-Guard`, HMAC-SHA256). See the [0.9.0 release notes](docs/releases/0.9.0.md).

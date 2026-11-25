@@ -24,32 +24,31 @@ describe('Project & Spec Generator', () => {
   });
 
   describe('buildConstitutionContent', () => {
-    test('renders fintech regulatory invariants', () => {
+    test('renders universal security, data, state and recovery invariants', () => {
       const content = buildConstitutionContent({
         projectName: 'NeoBank',
-        profile: 'fintech',
+        profile: 'general',
         stack: 'PostgreSQL / Node.js',
         docStandard: 'TSDoc',
       });
 
       assert.match(content, /# CONSTITUTION — NeoBank/);
-      assert.match(content, /PCI-DSS/);
-      assert.match(content, /Double-Entry Ledger/i);
+      assert.match(content, /Applicable security, data & state boundaries/);
+      assert.match(content, /idempotency/i);
       assert.match(content, /TSDoc/);
     });
 
-    test('renders bpo regulatory invariants', () => {
+    test('defaults to general profile when profile is omitted', () => {
       const content = buildConstitutionContent({
-        projectName: 'Pulso360',
-        profile: 'bpo',
+        projectName: 'UniversalApp',
         stack: 'React / Node.js',
         docStandard: 'JSDoc',
       });
 
-      assert.match(content, /# CONSTITUTION — Pulso360/);
-      assert.match(content, /k-Anonymity/i);
+      assert.match(content, /# CONSTITUTION — UniversalApp/);
+      assert.match(content, /General software project/);
       assert.match(content, /Anti-Slop/i);
-      assert.match(content, /Ley 1581/i);
+      assert.match(content, /JSDoc/);
     });
   });
 

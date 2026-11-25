@@ -25,7 +25,7 @@
     },
     "profile": {
       "type": ["string", "null"],
-      "description": "Domain regulatory profile (general, fintech, healthtech, bpo, ecommerce)."
+      "description": "Engineering governance profile (general; legacy domain strings normalize to general)."
     },
     "stack": {
       "type": ["string", "null"],

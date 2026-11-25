@@ -1,12 +1,12 @@
-# Compatibilidad y verificación — OmniSpec 0.9.0 Oficial Estable
+# Compatibilidad y verificación — OmniSpec 0.10.0 Oficial Estable
 
-La versión oficial de producción es **0.9.0**, publicada globalmente en el canal npm `latest` y GitHub Releases el 2026-11-11. Ver [notas de la versión 0.9.0](releases/0.9.0.md).
+La versión oficial de producción es **0.10.0**, publicada globalmente en el canal npm `latest` y GitHub Releases el 2026-11-15. Ver [notas de la versión 0.10.0](releases/0.10.0.md).
 
 OmniSpec instala flujos de especificación y revisión por proyecto, con soporte nativo de Plugin en Google Antigravity y adaptadores para los principales agentes de IA y herramientas de terminal. Conserva contexto y especificaciones al actualizar y exige auditoría, cobertura declarada de criterios y un registro de verificación formal firmado criptográficamente antes de cerrar trabajo. No garantiza precisión al primer intento ni certifica la aplicación o el razonamiento de un modelo por instalarse.
 
 ## Runtimes y gestores de paquetes
 
-OmniSpec 0.9.0 mantiene una estricta política de **Zero Runtime Dependencies** (`dependencies: {}`), eliminando riesgos de vulnerabilidades en la cadena de suministro y permitiendo compatibilidad directa entre diferentes runtimes y gestores:
+OmniSpec 0.10.0 mantiene una estricta política de **Zero Runtime Dependencies** (`dependencies: {}`), eliminando riesgos de vulnerabilidades en la cadena de suministro y permitiendo compatibilidad directa entre diferentes runtimes y gestores:
 
 | Entorno / Gestor | Comando recomendado | Compatibilidad verificada |
 | :--- | :--- | :--- |
@@ -33,7 +33,7 @@ El motor de detección contextual (`src/detector.mjs`) reconoce:
 
 ## Cartografía Políglota y Análisis de Impacto (`src/cartography/`)
 
-OmniSpec 0.9.0 incorpora un subsistema de cartografía estática de código que construye el grafo de dependencias de la aplicación sin recurrir a dependencias externas pesadas.
+OmniSpec 0.10.0 incorpora un subsistema de cartografía estática de código que construye el grafo de dependencias de la aplicación sin recurrir a dependencias externas pesadas.
 
 ### Matriz de soporte multi-lenguaje (Lexer DFA Pushdown y Resolvedor)
 
@@ -61,23 +61,21 @@ Omni-Guardian proporciona ejecución segura y gobernanza dura sobre las operacio
   - `omni-spec guardian check`: Valida archivos en stage contra las políticas de calidad y aserciones.
   - `omni-spec guardian uninstall`: Desinstala el hook gestionado.
 
-## Verificación Criptográfica v4 y Hollow-Guard
+## Verificación Criptográfica v4, Hollow-Guard y UI-Slop Guard
 
-El subsistema de verificación de OmniSpec 0.9.0 eleva las garantías de cumplimiento técnico:
+El subsistema de verificación de OmniSpec 0.10.0 eleva las garantías de cumplimiento técnico y visual:
 
 ### Atestación Criptográfica HMAC-SHA256 (`src/attestation.mjs`)
-Los registros de verificación (`specs/<slug>/verification.json`) evolucionan a la versión **v4**:
+Los registros de verificación (`specs/<slug>/verification.json`) operan en la versión **v4**:
 - Cada resultado de verificación ejecutado por `omni-spec verify <id>` es firmado digitalmente con un código de autenticación de mensajes basado en hash (**HMAC-SHA256**).
 - La firma vincula la huella del árbol de archivos verificado, el catálogo de checks ejecutados, la fecha y el estado de los criterios. Cualquier modificación manual posterior invalida la atestación.
 - **Almacenamiento seguro de claves (`src/secure-store.mjs`)**:
   - En Windows: La clave simétrica de atestación se protege mediante la API nativa de protección de datos de Windows (DPAPI) en `%LOCALAPPDATA%\OmniSpec\keys\attestation.key`.
   - En Linux/macOS: Se almacena con permisos de archivo estrictos `0600` en `$XDG_STATE_HOME/omnispec/keys/attestation.key` (o `~/.local/state/omnispec/keys/attestation.key`).
 
-### Hollow-Guard Anti-Slop (`src/hollow-guard.mjs`)
-`omni-spec verify` invoca automáticamente el interceptor Hollow-Guard sobre las pruebas creadas o modificadas en el trabajo activo:
-- **Bloqueo de tests sin aserciones**: Rechaza suites de prueba que solo instancian clases o invocan métodos sin ejecutar comprobaciones (`assert`, `expect`, `should`).
-- **Bloqueo de tautologías vacías**: Detecta y rechaza aserciones triviales o complacientes como `assert.ok(true)`, `expect(true).toBe(true)`, `expect(1).toBe(1)` o similares.
-- **Aislamiento de código real**: Valida que la prueba importe y ejercite código real del proyecto en lugar de limitarse a probar mocks ficticios desacoplados.
+### Hollow-Guard Anti-Slop (`src/hollow-guard.mjs`) y UI-Slop Guard (`src/design/ui-slop-guard.mjs`)
+- **Hollow-Guard (Pruebas):** `omni-spec verify` bloquea suites de prueba sin aserciones, tautologías vacías (`assert.ok(true)`, `expect(true).toBe(true)`) o pruebas desacopladas que no importan código real del proyecto.
+- **UI-Slop Guard (Interfaces):** `omni-spec design check` y `omni-spec verify` inspeccionan archivos `.tsx`, `.jsx`, `.vue`, `.svelte`, `.astro`, `.css` y `.html` bloqueando degradados cliché de IA (`UI_CLICHE_GRADIENT`), anidamiento excesivo de tarjetas (`UI_CARDITIS_NESTING`), puntos pulsantes decorativos (`UI_DECORATIVE_PULSE_DOT`), bordes laterales gruesos (`UI_THICK_LEFT_ACCENT`), encabezados con comentarios mecánicos (`UI_MECHANICAL_HEADER_PREFIX`), supresión de foco accesible (`UI_FOCUS_SUPPRESSED`) y curvas de rebote elástico (`UI_BANNED_BOUNCE_EASING`).
 
 ## Plataformas y sistemas operativos
 
@@ -89,7 +87,7 @@ La suite de verificación y empaquetado contempla soporte formal en:
 
 ## Adaptadores de agentes soportados
 
-OmniSpec 0.9.0 incluye 10 adaptadores probados en generación e integración:
+OmniSpec 0.10.0 incluye 10 adaptadores probados en generación e integración:
 
 1. **Antigravity**: Integración principal. Soporta modo workspace (`.agents/skills/` y `.agents/agents/omni-auditor.md`) y modo Plugin empaquetado (`plugin.json`), inyección de constitución con `trigger: always_on` y auditor sandboxeado.
 2. **Claude Code**: Adaptador para `.claude/skills/` y sincronización gestionada de `CLAUDE.md`. Si un proyecto contiene `CLAUDE.md`, Claude Code ignora `AGENTS.md`; OmniSpec administra su bloque en ambos archivos para garantizar continuidad de gobernanza.
@@ -101,6 +99,11 @@ OmniSpec 0.9.0 incluye 10 adaptadores probados en generación e integración:
 8. **Gemini CLI**: Adaptador para `.gemini/skills/` y archivos TOML en `.gemini/commands/`.
 9. **Generic**: Generación de plantillas y prompts en `specs/commands/` para cualquier modelo o interfaz de chat sin extensiones.
 10. **Plugin**: Enlace y gobernanza directa mediante el plugin oficial instalado.
+
+### Subagentes nativos, Swarms y colaboración en GitHub
+
+- **Orquestación sin fricción:** OmniSpec no impone jerarquías propietarias de subagentes; mantiene a `omni-auditor` como revisor independiente en sandbox (compatible con modo plugin y modo local) y permite que Antigravity Swarm, Claude Code subagents, Codex o Cursor trabajen en paralelo sobre un mismo workspace usando tickets de Lamport (`manifest.lock/`), `verify.lock/`, transacciones `BEGIN IMMEDIATE` en `memory.db` y control optimista `expectedRevision`.
+- **Aislamiento frente a GitHub e historial sin recorte:** `memory.db` reside por estación fuera del repositorio (`%LOCALAPPDATA%\OmniSpec\workspaces\<id>\` o `~/.local/share/OmniSpec/workspaces/<id>/`), por lo que `git pull` o `merge` nunca la sobrescriben. Todo el historial en SQLite (`context_history`, `decision_history`, `sessions`, `decisions`, `observations`) es estrictamente *append-only* y sin límite de recorte para no perder trazabilidad arquitectónica; únicamente los volcados binarios corruptos de emergencia en `quarantine/` se limitan a 5 copias, y los proyectos sin ejecutable `git` o fuera de repositorio degradan `syncFromGit` de forma segura.
 
 ## Actualizaciones y migraciones
 
@@ -116,13 +119,15 @@ La gestión del runtime local depende del modo configurado:
 
 Los trabajos completados permanecen como historial inmutable. Reabrir o volver a verificar un trabajo antiguo requiere adaptar sus criterios a `acceptance.json`; la actualización no inventa evidencia ni reescribe su resultado.
 
-## Nuevos Comandos CLI en OmniSpec 0.9.0
+## Comandos CLI de Ingeniería, Diseño y Gobernanza en OmniSpec 0.10.0
 
-OmniSpec 0.9.0 expande el CLI con herramientas dedicadas a seguridad, persistencia, cartografía y gobernanza:
+OmniSpec 0.10.0 expande el CLI con herramientas dedicadas a diseño determinista, seguridad, persistencia, cartografía y gobernanza:
 
 | Comando | Sintaxis principal | Propósito y comportamiento |
 | :--- | :--- | :--- |
-| **`mcp`** | `omni-spec mcp` | Inicia el servidor MCP (*Model Context Protocol*) nativo sobre stdio, exponiendo herramientas para inspección de especificaciones, memoria heurística y cartografía a agentes compatibles. |
+| **`design`** | `omni-spec design <contrast\|tokens\|scaffold\|check\|grill\|lens>` | Ejecuta el motor matemático Omni-Design: contraste WCAG 2.2 + OKLCH, validador y generador de tokens DTCG 2025.10, inspector UI-Slop Guard, interrogatorio pre-diseño y lentes bajo demanda. |
+| **`guide design`** | `omni-spec guide design [--lens <nombre>] [--json]` | Sirve el contrato de diseño proporcional o una de las 8 lentes especializadas (`grill`, `wayfinder`, `distill`, `bolder`, `quieter`, `polish`, `tokens`, `anti-slop`). |
+| **`mcp`** | `omni-spec mcp` | Inicia el servidor MCP (*Model Context Protocol*) nativo sobre stdio, exponiendo herramientas para inspección de especificaciones, memoria heurística, cartografía y Omni-Design a agentes compatibles. |
 | **`guardian`** | `omni-spec guardian <install\|uninstall\|check>` | Administra y ejecuta el hook `pre-commit` con ejecución segura sin shell y verificación anti-slop. |
 | **`cartography`** | `omni-spec cartography [--json]` | Indexa el grafo de dependencias de módulos de forma incremental en `memory.db`. |
 | **`blast-radius`** | `omni-spec blast-radius <archivo\|archivo#simbolo> [--json]` | Calcula el radio de impacto transitivo y advierte sobre módulos afectados. |

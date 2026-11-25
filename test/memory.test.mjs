@@ -710,6 +710,43 @@ describe('G. Self-healing, EARS acceptance and decision recording', () => {
       recorded_at: explicit.recorded_at,
     });
     assert.ok(!readdirSync(join(root, 'specs', 'decisions')).some(name => name.includes('.tmp.')));
+
+    // Committing a new specs tree change must NEVER prune SQLite-only decisions (file_path === null)
+    commitAll(root, 'commit explicit decision');
+    const afterCommit = await syncFromGit(memory, root);
+    assert.equal(afterCommit.pruned, 0);
+    assert.ok(
+      memory.searchContext('minifilters').some(r => r.source_id === record.id),
+      'SQLite-native decision must survive Git tree OID changes',
+    );
+  });
+
+  test('addObservations deduplicates identical (category, scope, summary) and attributes active session', () => {
+    const memory = track(openMemory(dbFile()));
+    memory.setProjectState({
+      schemaVersion: 1,
+      context: null,
+      session: { id: 'sess-active-1', host: 'cursor', observedAt: '2026-04-17T00:00:00.000Z', capabilities: {} },
+      decisions: [],
+    });
+    const [firstId] = memory.addObservations([
+      { category: 'gotcha', scope: 'src/db', summary: 'Use BEGIN IMMEDIATE to prevent SQLITE_BUSY promotion' },
+    ]);
+    const [secondId] = memory.addObservations([
+      {
+        category: 'gotcha',
+        scope: 'src/db',
+        summary: 'Use BEGIN IMMEDIATE to prevent SQLITE_BUSY promotion',
+        evidence: 'test/memory.test.mjs',
+      },
+    ]);
+    assert.equal(firstId, secondId);
+    const list = memory.listObservations({ scope: 'src/db' });
+    assert.equal(list.length, 1);
+    assert.equal(list[0].evidence, 'test/memory.test.mjs');
+    const row = memory.db.prepare('SELECT session_id FROM observations WHERE id = ?').get(firstId);
+    assert.equal(row.session_id, 'sess-active-1');
+    assert.equal(memory.searchContext('BEGIN IMMEDIATE').length, 1);
   });
 });
 
@@ -799,5 +836,55 @@ describe('H. Schema v4 (Phase 4 Studio: token events, review decisions, review r
     future.exec('PRAGMA user_version = 5');
     future.close();
     assert.throws(() => openMemory(dbFile()), /Unsupported memory schema version 5/);
+  });
+});
+
+describe('I. Enterprise resilience & lossless history invariants', () => {
+  test('quarantineTriad keeps at most 5 newest corrupt snapshots on disk', async () => {
+    const root = createRepo();
+    commitAll(root, 'init');
+    const path = memoryPath(root);
+    const quarantineRoot = join(path, '..', 'quarantine');
+    for (let i = 0; i < 8; i++) {
+      mkdirSync(join(path, '..'), { recursive: true });
+      writeFileSync(path, Buffer.alloc(64, 0x5a));
+      const { memory } = await openProjectMemory(root);
+      memory.close();
+    }
+    const kept = readdirSync(quarantineRoot).filter(name => !name.startsWith('.'));
+    assert.equal(kept.length, 5);
+  });
+
+  test('context_history and decision_history preserve complete lossless history without silent truncation', () => {
+    const memory = track(openMemory(dbFile()));
+    for (let i = 0; i < 250; i++) {
+      memory.appendContextHistory(`ctx-${i}`, { seq: i });
+    }
+    const contexts = memory.listContextHistory();
+    assert.equal(contexts.length, 250);
+    assert.equal(contexts[0].id, 'ctx-249');
+    assert.equal(contexts.at(-1).id, 'ctx-0');
+
+    for (let i = 0; i < 550; i++) {
+      memory.appendDecisionHistory(`dec-${i}`, { id: `d-${i}`, revision: i });
+    }
+    const decisions = memory.listDecisionHistory();
+    assert.equal(decisions.length, 550);
+    assert.equal(decisions[0].id, 'dec-549');
+    assert.equal(decisions.at(-1).id, 'dec-0');
+  });
+
+  test('syncFromGit returns null gracefully when PATH has no git executable', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'omni-nogit-'));
+    const savedPath = process.env.PATH;
+    process.env.PATH = '';
+    try {
+      const memory = track(openMemory(join(workDir, 'nogit.db')));
+      const report = await syncFromGit(memory, root);
+      assert.equal(report, null);
+    } finally {
+      process.env.PATH = savedPath;
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

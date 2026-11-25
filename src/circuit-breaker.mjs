@@ -310,7 +310,7 @@ const TABLE = `CREATE TABLE IF NOT EXISTS circuit_breakers (
 )`;
 
 /**
- * Breaker persistence in specs/.omni/memory.db. Every update runs in BEGIN IMMEDIATE so concurrent
+ * Breaker persistence in workspace memory.db. Every update runs in BEGIN IMMEDIATE so concurrent
  * processes serialize, and a trip is committed before its error propagates.
  * @param {{db: import('node:sqlite').DatabaseSync} | import('node:sqlite').DatabaseSync} memory
  * @param {{now?: () => number, random?: () => number}} [options]

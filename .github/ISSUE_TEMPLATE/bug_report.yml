@@ -13,7 +13,7 @@ body:
     attributes:
       label: OmniSpec Version
       description: Run `omni-spec version` or inspect `package.json`.
-      placeholder: "0.7.0-preview.1"
+      placeholder: "0.10.0"
     validations:
       required: true
 

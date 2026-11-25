@@ -216,21 +216,21 @@ test('force interactive choices update constitution and manifest consistently', 
     docStandard: 'TSDoc',
     profile: 'general',
   });
-  const result = await interactive(t, ['--force', '--stack', 'Python (FastAPI / Django)', '--profile', 'fintech']);
+  const result = await interactive(t, ['--force', '--stack', 'Python (FastAPI / Django)', '--profile', 'general']);
   assert.equal(result.code, 0, result.stderr);
   const manifest = await loadManifest(dir);
   const constitution = await readFile(join(dir, 'CONSTITUTION.md'), 'utf8');
-  assert.equal(manifest.profile, 'fintech');
+  assert.equal(manifest.profile, 'general');
   assert.equal(manifest.stack, 'Python (FastAPI / Django)');
   assert.equal(manifest.documentationStandard, 'Python Docstrings (PEP 257)');
   assert.ok(constitution.includes(manifest.stack));
-  assert.ok(constitution.includes('PCI-DSS'));
+  assert.ok(constitution.includes('General software project'));
 });
 
 test('reinitialization preserves custom configuration and rejects inconsistent changes without force', async () => {
   await scaffoldProject(dir, {
     projectName: 'Keep',
-    profile: 'fintech',
+    profile: 'general',
     stack: 'Python',
     docStandard: 'PEP257',
     qualityGates: 'python -m unittest',
@@ -238,16 +238,16 @@ test('reinitialization preserves custom configuration and rejects inconsistent c
   const before = await readFile(join(dir, 'CONSTITUTION.md'), 'utf8');
   await scaffoldProject(dir, await runWizard(dir, { yes: true }));
   const manifest = await loadManifest(dir);
-  assert.equal(manifest.profile, 'fintech');
+  assert.equal(manifest.profile, 'general');
   assert.equal(manifest.stack, 'Python');
   assert.equal(manifest.qualityGates, 'python -m unittest');
-  await assert.rejects(scaffoldProject(dir, await runWizard(dir, { yes: true, profile: 'general' })), /--force/);
-  assert.equal((await loadManifest(dir)).profile, 'fintech');
+  await assert.rejects(scaffoldProject(dir, await runWizard(dir, { yes: true, stack: 'Node.js' })), /--force/);
+  assert.equal((await loadManifest(dir)).stack, 'Python');
   assert.equal(await readFile(join(dir, 'CONSTITUTION.md'), 'utf8'), before);
 });
 
 test('profile injection retains edited original rows, added rows and table notes with CRLF', async () => {
-  await scaffoldProject(dir, { projectName: 'Security', profile: 'fintech' });
+  await scaffoldProject(dir, { projectName: 'Security', profile: 'general' });
   const template = join(dir, 'specs', '_templates', '01-feature', 'spec.md');
   let content = await readFile(template, 'utf8');
   content = content.replace(
@@ -266,7 +266,7 @@ test('profile injection retains edited original rows, added rows and table notes
     'MANDATORY_HSM_POLICY',
     'CUSTOM_CONTROL',
     'CUSTOM_TABLE_NOTE',
-    'Does it touch balances, money, or ledger?',
+    'Does it mutate critical state, balances, or external contracts?',
   ]) {
     assert.ok(generated.includes(text), text);
   }

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.9.0-blue.svg" alt="Version 0.9.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.10.0-blue.svg" alt="Version 0.10.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/dependencies-0%20(pure%20node)-green.svg" alt="Zero Dependencies"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.19.0-black.svg" alt="Node.js >=22.19.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-gray.svg" alt="License MIT"></a>
@@ -12,10 +12,10 @@
 
 ---
 
-# OmniSpec 0.9.0
+# OmniSpec 0.10.0
 
 > **Motor Universal de Ingeniería Agéntica (Universal Agentic Engineering Engine).**  
-> Evoluciona más allá de la burocracia documental del SDD tradicional mediante contratos de alcance proporcional (`fit`), cartografía políglota de dependencias AST y *blast-radius*, memoria persistente SQLite/FTS5 sin residuos en el repositorio (`%LOCALAPPDATA%\OmniSpec\workspaces\<id>\memory.db`) y compuertas de verificación deterministas y criptográficas (`Guardian`, `Hollow-Guard`, HMAC-SHA256).
+> Evoluciona más allá de la burocracia documental del SDD tradicional mediante contratos de alcance proporcional (`fit`), cartografía políglota de dependencias AST y *blast-radius*, memoria persistente SQLite/FTS5 sin residuos en el repositorio (`%LOCALAPPDATA%\OmniSpec\workspaces\<id>\memory.db` en Windows, `~/.local/share/OmniSpec/workspaces/<id>/memory.db` en POSIX) y compuertas de verificación deterministas y criptográficas (`Guardian`, `Hollow-Guard`, HMAC-SHA256).
 
 Inspirado en los principios de **Spec-Kit** y **OpenSpec**, OmniSpec evoluciona el desarrollo guiado por especificaciones hacia un **Motor Universal de Ingeniería Agéntica (Universal Agentic Engineering Engine)** sin dependencias runtime externas, con CLI portable y adaptadores según formatos documentados que vive dentro de tu repositorio. Funciona directamente desde el chat de tu editor preferido (Cursor, VS Code, Claude Code, Antigravity y más), soportando instalación directa como **Plugin nativo en Google Antigravity** (con modo de huella cero en el repositorio) y subagentes autónomos de auditoría (`omni-auditor`).
 
@@ -49,7 +49,7 @@ npx --yes omni-spec init
 
 La instalación global es opcional con `npm install -g omni-spec` (o `pnpm add -g omni-spec`). El asistente interactivo pregunta idioma, herramienta con IA y confirmación de la carpeta. Permite varias herramientas o `generic` si aún no elegiste una. Producto, stack, documentación y checks se acuerdan después con el agente. `init` conserva el código existente y no ejecuta scripts de aplicación; los comandos detectados quedan como candidatos en `specs/project-context.md`.
 
-En una terminal compatible verás el logo de caracteres y una pregunta activa: flechas para moverte, Espacio para marcar herramientas y Enter para continuar; Esc o Ctrl+C cancelan. La presentación se ajusta al tamaño disponible. Usa `--plain` para texto por líneas; tuberías, CI y JSON conservan salida sencilla. `NO_COLOR` desactiva los colores. Antigravity recibe también `.agents/agents/omni-auditor.md` para las superficies que admiten ese formato.
+En una terminal compatible (incluyendo Windows Terminal, PowerShell 7+, VS Code, iTerm2 o consolas POSIX con soporte TrueColor/UTF-8) verás el logo de caracteres, indicadores de progreso por paso y una pregunta activa: flechas para moverte, Espacio para marcar herramientas y Enter para continuar; Esc o Ctrl+C cancelan. La presentación se ajusta al tamaño disponible y degrada limpiamente usando `--plain` para texto por líneas, en tuberías, CI o `--json`. `NO_COLOR` desactiva los colores. Antigravity recibe también `.agents/agents/omni-auditor.md` para las superficies que admiten ese formato.
 
 El `--yes` **antes** del paquete pertenece a npm: evita su confirmación de descarga, pero el asistente de OmniSpec sigue siendo interactivo. Para automatización, añade el `--yes` de OmniSpec **después** de `init` y declara la integración:
 
@@ -107,6 +107,22 @@ OmniSpec guía el desarrollo a través de un ciclo continuo de 9 habilidades uni
 | `/omni-implement` | **Construcción** | Cirugía de código de alta precisión: minimal touch, calidad senior y sin comentarios de relleno. |
 | `/omni-converge` | **Verificación** | Ejecuta gates automáticos, valida criterios de aceptación y cierra el trabajo con evidencia. |
 
+```mermaid
+flowchart LR
+    Init["/omni-init<br/>Reconocimiento + Cartografía"] --> Discuss["/omni-discuss<br/>Exploración opcional"]
+    Discuss --> Specify["/omni-specify<br/>EARS + acceptance.json"]
+    Init --> Specify
+    Specify --> Fit{"omni-spec fit v2<br/>Riesgo · Alcance · Contrato"}
+    Fit -->|"light (1-2 archivos)"| Implement["/omni-implement<br/>Cirugía mínima"]
+    Fit -->|"standard (diseño)"| Plan["/omni-plan<br/>Arquitectura + UI States"]
+    Fit -->|"full (crítico/contrato)"| PlanFull["/omni-plan → /omni-tasks<br/>Plan + Tareas canónicas"]
+    Fit -->|"rfc (decisión)"| RFC["rfc.md<br/>ACCEPTED / REJECTED / DEFERRED"]
+    Plan --> Audit["/omni-audit<br/>Coherencia + omni-auditor"]
+    PlanFull --> Audit
+    Audit --> Implement
+    Implement --> Converge["/omni-converge<br/>verify (HMAC-SHA256 + Guards) → complete"]
+```
+
 ---
 
 ## Arquetipos de Trabajo
@@ -159,6 +175,47 @@ Para añadir o cambiar adaptadores en cualquier momento:
 node specs/.omni/runtime/bin/omni-spec.mjs setup-agent cursor,copilot,claude
 ```
 
+### Subagentes, Enjambres (Swarms) y Trabajo en Equipo (GitHub)
+
+OmniSpec separa intencionalmente la **orquestación de subagentes** (propia de cada IDE o CLI) del **estado y verificación determinista**:
+
+- **Subagente incluido (`omni-auditor`):** Funciona en contexto separado y modo sandbox para contrastar coherencia documental, pruebas reales y límites antes de cerrar trabajo. Detecta automáticamente si el proyecto usa el plugin global o el runtime local.
+- **Compatibilidad nativa con Swarms y Subagentes:** Antigravity Swarm, los subagentes de Claude Code, Codex o múltiples sesiones paralelas pueden trabajar simultáneamente sin corromper archivos gracias a:
+  1. `specs/manifest.lock/` con tickets de panadería de Lamport para serializar cambios al manifiesto.
+  2. `specs/.omni/verify.lock/` para aislar verificaciones concurrentes.
+  3. Base externa SQLite en modo **WAL + `BEGIN IMMEDIATE` + `busy_timeout`** y control optimista `expectedRevision` en decisiones y contratos.
+- **Sin colisiones en GitHub y memoria histórica 100% sin pérdidas:** `memory.db` vive fuera del repositorio Git y jamás es sobrescrito por `git pull`, `merge` o `rebase`. La verdad compartida por todo el equipo viaja versionada en `CONSTITUTION.md`, `specs/project-context.md`, `specs/contracts.json`, `specs/checks.json` y `specs/<slug>/`; al hacer `pull`, cada estación sincroniza automáticamente las decisiones versionadas sin perder sus observaciones locales. Todo el historial en SQLite (`decisions`, `decision_history`, `context_history`, `sessions`, `observations` y cartografía) se conserva íntegro de forma *append-only* para no perder trazabilidad jamás; únicamente los volcados binarios corruptos aislados en `quarantine/` se acotan a los 5 más recientes para proteger el disco.
+
+```mermaid
+flowchart TB
+    subgraph Agents["Agentes, Subagentes y Swarms Nativos"]
+        A1["Antigravity / Swarm"]
+        A2["Claude Code / Cursor / Codex"]
+        A3["omni-auditor (Sandbox)"]
+    end
+
+    subgraph Locks["Coordinación Atómica Local"]
+        L1["manifest.lock (Lamport Tickets)"]
+        L2["verify.lock (Snapshot Gate)"]
+    end
+
+    subgraph Repo["Repositorio Git Compartido (GitHub)"]
+        R1["CONSTITUTION.md · specs/project-context.md"]
+        R2["specs/manifest.json · contracts.json · checks.json"]
+        R3["specs/<slug>/* (spec, fit, plan, tasks, verification v4)"]
+    end
+
+    subgraph LocalStore["Estación Local (Nunca sobrescrita por Git)"]
+        M1["memory.db (SQLite WAL + FTS5 + Cartografía AST)"]
+        K1["attestation.key (DPAPI / 0600)"]
+    end
+
+    Agents --> Locks
+    Locks --> Repo
+    Agents <-->|"BEGIN IMMEDIATE / MCP"| LocalStore
+    Repo -->|"syncFromGit (tree OID)"| M1
+```
+
 ---
 
 ## Referencia del CLI
@@ -192,14 +249,22 @@ npx omni-spec context-check          # Estructura y enlaces locales del contexto
 npx omni-spec context-record         # Guarda el baseline de entradas de contexto en memory.db
 npx omni-spec session-record --host Antigravity --questions available --web available --terminal available --render available --delegation available
 npx omni-spec decision-record --id stack --topic stack --status approved --basis "Confirmado por el usuario"
-npx omni-spec guide evidence         # Forma exacta de cada JSON (también: guide setup, guide design)
+npx omni-spec guide evidence         # Forma exacta de cada JSON (también: guide setup, guide design --lens <nombre>)
+
+# Ingeniería de Diseño Nativa (Omni-Design 0.10.0)
+npx omni-spec design contrast "#0F172A" "#F8FAFC" --role normal-text  # Luminancia WCAG 2.2 + OKLCH ΔL
+npx omni-spec design scaffold --archetype precision-dark --output tokens.json  # Genera tokens DTCG 2025.10
+npx omni-spec design tokens tokens.json                               # Valida escala modular, fuentes 2+1, rejilla 4px/8px y radios
+npx omni-spec design check                                            # Inspector determinista UI-Slop Guard
+npx omni-spec design grill 001                                        # Verifica dirección de arte y matriz 4+1 estados en plan.md
+npx omni-spec guide design --lens grill                               # Lentes: grill, wayfinder, distill, bolder, quieter, polish, tokens, anti-slop
 
 # Calidad, Guardian y Verificación
 npx omni-spec guardian install       # Instala el hook pre-commit anti-slop
-npx omni-spec audit 001              # Audita consistencia de artefactos y placeholders
+npx omni-spec audit 001              # Audita consistencia de artefactos, placeholders y contradicciones UI
 npx omni-spec checks --from -        # Catálogo de checks con ID y cwd por módulo
 npx omni-spec configure --gates "npm test"  # Gates heredados desde la raíz
-npx omni-spec configure --stack "Java 25 + Spring Boot" --profile fintech --doc "Javadoc"  # Sin init --force
+npx omni-spec configure --stack "Java 25 + Spring Boot" --profile general --doc "Javadoc"  # Sin init --force
 npx omni-spec verify 001             # Ejecuta los checks y firma criptográficamente (HMAC-SHA256)
 npx omni-spec complete 001           # Cierra el trabajo tras comprobar evidencia
 npx omni-spec contracts              # Contratos de capacidad vigentes y propuestos
@@ -245,8 +310,8 @@ OmniSpec actúa como un guardián de calidad (*The Guardian*) que neutraliza los
 
 ### Zero Slop Guard (5 Reglas Anti-Código Basura)
 1. **Type-Slop:** Prohibido el uso de `any`, casteos ciegos (`as unknown as T`) o interfaces redundantes innecesarias.
-2. **Mock-Slop:** Prohibidos tests que solo verifiquen que los mocks fueron llamados; se exigen pruebas de integración reales con lógica ejecutable.
-3. **Visual-Slop:** Prohibidos los clichés genéricos de IA (degradados azul/púrpura sin justificación de marca, badges difusos y anidamiento excesivo de tarjetas con sombras o *card-itis*).
+2. **Mock-Slop:** Prohibidos tests que solo verifiquen que los mocks fueron llamados; se exigen pruebas de integración reales con lógica ejecutable (`Hollow-Guard`).
+3. **Visual-Slop (`UI-Slop Guard`):** Prohibidos los clichés genéricos de IA (degradados azul/púrpura sin justificación de marca, puntos pulsantes decorativos sin `role="status"`, bordes laterales gruesos `border-l-4`, encabezados con prefijos de comentario `// 01_`, curvas de rebote elástico y anidamiento excesivo de tarjetas con sombras o *card-itis*).
 4. **Scope-Slop (YAGNI Estricto):** Prohibidas capas especulativas (factorías, DTOs, wrappers) o funciones auxiliares no solicitadas que no respondan directamente a un criterio de aceptación.
 5. **Dependency-Slop:** Capacidades nativas de la plataforma primero; prohibido añadir dependencias externas para funciones nativas a menos que el usuario lo autorice expresamente.
 
@@ -257,14 +322,16 @@ Las especificaciones formulan sus criterios de aceptación (`AC-01 [kind]`) medi
 - **State-driven:** `MIENTRAS <estado>, <sistema> DEBERÁ <acción>` (ej. `AC-03 [interaction]: MIENTRAS los datos cargan, la UI DEBERÁ mostrar skeletons contextuales`).
 - **Unwanted condition:** `SI <error>, ENTONCES <sistema> DEBERÁ <acción>` (ej. `AC-04 [functional]: SI la red falla, ENTONCES el cliente DEBERÁ ofrecer reintento`).
 
-### Árbitro de Calidad UI (`guide design`)
-Para cambios que involucran frontend, `guide design` establece las directivas vinculantes:
-- **4 Estados Obligatorios de Interfaz:** Toda vista interactiva debe definir:
-  1. *Loading*: skeletons contextuales o carga real con Cumulative Layout Shift (CLS) = 0.
+### Subsistema Nativo Omni-Design (`design` & `guide design`)
+Para cualquier cambio que involucre frontend o interfaz de usuario, el subsistema **Omni-Design** se activa sin incrementar el presupuesto de contexto en tareas de backend:
+- **8 Lentes de Ingeniería de Diseño bajo demanda (`omni-spec guide design --lens <id>`):** `grill` (interrogatorio pre-diseño), `wayfinder` (arquetipos estéticos `precision-dark`, `swiss-editorial`, `high-density-ops`, `warm-craft`), `distill` (sustracción y disciplina cero-píldoras), `bolder` (jerarquía y punto focal), `quieter` (calma operativa), `polish` (radios concéntricos $r_{\text{inner}} = \max(0, r_{\text{outer}} - p)$ y foco accesible), `tokens` (DTCG 2025.10) y `anti-slop`.
+- **Matriz Obligatoria de 4+1 Estados:** Toda vista interactiva debe definir y construir:
+  1. *Loading*: skeletons geométricos con Cumulative Layout Shift (`CLS = 0`).
   2. *Empty*: mensaje contextual claro con llamada a la acción inmediata (CTA).
   3. *Error*: mensaje comprensible (sin códigos crípticos) y mecanismo de reintento o recuperación.
-  4. *Protected / Ideal*: contenido típico completo o vista restringida sin permisos.
-- **Medición Empírica de Contraste:** Se prohíbe cerrar criterios visuales inspeccionando solo código o JSX; se exige comprobación empírica con ratios mínimos de 4.5:1 para texto estándar y 3:1 para componentes de UI o texto grande.
+  4. *Protected / Ideal*: contenido completo autorizado y estado restringido sin permisos.
+  5. *Partial / Overflow*: truncamiento elegante ante cadenas extensas y volúmenes extremos.
+- **Verificación Matemática de Contraste y Tokens:** `omni-spec design contrast` calcula luminancia relativa WCAG 2.2 (`>= 4.5:1` texto normal, `>= 3.0:1` UI/texto grande) y distancia perceptual OKLCH ($\Delta L$). `omni-spec design tokens` valida manifiestos DTCG 2025.10 (escala modular `1.125–1.333`, regla `2+1` de fuentes, rejilla `4px/8px` y presupuesto de radios).
 
 ---
 
@@ -281,7 +348,6 @@ OmniSpec guarda el estado y los contratos en `specs/`, la constitución en la ra
 └── specs/
     ├── project-context.md      # Contexto, decisiones y comandos con su estado de evidencia
     ├── manifest.json           # Estado del framework, spec activa e historial
-    ├── project-state.json      # Baseline de contexto, sesiones y decisiones
     ├── checks.json             # Catálogo de checks aprobados (ID, cwd, timeout, tipo)
     ├── commands/omni-init.md    # Entrada breve a la skill; prompts completos en generic
     ├── manifest.lock/          # Tickets temporales de escritura; vacío en reposo
@@ -290,13 +356,12 @@ OmniSpec guarda el estado y los contratos en `specs/`, la constitución en la ra
     ├── 001-nombre-del-trabajo/ # Espacio de trabajo de la spec activa
     │   ├── spec.md             # Requerimientos y criterios de aceptación
     │   ├── fit.json            # Respuestas del Spec Fit; de ellas se deriva la ruta
-    │   ├── plan.md             # Diseño arquitectónico y estrategia de tests
-    │   ├── tasks.md            # Tareas atómicas con checkboxes
+    │   ├── plan.md             # Diseño arquitectónico, dirección de arte UI y estrategia de tests
+    │   ├── tasks.md            # Tareas atómicas con checkboxes (proyección de tasks.json)
     │   ├── acceptance.json     # Criterios vinculados a evidencia verificable
-    │   └── verification.json   # Huella, logs y resultados ejecutados de checks
+    │   └── verification.json   # Huella, logs y resultados firmados criptográficamente (HMAC-SHA256 v4)
     └── .omni/
-        ├── runtime/            # Motor CLI portable; no se versiona, lo restaura update
-        └── inputs/             # JSON de entrada para --from (ignorado por Git)
+        └── runtime/            # Motor CLI portable (en modo local; omitido en modo plugin Zero-Footprint)
 ```
 
 ---
@@ -327,14 +392,15 @@ Restaurar requiere el paquete de esa versión: normalmente se descarga del regis
 
 ## Estado del Proyecto & Visión
 
-OmniSpec nace con el propósito de ofrecer un Motor Universal de Ingeniería Agéntica (*Universal Agentic Engineering Engine*) verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, superando la burocracia documental del SDD tradicional mediante contratos proporcionales, cartografía de dependencias, memoria persistente externa y compuertas de verificación criptográfica sin ataduras a dependencias externas.
+OmniSpec nace con el propósito de ofrecer un Motor Universal de Ingeniería Agéntica (*Universal Agentic Engineering Engine*) verdaderamente adaptable a cualquier necesidad, stack tecnológico y agente de IA, superando la burocracia documental del SDD tradicional mediante contratos proporcionales, cartografía de dependencias, dirección de arte determinista (`Omni-Design`), memoria persistente externa y compuertas de verificación criptográfica sin ataduras a dependencias externas.
 
-La versión actual es **OmniSpec 0.9.0** (canal `latest`). Consulta las [notas de lanzamiento 0.9.0](docs/releases/0.9.0.md). Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
+La versión actual es **OmniSpec 0.10.0** (canal `latest`). Consulta las [notas de lanzamiento 0.10.0](docs/releases/0.10.0.md). Cualquier sugerencia, reporte o caso de uso es bienvenido a través de los [issues del repositorio](https://github.com/brahiandres1999-oss/omni-spec/issues).
 
 ---
 
 ## Documentación
 
+- [0.10.0 Oficial: Subsistema Nativo Omni-Design y Verificación Determinista de Interfaces](docs/releases/0.10.0.md)
 - [0.9.0 Oficial: Motor Universal de Ingeniería Agéntica (notas de lanzamiento)](docs/releases/0.9.0.md)
 - [0.8.1 Estable](docs/releases/0.8.1.md) · [0.8.0 Estable: arquitectura y pilares SDD](docs/releases/0.8.0.md)
 - [Publicada: 0.7.0-preview.2](docs/releases/0.7.0-preview.2.md) · [Historial de candidatas: 0.7.0-rc.2](docs/releases/0.7.0-rc.2.md) · [0.7.0-rc.1](docs/releases/0.7.0-rc.1.md) · [Publicada: 0.6.1](docs/releases/0.6.1.md)
