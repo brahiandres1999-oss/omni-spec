@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to OmniSpec!
 
-The current official release is **0.9.0** (npm channel `latest`). See the [Release notes](docs/releases/0.9.0.md) for scope, architecture and verification details.
+The current official release is **0.10.0** (npm channel `latest`). See the [Release notes](docs/releases/0.10.0.md) for scope, architecture and verification details.
 
 ## Guiding Principles
 1. **Zero External Dependencies:** OmniSpec must remain 100% dependency-free. Do not add third-party npm packages to `dependencies`. Use Node.js built-in modules (`node:fs`, `node:path`, `node:readline`, `node:test`). Tooling used only to build or verify the project belongs in `devDependencies` and is never published; `npm run release:check` enforces that `dependencies` stays empty.
@@ -44,7 +44,7 @@ Validate packaging and offline bootstrap locally before tagging or proposing rel
    ```bash
    npm run pack:dev
    ```
-   This outputs a reproducible tarball in `artifacts/dev/` (e.g., `omni-spec-0.9.0+dev.<timestamp>.tgz`).
+   This outputs a reproducible tarball in `artifacts/dev/` (e.g., `omni-spec-0.10.0+dev.<timestamp>.tgz`).
 
 2. Test installation offline in an isolated temporary directory using portable paths:
    ```bash

@@ -324,10 +324,10 @@ export async function saveFit(root, spec, answers) {
 }
 
 export function applyFitPreset(currentAnswers, presetName, overrides = {}) {
-  const presetKey = (presetName || 'full').toLowerCase();
-  if (presetName && !FIT_PRESETS[presetKey]) {
-    throw new Error(`Unknown preset: "${presetName}". Allowed presets: light, standard, full.`);
+  const presetKey = presetName ? presetName.toLowerCase() : null;
+  if (presetKey && !FIT_PRESETS[presetKey]) {
+    throw new Error('--preset must be light, standard or full.');
   }
-  const base = FIT_PRESETS[presetKey] || currentAnswers || FIT_PRESETS.full;
-  return { ...base, ...overrides, schemaVersion: 2 };
+  const base = (presetKey ? FIT_PRESETS[presetKey] : null) || currentAnswers || FIT_PRESETS.light;
+  return { ...FIT_PRESETS.light, ...base, ...overrides, schemaVersion: 2 };
 }

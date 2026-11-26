@@ -4,6 +4,7 @@ import { integrationEntries, normalizeAgents } from './integrations.mjs';
 import { packageEntries, pluginEntries } from './assets.mjs';
 import { syncManagedFiles, checkManagedFiles, loadRegistry, managedSection, safePath } from './managed.mjs';
 import { ensureProjectContext, buildConstitutionContent } from './generator.mjs';
+import { profiles } from './profiles/index.mjs';
 import { join } from 'node:path';
 import { detectPluginCoexistence } from './plugin-manager.mjs';
 
@@ -157,9 +158,10 @@ export async function updateProject(baseDir, options = {}) {
         `Refusing downgrade from ${manifest.version} to ${cliVersion}. Use the matching or newer CLI, or explicitly review update --allow-downgrade --dry-run.`,
       );
     const agent = normalizeAgents(options.agent || manifest.agent).join(',');
+    const effectiveProfile = Object.hasOwn(profiles, manifest.profile) ? manifest.profile : 'general';
     const reference = buildConstitutionContent({
       projectName: manifest.project,
-      profile: manifest.profile,
+      profile: effectiveProfile,
       stack: manifest.stack,
       docStandard: manifest.documentationStandard,
       qualityGates: manifest.qualityGates,

@@ -50,7 +50,7 @@ describe('OmniSpec CLI', () => {
         '--name',
         'HealthApp',
         '--profile',
-        'healthtech',
+        'general',
         '--stack',
         'TypeScript / PostgreSQL',
         '--doc',
@@ -63,12 +63,12 @@ describe('OmniSpec CLI', () => {
 
     const constitution = await readFile(join(tempDir, 'CONSTITUTION.md'), 'utf-8');
     assert.match(constitution, /HealthApp/);
-    assert.match(constitution, /HIPAA/);
+    assert.match(constitution, /General software project/);
     assert.match(constitution, /TSDoc/);
 
     const manifest = await loadManifest(tempDir);
     assert.equal(manifest.project, 'HealthApp');
-    assert.equal(manifest.profile, 'healthtech');
+    assert.equal(manifest.profile, 'general');
     assert.equal(manifest.documentationStandard, 'TSDoc');
   });
 

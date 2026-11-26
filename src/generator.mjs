@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, cp, readdir, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getProfile } from './profiles/index.mjs';
+import { getProfile, profiles } from './profiles/index.mjs';
 import { _initManifestUnlocked, loadManifest, saveManifest, withManifestLock } from './manifest.mjs';
 import { integrationEntries, normalizeAgents } from './integrations.mjs';
 import { packageEntries, pluginEntries } from './assets.mjs';
@@ -10,6 +10,7 @@ import { detectProjectEnvironment } from './detector.mjs';
 import { acceptanceSeed } from './acceptance.mjs';
 import { QUESTIONS, DOCUMENTATION } from './protocols.mjs';
 import { FIT_PRESETS } from './fit.mjs';
+import { syncProjectContextUnlocked } from './project-state.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -441,7 +442,17 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
     }
     const files = await readdir(templateSourceDir);
 
-    const route = options.light ? 'light' : options.standard ? 'standard' : options.full ? 'full' : options.route;
+    const rawRoute = options.light
+      ? 'light'
+      : options.standard
+        ? 'standard'
+        : options.full
+          ? 'full'
+          : options.route || options.preset;
+    const route = rawRoute ? String(rawRoute).toLowerCase() : undefined;
+    if (route && !FIT_PRESETS[route]) {
+      throw new Error('--preset / --route must be light, standard or full.');
+    }
     const allowedFiles = new Set(files);
     // An unclassified change starts with the primary artifact only; fit scaffolds the rest on escalation.
     if (route === 'light' || !route) {
@@ -463,7 +474,8 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
 
     const today = new Date().toISOString().split('T')[0];
     const title = options.title || name.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    const profile = getProfile(manifest.profile || options.profile || 'general');
+    const storedProfile = manifest.profile && Object.hasOwn(profiles, manifest.profile) ? manifest.profile : 'general';
+    const profile = getProfile(options.profile || storedProfile);
 
     for (const file of files) {
       if (!allowedFiles.has(file)) continue;
@@ -537,6 +549,7 @@ export async function createSpec(baseDir, rawArchetype, name, options = {}) {
     }
 
     await saveManifest(baseDir, updatedManifest);
+    await syncProjectContextUnlocked(baseDir);
 
     return {
       id: idStr,

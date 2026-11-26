@@ -66,7 +66,7 @@ const isIdentStartCode = code =>
 const isSpaceCode = code => (code < 128 ? CHAR_CLASS[code] === 1 : isUnicodeSpace(code));
 
 const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
-const NON_LATIN1 = /[Ā-￿]/;
+const NON_LATIN1 = /[\u0100-\uffff]/;
 
 /**
  * UTF-16 code units of the source in a typed array, which the maskers read and overwrite. Reading a

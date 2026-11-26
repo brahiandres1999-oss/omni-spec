@@ -56,7 +56,7 @@ const DESIGN_FILE = { feature: 'plan.md', bugfix: 'fix.md', debt: 'migration-pla
 async function untracedAutomatedCriteria(specDir, designFile, issues = []) {
   let acceptance;
   try {
-    acceptance = JSON.parse((await readFile(join(specDir, 'acceptance.json'), 'utf8')).replace(/^﻿/, ''));
+    acceptance = JSON.parse((await readFile(join(specDir, 'acceptance.json'), 'utf8')).replace(/^\uFEFF/, ''));
   } catch (error) {
     if (error.code === 'ENOENT') return [];
     if (error instanceof SyntaxError) return ['acceptance.json is not valid JSON.'];
@@ -309,7 +309,7 @@ export async function auditSpec(baseDir, specIdentifier = null) {
           errors.push('spec.md is missing Section 0: Clarification & Assumptions (Anti-Hallucination Gate).');
         } else {
           // Check substantive content strictly within Section 0
-          const section0Match = cleanSpec.match(/^## 0\.[^\n]*\n([\s\S]*?)(?=\n#{1,2}(?:\s|$)|$(?![\s\S]))/m);
+          const section0Match = cleanSpec.match(/^## 0\.[^\n]*\r?\n([\s\S]*?)(?=\n#{1,2}(?:\s|$)|$(?![\s\S]))/m);
           const section0Body = section0Match ? section0Match[1] : '';
           const substantiveText = section0Body
             .replace(/<!--[\s\S]*?-->/g, '')
@@ -347,6 +347,32 @@ export async function auditSpec(baseDir, specIdentifier = null) {
           }
           if (!cleanPlan.includes('Rollback') && !cleanPlan.includes('Reversión')) {
             errors.push('plan.md does not define a Rollback / Migration reversal strategy (or justified N/A).');
+          }
+          let hasUiCriteriaInAcceptance = false;
+          try {
+            const accRaw = await readFile(join(specDir, 'acceptance.json'), 'utf8');
+            const acc = JSON.parse(accRaw.replace(/^\uFEFF/, ''));
+            hasUiCriteriaInAcceptance =
+              Array.isArray(acc?.criteria) &&
+              acc.criteria.some(c => ['visual', 'interaction', 'accessibility'].includes(c?.kind));
+          } catch {
+            hasUiCriteriaInAcceptance = false;
+          }
+          const hasUiCriteria =
+            (specData && /\bAC-\d+\s*\[(?:visual|interaction|accessibility)\]/i.test(specData.clean)) ||
+            hasUiCriteriaInAcceptance;
+          const uiSectionMatch = cleanPlan.match(
+            /^## UI & Interaction Design\r?\n([\s\S]*?)(?=\r?\n#{1,2}(?:\s|$)|$(?![\s\S]))/m,
+          );
+          if (
+            hasUiCriteria &&
+            uiSectionMatch &&
+            /^(?:[-*]\s*)?(?:N\/A|No\s+aplica)\b/i.test(uiSectionMatch[1].trim())
+          ) {
+            const msg =
+              'UI_DESIGN_CONTRADICTION: spec.md declares UI acceptance criteria ([visual]/[interaction]/[accessibility]) but plan.md marks UI & Interaction Design as N/A.';
+            issues.push({ path: 'plan.md', code: 'UI_DESIGN_CONTRADICTION', message: msg });
+            errors.push(msg);
           }
         }
       }

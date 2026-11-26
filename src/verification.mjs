@@ -9,7 +9,7 @@ import { writeFileAtomic } from './fs-retry.mjs';
 import { hashProjectFiles, hashTree, digestFiles, changedFiles, newBudget } from './snapshot.mjs';
 import { reviewAcceptance, bindAcceptance } from './acceptance.mjs';
 import { loadChecks, checkDirectory } from './checks.mjs';
-import { assertContextFresh, readProjectState } from './project-state.mjs';
+import { assertContextFresh, readProjectState, syncProjectContextUnlocked } from './project-state.mjs';
 import { GuardianError, auditCommand, resolveExecution } from './guardian.mjs';
 import { getAttestationKey, signRecord, verifyRecord } from './attestation.mjs';
 import { hollowTestFindings } from './hollow-guard.mjs';
@@ -298,6 +298,7 @@ export async function verifySpec(root, identifier, options = {}) {
         );
       if (checks.length && options.manual && spec.type !== 'rfc')
         throw new Error('Manual verification cannot bypass configured quality gates.');
+      await syncProjectContextUnlocked(root, { inVerify: true });
       const configuration = { qualityGates: manifest.qualityGates, checks };
       const before = await projectSnapshot(root, spec, configuration);
       const hollowTests = mode === 'decision' ? [] : await hollowTestFindings(root);
@@ -541,6 +542,7 @@ async function completeUnlocked(root, identifier) {
       manifest.active_archetype = null;
     }
     await saveManifest(root, manifest);
+    await syncProjectContextUnlocked(root);
     return spec;
   });
 }

@@ -17,22 +17,38 @@ import { installAgentIntegrations, normalizeAgents, agentInstructions, AGENTS } 
 import { detectProjectEnvironment } from './detector.mjs';
 import { auditProjectContext } from './context-auditor.mjs';
 import { fitQuestionnaire, specRoute, applyFitPreset, saveFit, readFit } from './fit.mjs';
-import { projectStatus, recordContext, recordSession, recordDecision } from './project-state.mjs';
+import {
+  projectStatus,
+  recordContext,
+  recordSession,
+  recordDecision,
+  syncProjectContext,
+  syncProjectContextUnlocked,
+} from './project-state.mjs';
 import { loadChecks, validateChecks, gateProblems } from './checks.mjs';
 import { safePath } from './managed.mjs';
 import { writeFileAtomic } from './fs-retry.mjs';
 import { listContracts, readContract, updateContract, contractEffectiveSnapshot } from './contracts.mjs';
 import { fileURLToPath } from 'node:url';
 import { inspectInstallation, installationMessage, assertInstallationRuntime } from './installation.mjs';
-import { installationProgress } from './terminal-ui.mjs';
+import { installationProgress, resultSteps } from './terminal-ui.mjs';
 import { runMcpServer } from './mcp-server.mjs';
-import { memoryPath, openMemory } from './memory.mjs';
+import { memoryPath, openMemory, syncFromGit } from './memory.mjs';
 import { indexRepository, summarizeGraph } from './cartography/graph.mjs';
 import { checkBlastRadius, normalizeTargets } from './cartography/blast-radius.mjs';
 import { approveGate, gateStatus } from './gates.mjs';
 import { migrateTasks } from './tasks.mjs';
 import { inspectStaged, installHooks, uninstallHooks } from './guardian.mjs';
 import { createAuthStore, createPassthrough, PASSTHROUGH_PROVIDERS } from './auth.mjs';
+import {
+  evaluateContrastPair,
+  generateDtcgTokenScaffold,
+  validateDesignTokens,
+  uiSlopFindings,
+  getDesignLens,
+  listDesignLenses,
+  inspectSpecDesignGrill,
+} from './design/index.mjs';
 
 const mutating = new Set([
   'create',
@@ -109,6 +125,10 @@ const valueFlags = new Set([
   'value',
   'applies-to',
   'expected-revision',
+  'lens',
+  'role',
+  'archetype',
+  'output',
 ]);
 export const VALUE_OPTIONS = valueFlags;
 const booleanFlags = new Set([
@@ -127,7 +147,17 @@ const booleanFlags = new Set([
   'crosses-contract',
   'existing-tests',
   'replace',
+  'no-crosses-contract',
+  'no-existing-tests',
 ]);
+const optionalBooleanFlags = new Set(['crosses-contract', 'existing-tests']);
+
+function parseBooleanValue(option, raw) {
+  const norm = String(raw).trim().toLowerCase();
+  if (norm === 'true' || norm === '1') return true;
+  if (norm === 'false' || norm === '0') return false;
+  throw new Error(`Invalid boolean value for ${option}: expected true or false.`);
+}
 
 function acceptanceSummary(acceptance) {
   if (acceptance.error) return `Acceptance review failed: ${acceptance.error}`;
@@ -159,7 +189,15 @@ function parse(args) {
     const assigned = arg.indexOf('=');
     const name = assigned > 2 ? arg.slice(2, assigned) : arg.slice(2);
     const option = `--${name}`;
-    if (booleanFlags.has(name)) {
+    if (optionalBooleanFlags.has(name)) {
+      if (assigned > 2) {
+        flags[name] = parseBooleanValue(option, arg.slice(assigned + 1));
+      } else if (args[i + 1] !== undefined && /^(?:true|false)$/i.test(args[i + 1])) {
+        flags[name] = parseBooleanValue(option, args[++i]);
+      } else {
+        flags[name] = true;
+      }
+    } else if (booleanFlags.has(name)) {
       if (assigned > 2) throw new Error(`${option} does not take a value.`);
       flags[name] = true;
     } else if (valueFlags.has(name)) {
@@ -181,8 +219,8 @@ function parse(args) {
   flags.acceptUpdates = flags['accept-updates'];
   flags.allowDowngrade = flags['allow-downgrade'];
   flags.uiComponents = flags['ui-components'];
-  flags.crossesContract = flags['crosses-contract'];
-  flags.existingTests = flags['existing-tests'];
+  flags.crossesContract = flags['no-crosses-contract'] ? false : flags['crosses-contract'];
+  flags.existingTests = flags['no-existing-tests'] ? false : flags['existing-tests'];
   if (flags.timeout !== undefined) {
     flags.timeout = Number(flags.timeout);
     if (!Number.isSafeInteger(flags.timeout) || flags.timeout < 100 || flags.timeout > 3600000)
@@ -240,7 +278,8 @@ omni-spec <command> [arguments] [options]
   inspect [--json]               Read-only environment inventory; no scripts executed
   context-check [--json]         Check context structure/local links; semantic review required
   context-record                Snapshot reconciled context inputs; retain previous baseline
-  guide <design|setup|evidence> Read bundled procedures and record shapes; no external skill
+  guide <design|setup|evidence> [--lens <name>]  Read bundled procedures and lenses; no external skill
+  design <contrast|tokens|check|grill|lens|scaffold> [--json]  Run Omni-Design UI, token & anti-slop engine
   session-record --from <file|->  Record actual host capabilities (does not grant tools)
   decision-record --from <file|-> Record answer/delegation and dated technology sources
   checks [--from <file|->]        List/configure reviewed checks with IDs and module cwd
@@ -279,7 +318,7 @@ omni-spec <command> [arguments] [options]
                                  Search memory FTS5 for decisions and observations
   memory list [--category <cat>] [--scope <path>] [--limit <n>]
                                  List recorded observations with optional category/scope filter
-  cartography [--json]           Index the module graph (polyglot, incremental) into specs/.omni/memory.db
+  cartography [--json]           Index the module graph (polyglot, incremental) into workspace memory.db
   blast-radius <files...> [--json] [--depth 1..10] [--fail-on low|medium|high]
                                  Impact of changing files before editing; path#sym1,sym2 limits symbols
   help | version
@@ -331,7 +370,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     if (flags.all && command !== 'status') throw new Error('--all is supported only by status.');
     if (flags.active && (command !== 'contracts' || positionals.length))
       throw new Error('--active is supported only by contracts without an ID.');
-    if (flags.preset !== undefined && command !== 'fit') throw new Error('--preset is supported only by fit.');
+    if (flags.preset !== undefined && !['create', 'fit'].includes(command))
+      throw new Error('--preset is supported only by create and fit.');
     if ((flags.depth !== undefined || flags['fail-on'] !== undefined) && command !== 'blast-radius')
       throw new Error('--depth and --fail-on are supported only by blast-radius.');
     if (flags.preset !== undefined && !['light', 'standard', 'full'].includes(flags.preset.toLowerCase()))
@@ -342,6 +382,14 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       throw new Error('--route must be light, standard or full.');
     if ((flags.light || flags.standard || flags.full) && !['create', 'fit'].includes(command))
       throw new Error('--light, --standard and --full are supported only by create and fit.');
+    if (flags.lens !== undefined && !['guide', 'design'].includes(command))
+      throw new Error('--lens is supported only by guide design and design lens.');
+    if (flags.role !== undefined && (command !== 'design' || positionals[0] !== 'contrast'))
+      throw new Error('--role is supported only by design contrast.');
+    if (flags.archetype !== undefined && (command !== 'design' || positionals[0] !== 'scaffold'))
+      throw new Error('--archetype is supported only by design scaffold.');
+    if (flags.output !== undefined && (command !== 'design' || positionals[0] !== 'scaffold'))
+      throw new Error('--output is supported only by design scaffold.');
     const maxPositionals =
       {
         create: 2,
@@ -361,6 +409,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         tasks: 2,
         memory: 2,
         'blast-radius': Number.POSITIVE_INFINITY,
+        design: Number.POSITIVE_INFINITY,
       }[command] || 0;
     if (positionals.length > maxPositionals) throw new Error(`Unexpected arguments for ${command}. Run help.`);
     const emit = (value, human) =>
@@ -378,13 +427,124 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
     switch (command) {
       case 'guide': {
         if (!['design', 'setup', 'evidence'].includes(positionals[0]))
-          throw new Error('Usage: guide <design|setup|evidence>');
+          throw new Error(
+            'Usage: guide <design|setup|evidence> [--lens <grill|wayfinder|distill|bolder|quieter|polish|tokens|anti-slop>]',
+          );
+        if (flags.lens !== undefined) {
+          if (positionals[0] !== 'design') throw new Error('--lens is supported only by guide design.');
+          const lens = getDesignLens(flags.lens);
+          if (!lens) {
+            throw new Error(
+              `Unknown design lens: ${flags.lens}. Valid: grill, wayfinder, distill, bolder, quieter, polish, tokens, anti-slop.`,
+            );
+          }
+          emit(
+            {
+              topic: 'design',
+              lens: lens.id,
+              phase: lens.phase,
+              origin: lens.origin,
+              title: lens.title,
+              content: lens.content,
+              requiresExternalSkill: false,
+            },
+            lens.content,
+          );
+          return 0;
+        }
         const content = await readFile(
           fileURLToPath(new URL(`./resources/${positionals[0]}.md`, import.meta.url)),
           'utf8',
         );
         emit({ topic: positionals[0], content, requiresExternalSkill: false }, content);
         return 0;
+      }
+      case 'design': {
+        const sub = positionals[0];
+        if (flags.lens !== undefined && sub !== 'lens') {
+          throw new Error('--lens is supported only by guide design and design lens.');
+        }
+        if (sub === 'contrast') {
+          const [fg, bg] = [positionals[1], positionals[2]];
+          if (!fg || !bg) {
+            throw new Error(
+              'Usage: design contrast <foreground> <background> [--role <normal-text|large-text|ui-component|enhanced-text>] [--json]',
+            );
+          }
+          const result = evaluateContrastPair(fg, bg, { role: flags.role || 'normal-text' });
+          emit(
+            result,
+            `[${result.passed ? 'PASS' : 'FAIL'}] Contrast ${result.ratio}:1 (required ${result.requiredRatio}:1 for ${result.role}, WCAG ${result.wcagLevel}, OKLCH ΔL=${result.oklchDeltaL})`,
+          );
+          return result.passed ? 0 : 1;
+        }
+        if (sub === 'tokens') {
+          const target = positionals[1];
+          if (!target) throw new Error('Usage: design tokens <file.json> [--json]');
+          const filePath = resolve(invocationDir, target);
+          const raw = await readFile(filePath, 'utf8');
+          const report = validateDesignTokens(JSON.parse(raw.replace(/^\uFEFF/, '')));
+          emit(
+            report,
+            report.valid
+              ? `[OK] Design tokens valid (${report.tokenCount} tokens verified)`
+              : `[FAIL] Design tokens invalid: ${report.errors.join('; ')}`,
+          );
+          return report.valid ? 0 : 1;
+        }
+        if (sub === 'scaffold') {
+          const archetype = flags.archetype || positionals[1] || 'precision-dark';
+          const scaffold = generateDtcgTokenScaffold(archetype);
+          if (flags.output) {
+            const outPath = resolve(invocationDir, flags.output);
+            await writeFileAtomic(outPath, `${JSON.stringify(scaffold, null, 2)}\n`);
+          }
+          emit(scaffold, JSON.stringify(scaffold, null, 2));
+          return 0;
+        }
+        if (sub === 'check') {
+          const targets = positionals.slice(1);
+          const report = await uiSlopFindings(
+            targets.length ? invocationDir : workingDir,
+            targets.length ? targets : null,
+          );
+          emit(
+            report,
+            report.passed
+              ? `[OK] UI-Slop Guard passed (${report.filesChecked} file(s) clean)`
+              : [...report.errors, ...report.warnings].join('\n'),
+          );
+          return report.passed ? 0 : 1;
+        }
+        if (sub === 'grill') {
+          const report = await inspectSpecDesignGrill(workingDir, positionals[1] || null);
+          emit(
+            report,
+            report.openQuestions.length
+              ? report.openQuestions.map((q, idx) => `${idx + 1}. [${q.id}] (${q.severity}) ${q.question}`).join('\n\n')
+              : '[OK] All UI Art Direction & 4-State Matrix decisions are documented.',
+          );
+          return 0;
+        }
+        if (sub === 'lens') {
+          const lensName = flags.lens || positionals[1];
+          if (!lensName || lensName === 'list') {
+            const lenses = listDesignLenses();
+            emit({ lenses }, lenses.map(l => `- ${l.id}: ${l.title} (${l.phase})`).join('\n'));
+            return 0;
+          }
+          const lens = getDesignLens(lensName);
+          if (!lens) {
+            throw new Error(
+              `Unknown design lens: ${lensName}. Valid: grill, wayfinder, distill, bolder, quieter, polish, tokens, anti-slop.`,
+            );
+          }
+          emit(lens, lens.content);
+          return 0;
+        }
+        throw new Error(
+          `Unknown design subcommand: ${sub || '<none>'}. Valid: contrast, tokens, scaffold, check, grill, lens.`,
+        );
       }
       case 'init': {
         await assertInstallationRuntime();
@@ -396,7 +556,9 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           );
         const options = await runWizard(workingDir, { ...flags, cliVersion: version });
         if (!options) return 0;
-        const progress = installationProgress(process.stdout, options.language, flags.plain || json);
+        const progress = installationProgress(process.stdout, options.language, flags.plain || json, process.env, {
+          version,
+        });
         progress.start();
         const result = await scaffoldProject(workingDir, options);
         progress.files();
@@ -576,11 +738,13 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       case 'focus': {
         if (positionals.length !== 1) throw new Error('Usage: focus <id|slug>');
         const focused = await focusSpec(workingDir, positionals[0]);
+        await syncProjectContext(workingDir);
         emit(focused, `[ACTIVE] ${focused.slug} (${focused.type}) — ${focused.status}`);
         return 0;
       }
       case 'audit': {
         const report = await auditSpec(workingDir, positionals[0]);
+        await syncProjectContext(workingDir);
         emit(
           report,
           `[AUDIT ${report.valid ? 'PASSED' : 'BLOCKED'}] Structural document checks only.\n${report.errors.join('\n')}\n${report.warnings.map(w => '[WARN] ' + w).join('\n')}\nTasks: ${report.tasks?.completed || 0}/${report.tasks?.total || 0}. Code tests were not executed.`,
@@ -637,8 +801,8 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           const overrides = {};
           if (flags.files !== undefined) overrides.files = parseInt(flags.files, 10);
           if (flags.modules !== undefined) overrides.modules = parseInt(flags.modules, 10);
-          if (flags.crossesContract !== undefined) overrides.crossesContract = true;
-          if (flags.existingTests !== undefined) overrides.existingTests = true;
+          if (flags.crossesContract !== undefined) overrides.crossesContract = Boolean(flags.crossesContract);
+          if (flags.existingTests !== undefined) overrides.existingTests = Boolean(flags.existingTests);
           if (flags.risk !== undefined) overrides.risk = flags.risk;
           if (flags.uncertainty !== undefined) overrides.uncertainty = flags.uncertainty;
           if (flags.ambiguity !== undefined) overrides.ambiguity = flags.ambiguity;
@@ -659,6 +823,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           if (updatedRoute && ['standard', 'full'].includes(updatedRoute.route)) {
             scaffolded = await scaffoldMissingRouteArtifacts(workingDir, spec, updatedRoute.route);
           }
+          await syncProjectContext(workingDir);
           emit(
             {
               spec: spec.slug,
@@ -700,6 +865,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
         const scaffolded = ['standard', 'full'].includes(route.route)
           ? await scaffoldMissingRouteArtifacts(workingDir, spec, route.route)
           : [];
+        await syncProjectContext(workingDir);
         emit(
           {
             spec: spec.slug,
@@ -747,6 +913,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           if (changes.profile !== undefined) manifest.profile = changes.profile;
           if (changes.doc !== undefined) manifest.documentationStandard = changes.doc;
           await saveManifest(workingDir, manifest);
+          await syncProjectContextUnlocked(workingDir, { configured: changes });
         });
         const configured = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));
         emit(
@@ -807,20 +974,53 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
           const coexistence = res.pluginCoexistence
             ? `\n[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`
             : '';
-          emit(
-            res,
-            `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nReload the host if needed and confirm skill discovery; file installation does not establish host behavior.${coexistence}`,
-          );
+          const plainMsg = `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at:\n${res.targetDir}\nFiles copied: ${res.copied.join(', ')}\nReload the host if needed and confirm skill discovery; file installation does not establish host behavior.${coexistence}`;
+          const formatted =
+            process.stdout.isTTY && !flags.plain && !json
+              ? resultSteps(
+                  `[PLUGIN INSTALLED] OmniSpec plugin v${res.version} installed at: ${res.targetDir}`,
+                  [
+                    {
+                      title: 'Next step / Siguiente paso',
+                      lines: [
+                        `Files copied: ${res.copied.join(', ')}`,
+                        'Reload the host if needed and confirm skill discovery; file installation does not establish host behavior.',
+                        ...(res.pluginCoexistence
+                          ? [`[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`]
+                          : []),
+                      ],
+                    },
+                  ],
+                  { plain: flags.plain || json, version: res.version, showLogo: true },
+                )
+              : plainMsg;
+          emit(res, formatted);
           return 0;
         } else if (sub === 'update' || sub === 'upgrade') {
           const res = await updatePlugin({ ...flags, projectDir: root || undefined });
           const coexistence = res.pluginCoexistence
             ? `\n[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`
             : '';
-          emit(
-            res,
-            `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at:\n${res.targetDir}\nFiles updated: ${res.copied.join(', ')}${coexistence}`,
-          );
+          const plainMsg = `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at:\n${res.targetDir}\nFiles updated: ${res.copied.join(', ')}${coexistence}`;
+          const formatted =
+            process.stdout.isTTY && !flags.plain && !json
+              ? resultSteps(
+                  `[PLUGIN UPDATED] OmniSpec plugin v${res.version} updated at: ${res.targetDir}`,
+                  [
+                    {
+                      title: 'Details / Detalles',
+                      lines: [
+                        `Files updated: ${res.copied.join(', ')}`,
+                        ...(res.pluginCoexistence
+                          ? [`[WARN] Coexistencia de plugin: ${res.pluginCoexistence.message}`]
+                          : []),
+                      ],
+                    },
+                  ],
+                  { plain: flags.plain || json, version: res.version, showLogo: true },
+                )
+              : plainMsg;
+          emit(res, formatted);
           return 0;
         } else if (sub === 'status') {
           const res = await getPluginStatus(flags);
@@ -1004,6 +1204,7 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
       }
       case 'memory': {
         const sub = positionals[0];
+        const validCategories = new Set(['pattern', 'gotcha', 'convention', 'constraint', 'review-remark']);
         const memory = openMemory(memoryPath(workingDir));
         try {
           if (sub === 'add') {
@@ -1012,28 +1213,39 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
                 'Usage: memory add --category <pattern|gotcha|convention|constraint> --scope <path> --summary "<text>" [--evidence "<text>"] [--json]',
               );
             }
+            if (!validCategories.has(flags.category)) {
+              throw new Error(
+                `Invalid observation category "${flags.category}": use pattern, gotcha, convention, constraint or review-remark.`,
+              );
+            }
             const [id] = memory.addObservations([
               {
                 category: flags.category,
-                scope: flags.scope,
-                summary: flags.summary,
-                evidence: flags.evidence || null,
+                scope: flags.scope.trim(),
+                summary: flags.summary.trim(),
+                evidence: flags.evidence?.trim() || null,
               },
             ]);
             const record = {
               id,
               category: flags.category,
-              scope: flags.scope,
-              summary: flags.summary,
-              evidence: flags.evidence || null,
+              scope: flags.scope.trim(),
+              summary: flags.summary.trim(),
+              evidence: flags.evidence?.trim() || null,
             };
-            emit(record, `[OK] Observation ${id} recorded (${flags.category}) for ${flags.scope}`);
+            emit(record, `[OK] Observation ${id} recorded (${flags.category}) for ${flags.scope.trim()}`);
             return 0;
           } else if (sub === 'search') {
             const query = positionals[1];
             if (!query) {
               throw new Error('Usage: memory search <query> [--scope <path>] [--limit <n>] [--json]');
             }
+            await syncFromGit(memory, workingDir).catch(err => {
+              if (/HEAD:\.\/specs/.test(err.message)) {
+                return memory.syncSpecs(workingDir, { treeOid: '', status: '', prefix: '' });
+              }
+              return null;
+            });
             const limit = flags.limit ? Number(flags.limit) : 20;
             const results = memory.searchContext(query, { scope: flags.scope ?? null, limit });
             emit(
@@ -1044,22 +1256,30 @@ export async function runCli(args = process.argv.slice(2), workingDir = process.
             );
             return 0;
           } else if (sub === 'list') {
+            await syncFromGit(memory, workingDir).catch(err => {
+              if (/HEAD:\.\/specs/.test(err.message)) {
+                return memory.syncSpecs(workingDir, { treeOid: '', status: '', prefix: '' });
+              }
+              return null;
+            });
             const limit = flags.limit ? Number(flags.limit) : 20;
             const observations = memory.listObservations({
               category: flags.category ?? null,
               scope: flags.scope ?? null,
               limit,
             });
-            emit(
-              { observations },
-              observations.length
-                ? observations
-                    .map(
-                      o => `[${o.category}] ${o.scope}: ${o.summary}${o.evidence ? ` (evidence: ${o.evidence})` : ''}`,
-                    )
-                    .join('\n')
-                : 'No observations found.',
-            );
+            const decisions = memory.listDecisions({
+              topic: flags.topic ?? flags.scope ?? null,
+              status: flags.status ?? null,
+              limit,
+            });
+            const lines = [
+              ...observations.map(
+                o => `[${o.category}] ${o.scope}: ${o.summary}${o.evidence ? ` (evidence: ${o.evidence})` : ''}`,
+              ),
+              ...decisions.map(d => `[decision:${d.status}] ${d.topic || d.id}: ${d.basis}`),
+            ];
+            emit({ observations, decisions }, lines.length ? lines.join('\n') : 'No observations found.');
             return 0;
           } else {
             throw new Error(`Unknown memory subcommand: ${sub}. Valid: add, search, list.`);

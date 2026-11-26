@@ -705,3 +705,170 @@ test('assertContextFresh and projectStatus block when acceptance schemaVersion i
   assert.equal(blocker.action, 'Complete /omni-init and run context-record');
   assert.ok(Array.isArray(status.progress.memory.observations));
 });
+
+test('specs/project-context.md Section 7 and stack synchronize automatically across Spanish and English lifecycle phases without breaking context freshness or verification', async () => {
+  const contextPath = join(root, 'specs', 'project-context.md');
+  const initialMd = await readFile(contextPath, 'utf8');
+  await writeFile(
+    contextPath,
+    initialMd
+      .replace(
+        '- Inferred stack from recognized manifests: Undecided',
+        '- Inferred stack from recognized manifests: Undecided\n- Stack: `node`\n- Documentación: `es`',
+      )
+      .replace(
+        /## 7\.\s*Next action[\s\S]*$/,
+        '## 7. Siguiente acción\n\nEjecutar `/omni-specify` para formalizar el alcance completo, arquitectura de rutas (`/` ES, `/en/` EN, `/docs`, `/changelog`, Playground) y criterios de aceptación EARS (`[functional]`, `[visual]`, `[interaction]`, `[accessibility]`) antes de planificar e instalar el proyecto Astro.\n',
+      ),
+    'utf8',
+  );
+  await recordContext(root);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 1. Create unclassified spec -> asks for fit / /omni-specify
+  const spec = await createSpec(root, 'feature', 'astro-site');
+  let md = await readFile(contextPath, 'utf8');
+  assert.match(md, /## 7\. Siguiente acción[\s\S]*fit 001/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 2. Fit preset full (with template spec.md still pending) -> asks to complete spec.md or move to /omni-plan
+  await runCli(['fit', spec.id, '--preset', 'full'], root);
+  md = await readFile(contextPath, 'utf8');
+  assert.match(md, /## 7\. Siguiente acción[\s\S]*spec\.md/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 3. Author spec.md & acceptance.json (leaving plan.md & tasks.md as template) and run audit -> advances to /omni-plan
+  const specDir = join(root, 'specs', spec.slug);
+  const templatePlan = await readFile(join(specDir, 'plan.md'), 'utf8');
+  const templateTasks = await readFile(join(specDir, 'tasks.md'), 'utf8');
+  await fillSpec(root, spec);
+  await writeFile(join(specDir, 'plan.md'), templatePlan, 'utf8');
+  await writeFile(join(specDir, 'tasks.md'), templateTasks, 'utf8');
+  await runCli(['audit', spec.id], root);
+  md = await readFile(contextPath, 'utf8');
+  assert.match(md, /## 7\. Siguiente acción[\s\S]*\/omni-plan/);
+  assert.doesNotMatch(md, /Ejecutar `\/omni-specify` para formalizar/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 4. Author plan.md and run audit -> advances to /omni-tasks
+  await fillSpec(root, spec);
+  await writeFile(join(specDir, 'tasks.md'), templateTasks, 'utf8');
+  await runCli(['audit', spec.id], root);
+  md = await readFile(contextPath, 'utf8');
+  assert.match(md, /## 7\. Siguiente acción[\s\S]*\/omni-tasks/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 5. Author tasks.md with 1/2 tasks done and run tasks migrate -> advances to /omni-implement with task progress (1/2)
+  await fillSpec(root, spec);
+  await writeFile(
+    join(specDir, 'tasks.md'),
+    '# Tasks\n\n- [x] T-01: Configurar Astro (`package.json`)\n- [ ] T-02: Construir rutas bilingües (`src/pages/index.astro`)\n',
+    'utf8',
+  );
+  await runCli(['tasks', 'migrate', spec.id], root);
+  md = await readFile(contextPath, 'utf8');
+  assert.match(md, /## 7\. Siguiente acción[\s\S]*\/omni-implement[\s\S]*1\/2/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 6. Configure stack to astro -> updates Stack in Section 2/3, keeps project-context.md fresh, and re-records CONSTITUTION.md
+  await runCli(['configure', '--stack', 'astro', '--doc', 'es', '--gates', 'node -e "process.exit(0)"'], root);
+  md = await readFile(contextPath, 'utf8');
+  assert.match(md, /- Stack: `astro`/);
+  assert.ok(!(await contextFreshness(root)).changed.includes('specs/project-context.md'));
+  await recordContext(root);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 7. Complete all tasks in tasks.json and run audit -> advances to /omni-converge / verify
+  await writeFile(
+    join(specDir, 'tasks.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        tasks: [
+          { id: 'T-01', title: 'Configurar Astro (`package.json`)', status: 'done', criteria: ['AC-01'] },
+          {
+            id: 'T-02',
+            title: 'Construir rutas bilingües (`src/pages/index.astro`)',
+            status: 'done',
+            criteria: ['AC-01'],
+          },
+        ],
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+  await writeFile(
+    join(specDir, 'tasks.md'),
+    '# Tasks\n\n<!-- Generated from tasks.json by OmniSpec. Edit tasks.json; this file is rewritten. -->\n\n- [x] T-01: Configurar Astro (`package.json`)\n- [x] T-02: Construir rutas bilingües (`src/pages/index.astro`)\n',
+    'utf8',
+  );
+  await runCli(['audit', spec.id], root);
+  md = await readFile(contextPath, 'utf8');
+  assert.match(md, /## 7\. Siguiente acción[\s\S]*\/omni-converge[\s\S]*2\/2/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+
+  // 8. Verify and Complete -> advances to COMPLETED and never invalidates verification fingerprint
+  await verifySpec(root, spec.id);
+  await completeSpec(root, spec.id);
+  md = await readFile(contextPath, 'utf8');
+  assert.match(md, /## 7\. Siguiente acción[\s\S]*COMPLETED/);
+  assert.equal((await contextFreshness(root)).status, 'CURRENT');
+});
+
+test('memory CLI and status --json recall decisions, observations, and scoped FTS queries across revisions', async () => {
+  await recordDecision(root, {
+    id: '001-d1',
+    topic: 'auth-strategy',
+    status: 'pending',
+    appliesTo: ['001-auth'],
+    required: true,
+  });
+  // Updating status/basis without repeating topic or appliesTo preserves them and indexes into FTS5
+  const updated = await recordDecision(root, {
+    id: '001-d1',
+    expectedRevision: 1,
+    status: 'approved',
+    value: 'Stateless JWT RS256',
+    basis: 'Confirmed stateless JWT RS256 tokens for API boundary.',
+  });
+  assert.equal(updated.topic, 'auth-strategy');
+  assert.deepEqual(updated.appliesTo, ['001-auth']);
+  assert.equal(updated.required, true);
+
+  const addRes = await cli([
+    'memory',
+    'add',
+    '--category',
+    'gotcha',
+    '--scope',
+    'src/auth',
+    '--summary',
+    'Rotate RS256 public keys with JWKSkid header',
+    '--evidence',
+    'src/auth/jwks.ts',
+    '--json',
+  ]);
+  assert.equal(addRes.code, 0, addRes.stderr);
+
+  const searchScopedDecision = await cli(['memory', 'search', 'Stateless JWT', '--scope', '001-auth', '--json']);
+  assert.equal(searchScopedDecision.code, 0, searchScopedDecision.stderr);
+  const decisionHits = JSON.parse(searchScopedDecision.stdout).results;
+  assert.equal(decisionHits.length, 1);
+  assert.equal(decisionHits[0].source_id, '001-d1');
+
+  const searchByTopic = await cli(['memory', 'search', 'RS256', '--scope', 'auth-strategy', '--json']);
+  assert.equal(searchByTopic.code, 0, searchByTopic.stderr);
+  assert.equal(JSON.parse(searchByTopic.stdout).results[0].source_id, '001-d1');
+
+  const listRes = await cli(['memory', 'list', '--json']);
+  assert.equal(listRes.code, 0, listRes.stderr);
+  const listed = JSON.parse(listRes.stdout);
+  assert.equal(listed.observations.length, 1);
+  assert.ok(listed.decisions.some(d => d.id === '001-d1' && d.status === 'approved'));
+
+  const status = await projectStatus(root);
+  assert.equal(status.progress.memory.observations.length, 1);
+  assert.ok(status.progress.memory.decisions.some(d => d.id === '001-d1'));
+});

@@ -138,7 +138,7 @@ test('explicit declarations bypass repeated questions and are preserved in the c
       '--stack',
       'Python',
       '--profile',
-      'fintech',
+      'general',
       '--doc',
       'PEP257',
       '--gates',
@@ -151,7 +151,7 @@ test('explicit declarations bypass repeated questions and are preserved in the c
   const manifest = await loadManifest(root);
   assert.equal(manifest.project, 'Loans');
   assert.equal(manifest.stack, 'Python');
-  assert.equal(manifest.profile, 'fintech');
+  assert.equal(manifest.profile, 'general');
   assert.equal(manifest.qualityGates, 'python -m unittest');
   assert.match(await readFile(join(root, 'CONSTITUTION.md'), 'utf8'), /PEP257/);
 });
@@ -171,7 +171,7 @@ test('reinitialization preserves configuration, language, authored context and a
   await scaffoldProject(root, {
     agent: 'claude',
     language: 'es',
-    profile: 'fintech',
+    profile: 'general',
     stack: 'Python',
     docStandard: 'PEP257',
   });
@@ -184,7 +184,7 @@ test('reinitialization preserves configuration, language, authored context and a
   assert.match(result.stdout, /3\. Pídele que retome el trabajo pendiente\./);
   const manifest = await loadManifest(root);
   assert.equal(manifest.active_spec, spec.slug);
-  assert.equal(manifest.profile, 'fintech');
+  assert.equal(manifest.profile, 'general');
   assert.equal(manifest.stack, 'Python');
   assert.equal(await readFile(join(root, 'CONSTITUTION.md'), 'utf8'), constitution);
   assert.equal(await readFile(join(root, 'specs/project-context.md'), 'utf8'), '# User-owned context');
@@ -361,16 +361,16 @@ test('AC-03, AC-04 and AC-05: README and context follow the installer language a
 test('spec 028 AC-03: configure sets stack, profile and documentation without init --force', async () => {
   assert.equal(run(['init', '--yes', '--agent', 'claude', '--lang', 'es']).code, 0);
   const before = await readFile(join(root, 'CONSTITUTION.md'), 'utf8');
-  const result = run(['configure', '--stack', 'Java 25 + Spring Boot', '--profile', 'fintech', '--doc', 'Javadoc']);
+  const result = run(['configure', '--stack', 'Java 25 + Spring Boot', '--profile', 'general', '--doc', 'Javadoc']);
   assert.equal(result.code, 0, result.stderr);
   const manifest = await loadManifest(root);
   assert.equal(manifest.stack, 'Java 25 + Spring Boot');
-  assert.equal(manifest.profile, 'fintech');
+  assert.equal(manifest.profile, 'general');
   assert.equal(manifest.documentationStandard, 'Javadoc');
   const after = await readFile(join(root, 'CONSTITUTION.md'), 'utf8');
   assert.match(after, /^\* \*\*Primary Tech Stack:\*\* `Java 25 \+ Spring Boot`$/m);
   assert.match(after, /^\* \*\*Documentation Standard:\*\* `Javadoc` \(All public APIs/m);
-  assert.match(after, /^## 2\. Domain & Regulatory Invariants \(Fintech, Banking & Payments\)$/m);
+  assert.match(after, /^## 2\. Domain & Regulatory Invariants \(General software project\)$/m);
   assert.match(after, /idempotency/);
   for (const kept of ['## 1. Governance & Code Surgery', '## 4. Delivery Quality Gates', '## 5. UI Ergonomics'])
     assert.ok(after.includes(kept), kept);
@@ -426,7 +426,7 @@ test('spec 029 AC-01 and AC-02: status asks to confirm placeholder configuration
   assert.equal(warning.profile, 'general');
   assert.match(warning.action, /^configure --stack "<confirmed value>" --doc "<confirmed value>"$/);
   assert.match(warning.message, /run configure only after confirmation/);
-  assert.match(warning.message, /fintech/);
+  assert.doesNotMatch(warning.message, /Also confirm the profile/);
   assert.equal(run(['configure', '--stack', 'Node.js 24', '--doc', 'JSDoc']).code, 0);
   assert.equal(run(['context-record']).code, 0);
   assert.equal(pending(), undefined);

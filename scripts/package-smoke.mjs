@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, readdir, realpath, rm } from 'node:fs/promises';
 import { join, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,7 @@ const source = fileURLToPath(new URL('../', import.meta.url));
 const npm = process.env.npm_execpath;
 if (!npm)
   throw new Error('Run via npm run test:package so the current npm CLI can be resolved without shell assumptions.');
-const temporary = await mkdtemp(join(tmpdir(), 'omnispec-package-'));
+const temporary = await realpath(await mkdtemp(join(tmpdir(), 'omnispec-package-')));
 // npm run exports the user's cache; npm exec and npx would otherwise leave _npx entries there.
 const userCache = process.env.npm_config_cache;
 process.env.npm_config_cache = join(temporary, 'npm-cache');

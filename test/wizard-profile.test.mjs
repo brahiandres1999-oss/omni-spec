@@ -31,32 +31,32 @@ describe('Regression R07, R09 & R10: Wizard Configuration & Profile Security Que
     const config = await runWizard(tempDir, {
       yes: true,
       stack: 'Python',
-      profile: 'fintech',
+      profile: 'general',
     });
 
-    assert.strictEqual(config.profile, 'fintech');
+    assert.strictEqual(config.profile, 'general');
     assert.ok(config.stack.includes('Python'));
     assert.equal(config.qualityGates, '');
   });
 
-  test('createSpec in fintech profile injects specialized financial invariants into spec.md', async () => {
+  test('createSpec in general profile injects universal security, data and state invariants into spec.md', async () => {
     await scaffoldProject(tempDir, {
-      projectName: 'FintechApp',
-      profile: 'fintech',
+      projectName: 'CoreServiceApp',
+      profile: 'general',
       stack: 'Python',
     });
 
     const spec = await createSpec(tempDir, 'feature', 'fund-transfer', { full: true });
     const specContent = await readFile(join(spec.specDir, 'spec.md'), 'utf-8');
 
-    // Verify specialized fintech questions are injected in Section 3
+    // Verify universal security & state questions are injected in Section 3
     assert.ok(
-      specContent.includes('Does it touch balances, money, or ledger?'),
-      'Fintech spec must include balance/ledger question in Section 3',
+      specContent.includes('Does it touch sensitive personal data (PII) or secrets?'),
+      'General spec must include PII/secrets question in Section 3',
     );
     assert.ok(
-      specContent.includes('Double-entry ledger transaction with `Idempotency-Key`'),
-      'Fintech spec must include double-entry ledger enforcement',
+      specContent.includes('Does it mutate critical state, balances, or external contracts?'),
+      'General spec must include critical state/idempotency question in Section 3',
     );
   });
 });

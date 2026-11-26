@@ -2,14 +2,15 @@ import { readFile, access, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { safePath, hash } from './managed.mjs';
+import { writeFileAtomic } from './fs-retry.mjs';
 import { loadManifest, withManifestLock } from './manifest.mjs';
 import { auditProjectContext, citedProjectFiles } from './context-auditor.mjs';
 import { hashProjectFiles } from './snapshot.mjs';
 import { specRoute, UNCLASSIFIED_MESSAGE } from './fit.mjs';
 import { compareVersions, isVersion } from './versions.mjs';
-import { profiles } from './profiles/index.mjs';
 import { declaredVersions, contradictedVersions, describeContradiction } from './version-claims.mjs';
 import { openMemory, memoryPath } from './memory.mjs';
+import { parseJsonDocument, validateTasks, taskStats as typedTaskStats } from './tasks.mjs';
 
 const file = 'specs/project-state.json';
 const capabilities = ['questions', 'web', 'terminal', 'render', 'delegation'];
@@ -315,6 +316,261 @@ export async function contextSnapshot(root) {
   return Object.fromEntries(Object.entries(await contextDigests(root)).map(([name, { recorded }]) => [name, recorded]));
 }
 
+const PLACEHOLDER_TOKENS =
+  /\[TODO\]|\[NEEDS CLARIFICATION\]|\b(?:SPEC|BUG|DEBT|RFC)-XXX\b|Nombre \/ Rol|\[Rol Autorizado\]/;
+const SECTION_7_BLOCK =
+  /^(#{1,6}\s*(?:7\.?\s*)?(?:Siguiente acci[oó]n|Pr[oó]xim[ao]s?\s+(?:pasos?|acci[oó]n)|Next\s+(?:action|steps?))[ \t]*\r?\n(?:\r?\n)?)([^\r\n]+(?:(?:\r?\n)+(?![ \t]*#{1,6}\s|[^\r\n]*\[[^\]\r\n]+\]\([^)\r\n]+\))[^\r\n]+)*)/im;
+const SECTION_7_INLINE =
+  /^(#{1,6}\s*(?:7\.?\s*)?(?:Siguiente acci[oó]n|Pr[oó]xim[ao]s?\s+(?:pasos?|acci[oó]n)|Next\s+(?:action|steps?))\s*:\s*)([^\r\n]+)/im;
+
+async function readCleanSpecFile(specDir, fileName) {
+  try {
+    const raw = await readFile(join(specDir, fileName), 'utf8');
+    return raw.replace(/<!--[\s\S]*?-->/g, '');
+  } catch (error) {
+    if (['ENOENT', 'EISDIR'].includes(error.code)) return null;
+    throw error;
+  }
+}
+
+function countMarkdownChecklist(cleanText) {
+  if (!cleanText) return { total: 0, completed: 0, pending: 0 };
+  let fence = null;
+  let completed = 0;
+  let pending = 0;
+  for (const line of cleanText.split(/\r?\n/)) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const match = /^\s*- \[([ xX])\]\s+\S.*$/.exec(line);
+    if (match) {
+      if (match[1] === ' ') pending++;
+      else completed++;
+    }
+  }
+  return { total: completed + pending, completed, pending };
+}
+
+async function deriveNextActionLine(root, manifest, isEs) {
+  if (!manifest?.specs?.length) return null;
+  const activeSpec = manifest.specs.find(item => item.slug === manifest.active_spec) || null;
+  if (!activeSpec || CLOSED.includes(activeSpec.status)) {
+    const lastSpec = activeSpec || manifest.specs[manifest.specs.length - 1];
+    return isEs
+      ? `Último cambio \`specs/${lastSpec.slug}\` en estado \`${lastSpec.status}\`. Ejecutar \`/omni-discuss\` para explorar el siguiente alcance o \`/omni-specify\` para iniciar una nueva especificación.`
+      : `Last change \`specs/${lastSpec.slug}\` is \`${lastSpec.status}\`. Run \`/omni-discuss\` to explore the next scope or \`/omni-specify\` to start a new specification.`;
+  }
+
+  const specDir = await safePath(root, `specs/${activeSpec.slug}`);
+  const primaryFile =
+    { feature: 'spec.md', bugfix: 'bug.md', debt: 'audit.md', rfc: 'rfc.md' }[activeSpec.type] || 'spec.md';
+  const primaryClean = await readCleanSpecFile(specDir, primaryFile);
+  const primaryIncomplete = !primaryClean?.trim() || PLACEHOLDER_TOKENS.test(primaryClean);
+  let routeInfo = null;
+  try {
+    routeInfo = await specRoute(root, activeSpec);
+  } catch {
+    routeInfo = { route: 'invalid' };
+  }
+  const unclassified = activeSpec.type !== 'rfc' && (!routeInfo || routeInfo.route === 'invalid');
+
+  if (unclassified) {
+    return isEs
+      ? `Especificación activa \`specs/${activeSpec.slug}\` (${activeSpec.type}) en fase \`/omni-specify\`. Completar \`${primaryFile}\` y \`acceptance.json\`, clasificar la ruta con \`omni-spec fit ${activeSpec.id}\` y continuar según la ruta derivada (\`light\` -> \`/omni-implement\`, \`standard\` -> \`/omni-plan\`, \`full\` -> \`/omni-plan\` + \`/omni-tasks\`).`
+      : `Active specification \`specs/${activeSpec.slug}\` (${activeSpec.type}) in \`/omni-specify\` phase. Complete \`${primaryFile}\` and \`acceptance.json\`, classify the route with \`omni-spec fit ${activeSpec.id}\`, and continue according to the derived route (\`light\` -> \`/omni-implement\`, \`standard\` -> \`/omni-plan\`, \`full\` -> \`/omni-plan\` + \`/omni-tasks\`).`;
+  }
+
+  if (primaryIncomplete) {
+    const rLabel = (routeInfo?.route || 'full').toUpperCase();
+    const afterSpecify = routeInfo?.route === 'light' ? '`/omni-implement`' : '`/omni-clarify` o `/omni-plan`';
+    const afterSpecifyEn = routeInfo?.route === 'light' ? '`/omni-implement`' : '`/omni-clarify` or `/omni-plan`';
+    return isEs
+      ? `Especificación activa \`specs/${activeSpec.slug}\` [ruta: ${rLabel}] en fase \`/omni-specify\`. Completar \`${primaryFile}\` y \`acceptance.json\` para continuar con ${afterSpecify}.`
+      : `Active specification \`specs/${activeSpec.slug}\` [route: ${rLabel}] in \`/omni-specify\` phase. Complete \`${primaryFile}\` and \`acceptance.json\` to continue with ${afterSpecifyEn}.`;
+  }
+
+  const needsPlan = activeSpec.type !== 'rfc' && Boolean(routeInfo?.artifacts?.plan);
+  if (needsPlan) {
+    const designFiles =
+      activeSpec.type === 'feature'
+        ? ['plan.md']
+        : activeSpec.type === 'bugfix'
+          ? ['rca.md', 'fix.md']
+          : activeSpec.type === 'debt'
+            ? ['migration-plan.md']
+            : [];
+    let designPending = false;
+    for (const df of designFiles) {
+      const clean = await readCleanSpecFile(specDir, df);
+      if (!clean?.trim() || PLACEHOLDER_TOKENS.test(clean)) {
+        designPending = true;
+        break;
+      }
+    }
+    if (designPending) {
+      const nextStep = routeInfo?.artifacts?.tasks ? '`/omni-tasks`' : '`/omni-implement`';
+      return isEs
+        ? `Especificación activa \`specs/${activeSpec.slug}\` [ruta: ${routeInfo.route.toUpperCase()}]. Ejecutar \`/omni-clarify\` (si hay decisiones pendientes) o \`/omni-plan\` para completar ${designFiles.map(f => '`' + f + '`').join(' y ')} antes de pasar a ${nextStep}.`
+        : `Active specification \`specs/${activeSpec.slug}\` [route: ${routeInfo.route.toUpperCase()}]. Run \`/omni-clarify\` (if decisions remain) or \`/omni-plan\` to complete ${designFiles.map(f => '`' + f + '`').join(' and ')} before proceeding to ${nextStep}.`;
+    }
+  }
+
+  const needsTasks = ['feature', 'debt'].includes(activeSpec.type) && Boolean(routeInfo?.artifacts?.tasks);
+  let taskCounts = { total: 0, completed: 0, pending: 0 };
+  if (needsTasks) {
+    let tasksPendingArtifact = false;
+    try {
+      const rawJson = await readFile(join(specDir, 'tasks.json'), 'utf8');
+      const parsed = parseJsonDocument(rawJson, 'tasks.json');
+      if (validateTasks(parsed).length === 0) {
+        taskCounts = typedTaskStats(parsed);
+      } else {
+        tasksPendingArtifact = true;
+      }
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        const tasksClean = await readCleanSpecFile(specDir, 'tasks.md');
+        if (!tasksClean?.trim() || PLACEHOLDER_TOKENS.test(tasksClean)) {
+          tasksPendingArtifact = true;
+        } else {
+          taskCounts = countMarkdownChecklist(tasksClean);
+          if (taskCounts.total === 0) tasksPendingArtifact = true;
+        }
+      } else {
+        tasksPendingArtifact = true;
+      }
+    }
+    if (tasksPendingArtifact) {
+      return isEs
+        ? `Especificación activa \`specs/${activeSpec.slug}\` [ruta: ${routeInfo.route.toUpperCase()}] con diseño listo. Ejecutar \`/omni-tasks\` para desglosar \`tasks.md\` y validar con \`/omni-audit\` antes de \`/omni-implement\`.`
+        : `Active specification \`specs/${activeSpec.slug}\` [route: ${routeInfo.route.toUpperCase()}] with design ready. Run \`/omni-tasks\` to author \`tasks.md\` and validate with \`/omni-audit\` before \`/omni-implement\`.`;
+    }
+  } else if (activeSpec.type === 'bugfix' && needsPlan) {
+    const fixClean = await readCleanSpecFile(specDir, 'fix.md');
+    taskCounts = countMarkdownChecklist(fixClean);
+  }
+
+  const routeLabel = (routeInfo?.route || (activeSpec.type === 'rfc' ? 'rfc' : 'full')).toUpperCase();
+  if (taskCounts.pending > 0) {
+    return isEs
+      ? `Especificación activa \`specs/${activeSpec.slug}\` [ruta: ${routeLabel}] en fase \`/omni-implement\` (${taskCounts.completed}/${taskCounts.total} tareas completadas, ${taskCounts.pending} pendientes). Completar la implementación aprobada y luego ejecutar \`/omni-converge\` (\`verify ${activeSpec.id}\` y \`complete ${activeSpec.id}\`).`
+      : `Active specification \`specs/${activeSpec.slug}\` [route: ${routeLabel}] in \`/omni-implement\` phase (${taskCounts.completed}/${taskCounts.total} tasks completed, ${taskCounts.pending} pending). Complete the approved implementation and then run \`/omni-converge\` (\`verify ${activeSpec.id}\` and \`complete ${activeSpec.id}\`).`;
+  }
+
+  return isEs
+    ? `Especificación activa \`specs/${activeSpec.slug}\` [ruta: ${routeLabel}] en \`/omni-implement\` / \`/omni-converge\` (${taskCounts.total ? `${taskCounts.completed}/${taskCounts.total} tareas completadas` : 'artefactos listos'}). Completar la implementación y evidencia en \`verification.md\` y \`acceptance.json\`, ejecutar \`omni-spec verify ${activeSpec.id}\` y cerrar con \`omni-spec complete ${activeSpec.id}\`.`
+    : `Active specification \`specs/${activeSpec.slug}\` [route: ${routeLabel}] in \`/omni-implement\` / \`/omni-converge\` (${taskCounts.total ? `${taskCounts.completed}/${taskCounts.total} tasks completed` : 'artifacts ready'}). Complete implementation and evidence in \`verification.md\` and \`acceptance.json\`, run \`omni-spec verify ${activeSpec.id}\`, and close with \`omni-spec complete ${activeSpec.id}\`.`;
+}
+
+/**
+ * Synchronize specs/project-context.md Section 7 (Next action / Siguiente acción) and configured
+ * stack/doc lines with the live lifecycle state without invalidating an existing verification record
+ * or recorded context baseline. Caller must hold withManifestLock.
+ * @param {string} root Project root.
+ * @param {{inVerify?: boolean, inRecordContext?: boolean, configured?: {stack?: string, doc?: string, gates?: string, profile?: string}}} [options]
+ * @returns {Promise<boolean>} True if specs/project-context.md was updated.
+ */
+export async function syncProjectContextUnlocked(root, options = {}) {
+  const manifest = await loadManifest(root);
+  if (!manifest) return false;
+  let contextPath;
+  let currentText;
+  try {
+    contextPath = await safePath(root, 'specs/project-context.md');
+    currentText = await readFile(contextPath, 'utf8');
+  } catch (error) {
+    if (['ENOENT', 'EISDIR'].includes(error.code)) return false;
+    throw error;
+  }
+
+  const activeSpec = manifest.specs.find(item => item.slug === manifest.active_spec) || null;
+  if (activeSpec && !CLOSED.includes(activeSpec.status) && !options.inVerify && !options.configured) {
+    if (await exists(root, `specs/${activeSpec.slug}/verification.json`)) {
+      return false;
+    }
+  }
+
+  const isEs =
+    manifest.language === 'es' ||
+    /^#{1,6}\s*(?:7\.?\s*)?(?:Siguiente acci[oó]n|Pr[oó]xim[ao]s?\s+(?:pasos?|acci[oó]n))/im.test(currentText) ||
+    /^#\s+Contexto del proyecto/im.test(currentText);
+  const newline = currentText.includes('\r\n') ? '\r\n' : '\n';
+
+  let nextText = currentText;
+  if (options.configured) {
+    const { stack, doc } = options.configured;
+    if (stack) {
+      nextText = nextText
+        .replace(
+          /^([ \t]*-\s+(?:Stack inferido de manifiestos reconocidos|Inferred stack from recognized manifests):\s*)[^\r\n]+/im,
+          `$1${stack}`,
+        )
+        .replace(/^([ \t]*-\s+Stack:\s*)`?[^`\r\n]+`?/im, `$1\`${stack}\``);
+    }
+    if (doc) {
+      nextText = nextText
+        .replace(
+          /^([ \t]*-\s+(?:Convención de documentación por módulo|Documentation convention per module):\s*)REVIEW_REQUIRED/im,
+          `$1${doc}`,
+        )
+        .replace(/^([ \t]*-\s+(?:Documentaci[oó]n|Documentation):\s*)`?[^`\r\n]+`?/im, `$1\`${doc}\``);
+    }
+  }
+
+  const nextActionLine = await deriveNextActionLine(root, manifest, isEs);
+  if (nextActionLine) {
+    if (SECTION_7_BLOCK.test(nextText)) {
+      nextText = nextText.replace(SECTION_7_BLOCK, (_, prefix) => `${prefix}${nextActionLine}`);
+    } else if (SECTION_7_INLINE.test(nextText)) {
+      nextText = nextText.replace(SECTION_7_INLINE, (_, prefix) => `${prefix}${nextActionLine}`);
+    }
+  }
+
+  if (newline === '\r\n') {
+    nextText = nextText.replace(/\r?\n/g, '\r\n');
+  }
+
+  if (nextText === currentText) return false;
+
+  await writeFileAtomic(contextPath, nextText);
+
+  if (!options.inRecordContext) {
+    const state = await readProjectState(root);
+    const recordedHash = state.context?.inputs?.['specs/project-context.md'];
+    if (recordedHash !== undefined) {
+      const beforeDigest = inputDigests(Buffer.from(currentText));
+      const scope = state.context.scope;
+      const wasFresh =
+        scope === CONTEXT_SCOPE
+          ? beforeDigest.recorded === recordedHash
+          : scope === RAW_CONTEXT_SCOPE
+            ? [beforeDigest.recorded, beforeDigest.raw, beforeDigest.crlf].includes(recordedHash)
+            : beforeDigest.raw === recordedHash;
+      if (wasFresh) {
+        const afterDigest = inputDigests(Buffer.from(nextText));
+        state.context.inputs['specs/project-context.md'] =
+          scope === CONTEXT_SCOPE ? afterDigest.recorded : afterDigest.raw;
+        await save(root, state);
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Synchronize specs/project-context.md under the manifest lock.
+ * @param {string} root Project root.
+ * @param {object} [options] Options forwarded to syncProjectContextUnlocked.
+ * @returns {Promise<boolean>}
+ */
+export async function syncProjectContext(root, options = {}) {
+  return withManifestLock(root, () => syncProjectContextUnlocked(root, options));
+}
+
 /**
  * Save a reconciled baseline under the manifest lock and archive its predecessor. The baseline uses
  * CONTEXT_SCOPE and the values of contextSnapshot.
@@ -323,19 +579,12 @@ export async function contextSnapshot(root) {
  */
 export async function recordContext(root) {
   return withManifestLock(root, async () => {
+    await syncProjectContextUnlocked(root, { inRecordContext: true });
     const audit = await auditProjectContext(root);
     if (!audit.valid) throw new Error(`Cannot record context: ${audit.errors.join('; ')}`);
     const state = await readProjectState(root);
     const inputs = await contextSnapshot(root);
     const previous = state.context;
-    if (previous) {
-      const memory = openMemory(memoryPath(root));
-      try {
-        memory.appendContextHistory(randomUUID(), previous);
-      } finally {
-        memory.close();
-      }
-    }
     state.context = {
       recordedAt: new Date().toISOString(),
       scope: CONTEXT_SCOPE,
@@ -343,7 +592,15 @@ export async function recordContext(root) {
       reviewScope: 'EOL_NORMALIZED_BASELINE_AND_STRUCTURAL_LINKS_ONLY',
       semanticReview: 'AGENT_OR_HUMAN_REQUIRED',
     };
-    await save(root, state);
+    const memory = openMemory(memoryPath(root));
+    try {
+      if (previous) {
+        memory.appendContextHistory(randomUUID(), previous);
+      }
+      memory.setProjectState(state);
+    } finally {
+      memory.close();
+    }
     return state.context;
   });
 }
@@ -507,7 +764,14 @@ export async function recordDecision(root, decision) {
     if (!previous && decision.expectedRevision !== undefined && decision.expectedRevision !== 0)
       throw new Error('A new decision starts with expectedRevision 0.');
     const { expectedRevision: _expectedRevision, ...payload } = decision;
-    const next = { ...payload, recordedAt: new Date().toISOString(), revision: (previous?.revision || 0) + 1 };
+    const next = {
+      ...(previous?.topic !== undefined ? { topic: previous.topic } : {}),
+      ...(previous?.appliesTo !== undefined ? { appliesTo: previous.appliesTo } : {}),
+      ...(previous?.required !== undefined ? { required: previous.required } : {}),
+      ...payload,
+      recordedAt: new Date().toISOString(),
+      revision: (previous?.revision || 0) + 1,
+    };
     if (index < 0) state.decisions.push(next);
     else state.decisions[index] = next;
     // Reuse the same validation before committing, without trusting an in-memory input.
@@ -540,7 +804,6 @@ export async function recordDecision(root, decision) {
         memory.appendDecisionHistory(randomUUID(), previous);
       }
       memory.setProjectState(state);
-      memory.indexDecision(next);
     } finally {
       memory.close();
     }
@@ -779,7 +1042,7 @@ export async function projectStatus(root, { all = false } = {}) {
         fields: pending,
         profile: manifest.profile || 'general',
         action: `configure ${pending.map(field => `--${field} "<confirmed value>"`).join(' ')}`,
-        message: `specs/manifest.json still holds placeholder ${pending.join(' and ')}. Propose values from the evidence and ask the user; run configure only after confirmation. Also confirm the profile (current: ${manifest.profile || 'general'}; available: ${Object.keys(profiles).join(', ')}). An undecided stack can stay pending until it is decided.`,
+        message: `specs/manifest.json still holds placeholder ${pending.join(' and ')}. Propose values from the evidence and ask the user; run configure only after confirmation. An undecided stack can stay pending until it is decided.`,
       });
   }
   let specs = manifest.specs,
@@ -800,9 +1063,11 @@ export async function projectStatus(root, { all = false } = {}) {
     );
   }
   let observations = [];
+  let memoryDecisions = [];
   const memory = openMemory(memoryPath(root));
   try {
     observations = memory.listObservations({ limit: 15 });
+    memoryDecisions = memory.listDecisions({ limit: 15 });
   } finally {
     memory.close();
   }
@@ -816,7 +1081,7 @@ export async function projectStatus(root, { all = false } = {}) {
       nextAction,
       warnings,
       readSet,
-      memory: { observations },
+      memory: { observations, decisions: memoryDecisions },
       capabilities:
         state.session?.capabilities || Object.fromEntries(capabilities.map(name => [name, { status: 'unknown' }])),
       omitted: {

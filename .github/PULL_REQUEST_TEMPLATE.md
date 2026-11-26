@@ -8,7 +8,7 @@
 
 ## Quality Gate Checklist
 
-- [ ] All automated tests pass cleanly (`npm test`).
-- [ ] No external dependencies added to `package.json`.
+- [ ] All automated tests, lint, and release checks pass cleanly (`npm test`, `npm run lint`, `npm run release:check`).
+- [ ] No external runtime dependencies added to `package.json`.
 - [ ] Tested across operating systems (POSIX / Windows path normalization verified).
 - [ ] Documentation updated in `README.md` and `CHANGELOG.md` if user-facing API changed.

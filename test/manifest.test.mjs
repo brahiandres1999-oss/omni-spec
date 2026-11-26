@@ -28,13 +28,13 @@ describe('Manifest State Machine', () => {
   test('initManifest creates a valid initial manifest file', async () => {
     const manifest = await initManifest(tempDir, {
       projectName: 'TestApp',
-      profile: 'fintech',
+      profile: 'general',
       techStack: 'Node / Express',
       documentationStandard: 'JSDoc',
     });
 
     assert.equal(manifest.project, 'TestApp');
-    assert.equal(manifest.profile, 'fintech');
+    assert.equal(manifest.profile, 'general');
     assert.equal(manifest.stack, 'Node / Express');
     assert.equal(manifest.documentationStandard, 'JSDoc');
     assert.equal(manifest.active_spec, null);

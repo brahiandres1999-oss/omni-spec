@@ -7,6 +7,8 @@ import {
   supportsTerminalUI,
   installerFrame,
   resultSections,
+  resultSteps,
+  resolveColorDepth,
   terminalText,
   textWidth,
   logoLines,
@@ -274,7 +276,7 @@ test('NO_COLOR and plain summaries have no ANSI; untrusted labels cannot move th
   assert.equal(logoLines().length, 6);
   assert.ok(logoLines().every(line => textWidth(line) <= 50));
   assert.equal(logoLines(false).join('\n'), stripVTControlCharacters(logoLines(false).join('\n')));
-  assert.ok(logoLines(false).join('\n').includes('v0.8.1'));
+  assert.ok(logoLines(false).join('\n').includes('v0.10.0'));
   const brand = logoLines(true).join('\n');
   // Omni in blue (88;166;255), Spec in amber (245;158;11), and version in muted (139;148;158)
   assert.ok(brand.includes('38;2;88;166;255'));
@@ -298,4 +300,38 @@ test('progress appears only on a terminal and reports each completed stage expli
   progress.done();
   assert.match(written, /Instalando archivos/);
   assert.match(written, /Integridad comprobada/);
+});
+
+test('PowerShell, Windows Terminal and VS Code terminals resolve 24-bit TrueColor depth and step progress bars', () => {
+  const lowDepthOutput = { isTTY: true, columns: 90, rows: 30, getColorDepth: () => 4 };
+  assert.equal(resolveColorDepth(lowDepthOutput, {}), 4);
+  assert.equal(resolveColorDepth(lowDepthOutput, { WT_SESSION: '1111-2222' }), 24);
+  assert.equal(resolveColorDepth(lowDepthOutput, { TERM_PROGRAM: 'vscode' }), 24);
+  assert.equal(resolveColorDepth(lowDepthOutput, { COLORTERM: 'truecolor' }), 24);
+  assert.equal(resolveColorDepth(lowDepthOutput, { FORCE_COLOR: '1', WT_SESSION: '1111-2222' }), 4);
+
+  const frameStep2 = installerFrame({
+    version: '0.10.0',
+    language: 'es',
+    step: 2,
+    title: '¿Dónde usarás OmniSpec?',
+    details: ['Destino: C:/Users/dev/mi-proyecto'],
+    options: tools,
+    columns: 90,
+    rows: 32,
+    color: true,
+    depth: 24,
+  });
+  const plainFrame = stripVTControlCharacters(frameStep2);
+  assert.match(plainFrame, /PREPARAR PROYECTO {3}2 \/ 3 {2}\[====\.\.\]/);
+  assert.match(plainFrame, /Destino: C:\/Users\/dev\/mi-proyecto/);
+  assert.ok(frameStep2.includes('38;2;88;166;255')); // blue key highlight
+
+  const richSteps = resultSteps(
+    'OmniSpec 0.10.0 está listo en C:/Users/dev/mi-proyecto',
+    [{ title: 'Siguiente paso', lines: ['1. Abre esta carpeta en Antigravity.'] }],
+    { output: { isTTY: true, columns: 90, getColorDepth: () => 24 }, env: {}, plain: false, showLogo: true },
+  );
+  assert.match(stripVTControlCharacters(richSteps), /\[OK\] OmniSpec 0\.10\.0 está listo en/);
+  assert.ok(richSteps.includes('38;2;63;185;80')); // green [OK] badge
 });

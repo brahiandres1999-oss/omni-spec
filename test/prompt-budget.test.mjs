@@ -60,8 +60,9 @@ async function agentTexts() {
 
 test('agent-facing prompts stay within their character caps', async () => {
   const texts = await agentTexts();
-  assert.equal(texts.length, 5 + 1 + 9 + 1 + 1 + 9);
-  assert.ok(texts[5][2].startsWith('## Project protocol'));
+  const profileCount = Object.keys(profiles).length;
+  assert.equal(texts.length, profileCount + 1 + 9 + 1 + 1 + 9);
+  assert.ok(texts[profileCount][2].startsWith('## Project protocol'));
   assert.deepEqual([...new Set(texts.map(([, cap]) => cap))].sort(), Object.keys(CAPS).sort());
   for (const [label, cap, text] of texts)
     assert.ok(text.length <= CAPS[cap], `${label}: ${text.length} characters, cap ${CAPS[cap]}`);

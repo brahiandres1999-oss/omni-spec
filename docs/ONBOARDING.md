@@ -1,6 +1,6 @@
-# Contrato de onboarding — OmniSpec 0.9.0 Oficial Estable
+# Contrato de onboarding — OmniSpec 0.10.0 Oficial Estable
 
-Contrato distribuido en `0.9.0` estable. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [notas de la versión 0.9.0](releases/0.9.0.md).
+Contrato distribuido en `0.10.0` estable. Empieza después del instalador de [INSTALLATION](INSTALLATION.md): la integridad local puede estar comprobada mientras descubrimiento y reconocimiento conversacional siguen pendientes. Ver [notas de la versión 0.10.0](releases/0.10.0.md).
 
 ## Preparación y decisiones pendientes
 
@@ -10,13 +10,14 @@ Antes de preparar una aplicación, el agente registra prerrequisitos disponibles
 
 La preparación autorizada puede incluir Git local después de comprobar los límites del repositorio y sus reglas de exclusión. El reconocimiento inicial no ejecuta `git init`. Crear un repositorio local, hacer un commit y publicar son acciones distintas; una restricción de trabajo local sigue vigente.
 
-Para interfaces nuevas o rediseños importantes, se define una dirección con referencias pertinentes, una superficie representativa y pruebas sobre el resultado renderizado y su recorrido. En estricto cumplimiento del estándar **Zero Slop Guard**, toda vista interactiva debe contemplar explícitamente los **4 estados obligatorios**:
+Para interfaces nuevas o rediseños importantes, se define una dirección con referencias pertinentes, una superficie representativa y pruebas sobre el resultado renderizado y su recorrido mediante el subsistema **Omni-Design** (`omni-spec guide design --lens grill`). En estricto cumplimiento del estándar **UI-Slop Guard**, toda vista interactiva debe contemplar explícitamente los **4+1 estados obligatorios**:
 1. *Loading*: Skeletons contextuales o indicadores de carga con Cumulative Layout Shift (CLS) = 0.
 2. *Empty*: Explicación contextual clara con acción inmediata o botón de llamada a la acción (CTA).
 3. *Error*: Mensaje comprensible (sin códigos de error opacos) y mecanismo de reintento o recuperación.
 4. *Protected / Ideal*: Contenido completo autorizado o estado restringido cuando no se poseen permisos.
+5. *Partial / Overflow*: Comportamiento ante cadenas extensas, valores nulos y volúmenes extremos.
 
-Quedan estrictamente prohibidos los clichés visuales de IA (degradados azul/púrpura genéricos sin fundamento de marca, badges con resplandor difuso artificial y anidamiento excesivo de tarjetas con sombras o *card-itis*). Se exige tipografía deliberada y contraste WCAG 2.1 AA medible. Sin herramientas adecuadas se registra `NOT_VERIFIED` y el procedimiento manual pendiente.
+Quedan estrictamente prohibidos los clichés visuales de IA (degradados azul/púrpura genéricos sin fundamento de marca, puntos pulsantes decorativos sin `role="status"`, bordes laterales gruesos `border-l-4`, encabezados con comentarios mecánicos `// 01_` y anidamiento excesivo de tarjetas con sombras o *card-itis*). Se exige tipografía deliberada (`2+1`), geometría concéntrica ($r_{\text{inner}} = \max(0, r_{\text{outer}} - p)$) y contraste WCAG 2.2 AA medible con `omni-spec design contrast`. Sin herramientas adecuadas se registra `NOT_VERIFIED` y el procedimiento manual pendiente.
 
 Estos son contratos de comportamiento distribuidos al agente. Las pruebas de generación comprueban su presencia y la preservación del proyecto; no certifican su ejecución por todos los hosts ni la calidad del producto generado.
 
@@ -28,7 +29,7 @@ Leer manifiesto, constitución, contexto, configuración, instrucciones locales 
 
 En proyectos brownfield con código existente, el agente debe ejecutar `omni-spec cartography --json` para indexar de forma incremental el grafo de dependencias de módulos, exports, imports y rutas en la base de datos externa `memory.db`. Esto permite conocer la topología de la aplicación y calcular el radio de impacto (`blast-radius`) antes de proponer cambios arquitectónicos.
 
-OmniSpec 0.9.0 erradica el almacenamiento de estado en archivos dentro del repositorio: no existen `specs/project-state.json`, carpetas `specs/decisions/` ni historiales locales en `specs/.omni/context-history/` o `specs/.omni/decision-history/`. Toda la información de sesiones, decisiones aprobadas, historiales y memoria heurística se gestiona de forma externa en `%LOCALAPPDATA%\OmniSpec\workspaces\<id>\memory.db` (o `$XDG_STATE_HOME/omnispec/workspaces/<id>/memory.db` en Linux/macOS).
+OmniSpec 0.10.0 erradica el almacenamiento de estado en archivos dentro del repositorio: no existen `specs/project-state.json`, carpetas `specs/decisions/` ni historiales locales en `specs/.omni/context-history/` o `specs/.omni/decision-history/`. Toda la información de sesiones, decisiones aprobadas, historiales y memoria heurística se gestiona de forma externa en `%LOCALAPPDATA%\OmniSpec\workspaces\<id>\memory.db` (o `~/.local/share/OmniSpec/workspaces/<id>/memory.db` en Linux/macOS).
 
 El registro de sesiones y decisiones se realiza sin archivos temporales:
 - `session-record` acepta directivas por flags directos (ej. `omni-spec session-record --host Antigravity --questions available --web available --terminal available --render available --delegation available`) o `--json-input`.
@@ -44,7 +45,7 @@ omni-spec memory list
 Estas observaciones son inyectadas automáticamente en el bloque `progress.memory` de `omni-spec status --json` para prevenir la amnesia entre sesiones.
 
 ### Bloqueo estricto de cierre (Strict Onboarding Gate)
-`context-record` registra el baseline de entradas de contexto en `memory.db`. En OmniSpec 0.9.0, las compuertas de gobernanza `verify` y `complete` **bloquean terminantemente el cierre** de cualquier especificación si el estado de onboarding en `context-record` permanece como `NOT_RECORDED`. No es posible certificar ni cerrar trabajo técnico si el reconocimiento del proyecto y su contexto inicial no han sido completados y formalizados.
+`context-record` registra el baseline de entradas de contexto en `memory.db`. En OmniSpec 0.10.0, las compuertas de gobernanza `verify` y `complete` **bloquean terminantemente el cierre** de cualquier especificación si el estado de onboarding en `context-record` permanece como `NOT_RECORDED`. No es posible certificar ni cerrar trabajo técnico si el reconocimiento del proyecto y su contexto inicial no han sido completados y formalizados.
 
 `init --yes` no convierte los scripts detectados en gates: quedan como candidatos `NOT_RUN` en la matriz de comandos del contexto. El agente los revisa y, con autorización, los configura con `checks --from` o `configure --gates`. El contexto registrado cubre `project-context.md`, los archivos que enlaza, manifiestos de build/dependencias/runtime, CI e instrucciones de agentes; los cambios de código fuente no lo dejan obsoleto. `omni-spec guide evidence` muestra la forma exacta de cada registro JSON.
 

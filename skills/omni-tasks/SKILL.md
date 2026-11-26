@@ -17,7 +17,7 @@ Inspect before asking; reuse confirmed answers. Ask about goals, constraints and
 Keep scope proportional. Do not add databases, services, dependencies or architecture without requirements. Record justified N/A where not applicable.
 Aim for maintainable results and verify them; do not promise first-attempt perfection. Correct observed defects and recheck.
 - Code craft: direct, idiomatic implementation. Minimal touch surgery: modify only what is requested. Avoid premature abstraction layers (factories, DTOs, wrappers) when standard functions/modules suffice. Ban obvious syntax-narrating comments. Fail fast: never write try/catch wrappers that silently swallow exceptions or mask failures.
-- Zero Slop Guard: (1) Type-Slop: ban `any`, blind casts, redundant DTOs. (2) Mock-Slop: ban 100% mock tests; require real logic/integration tests. (3) Visual-Slop: ban generic AI clichés; cover Loading, Empty, Error, Protected/Ideal states. (4) Scope-Slop: strict YAGNI; trace all code to an acceptance criterion. (5) Dependency-Slop: native platform first; ban external packages unless user-authorized.
+- Zero Slop Guard: (1) Type-Slop: ban `any`, blind casts, redundant DTOs. (2) Mock-Slop: ban 100% mock tests; require real logic tests. (3) Visual-Slop: ban AI clichés; cover Loading, Empty, Error, Protected/Ideal states. (4) Scope-Slop: strict YAGNI; trace code to AC. (5) Dependency-Slop: native first; ban unapproved packages.
 - Spec and plan craft: high information density, structured tables/bullets, explicit non-goals, formal EARS acceptance criteria (AC-01 [kind]), zero filler/buzzwords.
 - UI craft (when touching interfaces): choose composition from user task, content and approved identity; review relevant states and actual render rather than enforcing a universal visual recipe.
 Agree and record the documentation convention per module/language: JSDoc for JavaScript, TSDoc or the project's established convention for TypeScript, Javadoc for Java, and the ecosystem equivalent elsewhere. Document public/exported APIs, components/hooks and nontrivial internal contracts with purpose, parameters, return value, errors, side effects and invariants where relevant. Keep signatures, types and examples accurate as code changes. Avoid syntax-narrating comments; this never excuses removing useful API documentation. Check the available documentation/lint tooling and review semantic accuracy; counting tags does not establish correctness.
@@ -34,7 +34,7 @@ debt: audit.md (impact), migration-plan.md (proportional change), tasks.md.
 rfc: rfc.md (alternatives, trade-offs, Decision: ACCEPTED/REJECTED/DEFERRED); no code implementation.
 Every type uses verification.md for criterion-to-evidence mapping at delivery. Resolve active type before choosing files; never require feature files for another type.
 Do not run full audit during early clarification; run it when planning and tasks are ready.
-End with findings, changes, evidence, open issues and next action. Resume existing work rather than duplicating.
+Keep specs/project-context.md Section 7 synced with the active phase. End with findings, changes, evidence, open issues and next action. Resume existing work rather than duplicating.
 
 ## Workflow
 Read the derived route first with the CLI fit command. Only the full route has a task breakdown. On the light or standard route, do not invent tasks: report that the route does not require a breakdown, keep the primary artifact, design and acceptance criteria as the contract, and stop.
@@ -42,5 +42,5 @@ For feature/debt edit tasks.md; for bugfix edit the checklist in fix.md. For RFC
 Create only tasks needed by the approved scope, in dependency order. Link each to an acceptance criterion and affected files. Include regression/acceptance verification.
 Avoid task inflation: do not fragment a simple change into dozens of micro-tasks. Keep tasks atomic, in dependency order, and mapped to acceptance criteria.
 Remove template examples and all TODO tokens; never mark unperformed work complete. Do not invent layers or a fixed number of files per task.
-Run audit and resolve document blockers before implementation. Audit checks documents, not whether the implementation is correct.
+Run audit, resolve document blockers, and update specs/project-context.md Section 7 before implementation. Audit checks documents, not whether the implementation is correct.
 

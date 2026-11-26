@@ -25,6 +25,7 @@ const DECISIONS_DIR = 'specs/decisions';
 const SPECS_STATE_KEY = 'specs';
 const CANONICAL_PATHSPECS = ['specs/manifest.json', 'specs/contracts.json', DECISIONS_DIR];
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'latin1');
+const MAX_QUARANTINE_DIRS = 5;
 const SLEEP_CELL = new Int32Array(new SharedArrayBuffer(4));
 const execFileAsync = promisify(execFile);
 
@@ -361,12 +362,33 @@ export function openMemory(path) {
   }
 }
 
+function pruneOldQuarantines(quarantineRoot, keep = MAX_QUARANTINE_DIRS) {
+  if (!fs.existsSync(quarantineRoot)) return;
+  try {
+    const entries = fs
+      .readdirSync(quarantineRoot, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort();
+    while (entries.length > keep) {
+      const oldest = entries.shift();
+      fs.rmSync(join(quarantineRoot, oldest), { recursive: true, force: true });
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT' && !RENAME_TRANSIENT.has(error?.code)) throw error;
+  }
+}
+
 function quarantineTriad(path) {
-  const directory = join(dirname(path), 'quarantine', new Date().toISOString().replace(/[:.]/g, '-'));
+  const quarantineRoot = join(dirname(path), 'quarantine');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  let directory = join(quarantineRoot, stamp);
+  if (fs.existsSync(directory)) directory = join(quarantineRoot, `${stamp}-${randomBytes(2).toString('hex')}`);
   fs.mkdirSync(directory, { recursive: true });
   for (const file of [path, `${path}-wal`, `${path}-shm`]) {
     if (fs.existsSync(file)) renameWithRetrySync(file, join(directory, basename(file)));
   }
+  pruneOldQuarantines(quarantineRoot);
   return directory;
 }
 
@@ -383,7 +405,7 @@ function hasSqliteHeader(path) {
 }
 
 /**
- * Opens specs/.omni/memory.db, quarantining a corrupt triad, and hydrates it from Git.
+ * Opens the external workspace memory.db, quarantining a corrupt triad, and hydrates it from Git.
  * The header is checked before any handle exists because closing a SQLite handle deletes -wal and -shm.
  */
 export async function openProjectMemory(root) {
@@ -398,7 +420,17 @@ export async function openProjectMemory(root) {
     memory = openMemory(path);
   }
   try {
-    return { memory, quarantined, sync: await syncFromGit(memory, root) };
+    let sync;
+    try {
+      sync = await syncFromGit(memory, root);
+    } catch (error) {
+      if (/HEAD:\.\/specs/.test(error.message)) {
+        sync = memory.syncSpecs(root, { treeOid: '', status: '', prefix: '' });
+      } else {
+        throw error;
+      }
+    }
+    return { memory, quarantined, sync };
   } catch (error) {
     memory.close();
     throw error;
@@ -433,12 +465,12 @@ export async function readSpecsGitState(root) {
   return { treeOid, status, prefix };
 }
 
-/** True when `root` is inside a Git working tree; a folder that was never a repository answers false. */
+/** True when `root` is inside a Git working tree; missing repositories or absent git CLI answer false. */
 export async function isGitWorkTree(root) {
   try {
     return (await git(root, ['rev-parse', '--is-inside-work-tree'])).trim() === 'true';
   } catch (error) {
-    if (/not a git repository/i.test(error.message)) return false;
+    if (error?.cause?.code === 'ENOENT' || /not a git repository|ENOENT|spawn git/i.test(error.message)) return false;
     throw error;
   }
 }
@@ -501,7 +533,7 @@ function readDecisionFiles(root, paths) {
 
 function parseDecision(path, raw) {
   const { topic, id } = parseDecisionFileName(basename(path));
-  const record = JSON.parse(raw.replace(/^﻿/, ''));
+  const record = JSON.parse(raw.replace(/^\uFEFF/, ''));
   const problems = [];
   if (record.id !== id) problems.push(`id ${record.id} does not match file name`);
   if (record.topic !== topic) problems.push(`topic ${record.topic} does not match file name`);
@@ -537,13 +569,24 @@ class Memory {
         db.prepare(`INSERT INTO decisions (id, topic, status, basis, sources_json, recorded_at, review_after, file_path)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET topic = excluded.topic, status = excluded.status,
         basis = excluded.basis, sources_json = excluded.sources_json, recorded_at = excluded.recorded_at,
-        review_after = excluded.review_after, file_path = excluded.file_path`),
+        review_after = excluded.review_after, file_path = COALESCE(excluded.file_path, decisions.file_path)`),
       deleteDecision: db.prepare('DELETE FROM decisions WHERE id = ?'),
       deleteFts: db.prepare('DELETE FROM memory_fts WHERE source_type = ? AND source_id = ?'),
       insertFts: db.prepare('INSERT INTO memory_fts (source_type, source_id, content) VALUES (?, ?, ?)'),
+      findObservationByNaturalKey: db.prepare(
+        'SELECT id, evidence FROM observations WHERE category = ? AND scope = ? AND summary = ? LIMIT 1',
+      ),
+      updateObservation: db.prepare(
+        'UPDATE observations SET session_id = COALESCE(?, session_id), evidence = COALESCE(?, evidence), created_at = ? WHERE id = ?',
+      ),
       insertObservation:
         db.prepare(`INSERT INTO observations (id, session_id, category, scope, summary, evidence, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)`),
+      upsertSession: db.prepare(`INSERT INTO sessions (id, host, model, started_at, ended_at, capabilities_json)
+        VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET host = excluded.host,
+        model = COALESCE(excluded.model, sessions.model), started_at = excluded.started_at,
+        ended_at = COALESCE(excluded.ended_at, sessions.ended_at), capabilities_json = excluded.capabilities_json`),
+      sessionExists: db.prepare('SELECT 1 FROM sessions WHERE id = ? LIMIT 1'),
       getProjectState: db.prepare('SELECT value_json FROM project_state_store WHERE key = ?'),
       setProjectState: db.prepare(`INSERT INTO project_state_store (key, value_json, updated_at)
         VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`),
@@ -563,12 +606,23 @@ class Memory {
           AND (:scope IS NULL OR substr(scope, 1, length(:scope)) = :scope)
         ORDER BY created_at DESC, rowid DESC
         LIMIT :limit`),
+      listDecisions: db.prepare(`SELECT id, topic, status, basis, sources_json, recorded_at, review_after, file_path
+        FROM decisions
+        WHERE (:topic IS NULL OR substr(topic, 1, length(:topic)) = :topic OR instr(sources_json, :topic) > 0)
+          AND (:status IS NULL OR status = :status)
+        ORDER BY recorded_at DESC, rowid DESC
+        LIMIT :limit`),
       search: db.prepare(`SELECT f.source_type, f.source_id, f.content
         FROM memory_fts f
         LEFT JOIN observations o ON f.source_type = 'observation' AND o.id = f.source_id
         LEFT JOIN decisions d ON f.source_type = 'decision' AND d.id = f.source_id
         WHERE memory_fts MATCH :query
-          AND (:scope IS NULL OR substr(o.scope, 1, length(:scope)) = :scope OR instr(d.sources_json, :scope) > 0)
+          AND (
+            :scope IS NULL
+            OR substr(o.scope, 1, length(:scope)) = :scope
+            OR substr(d.topic, 1, length(:scope)) = :scope
+            OR instr(d.sources_json, :scope) > 0
+          )
         ORDER BY f.rank LIMIT :limit`),
     };
   }
@@ -610,22 +664,39 @@ class Memory {
   }
 
   addObservations(observations) {
-    return this.write(() =>
-      observations.map(({ category, scope, summary, evidence = null, sessionId = null }) => {
+    return this.write(() => {
+      let activeSessionId = null;
+      const stateRow = this.statements.getProjectState.get('state');
+      if (stateRow) {
+        try {
+          activeSessionId = JSON.parse(stateRow.value_json)?.session?.id ?? null;
+        } catch {
+          activeSessionId = null;
+        }
+      }
+      return observations.map(({ category, scope, summary, evidence = null, sessionId = null }) => {
+        const candidateSession = sessionId ?? activeSessionId;
+        const resolvedSessionId =
+          candidateSession && this.statements.sessionExists.get(candidateSession) ? candidateSession : null;
+        const now = new Date().toISOString();
+        const existing = this.statements.findObservationByNaturalKey.get(category, scope, summary);
+        if (existing) {
+          const mergedEvidence = evidence ?? existing.evidence ?? null;
+          this.statements.updateObservation.run(resolvedSessionId, evidence, now, existing.id);
+          this.statements.deleteFts.run('observation', existing.id);
+          this.statements.insertFts.run(
+            'observation',
+            existing.id,
+            [scope, summary, mergedEvidence].filter(Boolean).join('\n'),
+          );
+          return existing.id;
+        }
         const id = uuidv7();
-        this.statements.insertObservation.run(
-          id,
-          sessionId,
-          category,
-          scope,
-          summary,
-          evidence,
-          new Date().toISOString(),
-        );
+        this.statements.insertObservation.run(id, resolvedSessionId, category, scope, summary, evidence, now);
         this.statements.insertFts.run('observation', id, [scope, summary, evidence].filter(Boolean).join('\n'));
         return id;
-      }),
-    );
+      });
+    });
   }
 
   searchContext(query, { scope = null, limit = 20 } = {}) {
@@ -633,6 +704,7 @@ class Memory {
   }
 
   isSpecsTreeCurrent({ treeOid, status }) {
+    if (!treeOid) return false;
     const stored = this.statements.specsState.get(SPECS_STATE_KEY);
     return status === '' && stored?.tree_oid === treeOid && stored.content_hash === CLEAN_STATUS_HASH;
   }
@@ -643,7 +715,8 @@ class Memory {
     report.fastPath = false;
 
     const stored = this.statements.specsState.get(SPECS_STATE_KEY);
-    const dirtyOnly = stored?.tree_oid === state.treeOid && stored.content_hash === CLEAN_STATUS_HASH;
+    const dirtyOnly =
+      Boolean(state.treeOid) && stored?.tree_oid === state.treeOid && stored.content_hash === CLEAN_STATUS_HASH;
     const paths = dirtyOnly ? dirtyDecisionPaths(state) : listDecisionPaths(root);
     const { decisions, absent } = readDecisionFiles(root, paths);
     report.scanned = decisions.size;
@@ -656,7 +729,7 @@ class Memory {
         this.statements.syncState.all(SPECS_STATE_KEY).map(row => [row.file_path, row.content_hash]),
       );
       for (const { id, file_path: path } of this.statements.decisionsByPath.all()) {
-        if (!isRemoved(path)) continue;
+        if (!path || !isRemoved(path)) continue;
         this.#deleteDecision(id, path);
         report.pruned++;
       }
@@ -667,7 +740,9 @@ class Memory {
         else report.hydrated++;
         this.#upsertDecision(path, record, hash, state.treeOid);
       }
-      this.statements.upsertSyncState.run(SPECS_STATE_KEY, state.treeOid, sha256(state.status), Date.now());
+      if (state.treeOid) {
+        this.statements.upsertSyncState.run(SPECS_STATE_KEY, state.treeOid, sha256(state.status), Date.now());
+      }
     });
     return report;
   }
@@ -678,10 +753,32 @@ class Memory {
   }
 
   setProjectState(state) {
+    const parsed = typeof state === 'string' ? JSON.parse(state) : state;
     const json = typeof state === 'string' ? state : JSON.stringify(state, null, 2);
     const now = new Date().toISOString();
     return this.write(() => {
       this.statements.setProjectState.run('state', json, now);
+      const allSessions = [
+        ...(Array.isArray(parsed?.sessions) ? parsed.sessions : []),
+        ...(parsed?.session ? [parsed.session] : []),
+      ];
+      for (const session of allSessions) {
+        if (session?.id && session?.host) {
+          this.statements.upsertSession.run(
+            session.id,
+            session.host,
+            session.model ?? null,
+            session.observedAt || session.recordedAt || now,
+            session.endedAt ?? null,
+            JSON.stringify(session.capabilities || {}),
+          );
+        }
+      }
+      if (Array.isArray(parsed?.decisions)) {
+        for (const decision of parsed.decisions) {
+          if (decision?.id) this.#indexDecisionRow(decision);
+        }
+      }
       return state;
     });
   }
@@ -730,29 +827,56 @@ class Memory {
     });
   }
 
-  indexDecision(decision) {
+  listDecisions({ topic = null, status = null, limit = 20 } = {}) {
+    return this.statements.listDecisions
+      .all({
+        topic: topic ?? null,
+        status: status ?? null,
+        limit: limit ?? 20,
+      })
+      .map(row => ({
+        id: row.id,
+        topic: row.topic,
+        status: row.status,
+        basis: row.basis,
+        sources: JSON.parse(row.sources_json || '[]'),
+        recorded_at: row.recorded_at,
+        review_after: row.review_after,
+        file_path: row.file_path,
+      }));
+  }
+
+  #indexDecisionRow(decision) {
     const id = decision.id;
     const topic = decision.topic || '';
     const basis = decision.basis || '';
-    const sources = Array.isArray(decision.sources)
+    const rawSources = Array.isArray(decision.sources)
       ? decision.sources.map(s => (typeof s === 'string' ? s : s.url || s.appliesTo || JSON.stringify(s)))
       : [];
-    const content = [topic, basis, decision.value || '', ...sources].filter(Boolean).join('\n');
+    const appliesTo = Array.isArray(decision.appliesTo)
+      ? decision.appliesTo.filter(s => typeof s === 'string' && s.trim())
+      : [];
+    const sources = [...new Set([...rawSources, ...appliesTo])];
+    const content = [id, topic, basis, decision.value || '', ...sources].filter(Boolean).join('\n');
+    const validStatuses = new Set(['pending', 'approved', 'delegated', 'deprecated', 'superseded']);
+    const status = validStatuses.has(decision.status) ? decision.status : 'pending';
+    this.statements.upsertDecision.run(
+      id,
+      topic,
+      status,
+      basis || topic || id,
+      JSON.stringify(sources),
+      decision.recordedAt || decision.recorded_at || new Date().toISOString(),
+      decision.reviewAfter || decision.review_after || null,
+      decision.file_path ?? null,
+    );
+    this.statements.deleteFts.run('decision', id);
+    this.statements.insertFts.run('decision', id, content);
+  }
+
+  indexDecision(decision) {
     return this.write(() => {
-      const validStatuses = new Set(['pending', 'approved', 'delegated', 'deprecated', 'superseded']);
-      const status = validStatuses.has(decision.status) ? decision.status : 'pending';
-      this.statements.upsertDecision.run(
-        id,
-        topic,
-        status,
-        basis || topic || id,
-        JSON.stringify(sources),
-        decision.recordedAt || new Date().toISOString(),
-        decision.reviewAfter || null,
-        null,
-      );
-      this.statements.deleteFts.run('decision', id);
-      this.statements.insertFts.run('decision', id, content);
+      this.#indexDecisionRow(decision);
     });
   }
 
@@ -806,7 +930,7 @@ class Memory {
   #deleteDecision(id, path) {
     this.statements.deleteDecision.run(id);
     this.statements.deleteFts.run('decision', id);
-    this.statements.deleteSyncState.run(path);
+    if (path) this.statements.deleteSyncState.run(path);
   }
 }
 
